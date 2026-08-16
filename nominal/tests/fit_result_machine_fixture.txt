@@ -1,0 +1,13 @@
+# New format: these rows define the exact covariance ordering.
+parameter 0 Re_f0_1500_00 2.0 0.2
+parameter 1 Im_f0_1500_00 -0.5 0.1
+parameter 2 log_rho_f0_1710_00 1.09861228866811 0.1
+parameter 3 Re_eta_c_11 0.2 0.02
+parameter 4 Im_eta_c_11 0.3 0.03
+parameter 5 Re_X_1835_11 0.4 0.04
+parameter 6 Im_X_1835_11 0.5 0.05
+parameter 7 Re_X_2370_11 0.6 0.06
+parameter 8 Im_X_2370_11 0.7 0.07
+parameter 9 Re_NR_0mp_11 0.8 0.08
+parameter 10 Im_NR_0mp_11 0.9 0.09
+parameter 11 log_Romega_f0_1500 -0.916290731874155 0.2

@@ -1,0 +1,43 @@
+# Input data and ROOT files
+/RootSet/
+*.root
+
+# Compiled binaries and build products
+/nominal/bin/
+/nominal/build/
+/nominal/tests/bin/
+*.exe
+*.o
+*.so
+*.a
+*.d
+*.pcm
+*.rootmap
+
+# Fit, PostFit, projection, and generated plot outputs
+/nominal/results/*
+!/nominal/results/plot/
+/nominal/results/plot/*
+!/nominal/results/plot/.gitkeep
+
+# Batch and build logs
+/nominal/runlog/*
+!/nominal/runlog/.gitkeep
+*.out
+*.log
+
+# Generated figures
+*.pdf
+*.eps
+*.png
+*.jpg
+*.jpeg
+
+# Editor, cache, and temporary files
+.DS_Store
+*~
+*.swp
+*.swo
+__pycache__/
+*.pyc
+*.bak
