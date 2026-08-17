@@ -53,3 +53,10 @@ states otherwise.
   model-definition unit tests.  The new layer is host-only and does not yet
   replace the legacy hard-coded GPU model.  New and pre-existing unit tests
   passed after the change.
+- 2026-08-17: Added the process-level GVV wave registry and model compiler.
+  Stable resonance, wave, and term ids from `model.json` are now validated and
+  compiled to dense runtime vectors used at the CUDA boundary.  The migration
+  regression test confirms that the nominal JSON compiles to exactly the same
+  six resonance descriptors, eight term descriptors, initial couplings, and
+  active wave set as the legacy hard-coded model.  No new wave or physics
+  formula was introduced.

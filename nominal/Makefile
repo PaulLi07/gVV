@@ -20,7 +20,7 @@ CUDA_ARCH=-gencode arch=compute_70,code=sm_70 \
 COMPILEFLAGS=-O2 -g -std=c++17 $(CUDA_ARCH)
 DVAR=-DUSEROOT
 
-COMMON_OBJECTS=$(OBJ_DIR)/kernel.o $(OBJ_DIR)/OmegaPropagator.o $(OBJ_DIR)/GVVSample.o $(OBJ_DIR)/GVVFitParameters.o $(OBJ_DIR)/ModelDefinition.o
+COMMON_OBJECTS=$(OBJ_DIR)/kernel.o $(OBJ_DIR)/OmegaPropagator.o $(OBJ_DIR)/GVVSample.o $(OBJ_DIR)/GVVFitParameters.o $(OBJ_DIR)/ModelDefinition.o $(OBJ_DIR)/GVVProcessModel.o
 FIT_OBJECTS=$(COMMON_OBJECTS) $(OBJ_DIR)/NLL_estimator.o $(OBJ_DIR)/Fit.o
 POSTFIT_OBJECTS=$(COMMON_OBJECTS) $(OBJ_DIR)/PostFit.o
 
@@ -46,6 +46,9 @@ $(OBJ_DIR)/GVVFitParameters.o: src/GVVFitParameters.cu include/GVVFitParameters.
 $(OBJ_DIR)/ModelDefinition.o: src/ModelDefinition.cpp include/framework/ModelDefinition.h | $(OBJ_DIR)
 	$(NVCC) $(LIBS) $(CFLAGS) -c -w $< $(INCLUDES) $(DVAR) $(COMPILEFLAGS) -o $@
 
+$(OBJ_DIR)/GVVProcessModel.o: src/GVVProcessModel.cu include/process/GVVProcessModel.h include/framework/ModelDefinition.h include/GVVModel.h | $(OBJ_DIR)
+	$(NVCC) $(LIBS) $(CFLAGS) -c -w $< $(INCLUDES) $(DVAR) $(COMPILEFLAGS) -o $@
+
 $(OBJ_DIR)/NLL_estimator.o: src/NLL_estimator.cu include/NLL_estimator.h include/GVVSample.h include/GVVModel.h include/Dynamics.h | $(OBJ_DIR)
 	$(NVCC) $(LIBS) $(CFLAGS) -c -w $< $(INCLUDES) $(DVAR) $(COMPILEFLAGS) -o $@
 
@@ -61,7 +64,7 @@ $(BIN_DIR)/Fit.exe: $(FIT_OBJECTS) | $(BIN_DIR)
 $(BIN_DIR)/PostFit.exe: $(POSTFIT_OBJECTS) | $(BIN_DIR)
 	$(NVCC) -w $(POSTFIT_OBJECTS) $(LIBS) $(RPATH) $(CFLAGS) $(DVAR) $(COMPILEFLAGS) -o $@
 
-tests: $(TEST_BIN_DIR)/test_dynamics.exe $(TEST_BIN_DIR)/test_gvv_amplitude.exe $(TEST_BIN_DIR)/test_gvv_model.exe $(TEST_BIN_DIR)/test_gvv_fit_parameters.exe $(TEST_BIN_DIR)/test_model_definition.exe
+tests: $(TEST_BIN_DIR)/test_dynamics.exe $(TEST_BIN_DIR)/test_gvv_amplitude.exe $(TEST_BIN_DIR)/test_gvv_model.exe $(TEST_BIN_DIR)/test_gvv_fit_parameters.exe $(TEST_BIN_DIR)/test_model_definition.exe $(TEST_BIN_DIR)/test_gvv_process_model.exe
 
 $(TEST_BIN_DIR)/test_dynamics.exe: tests/test_dynamics.cu include/Dynamics.h | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(INCLUDES) $(COMPILEFLAGS) -o $@
@@ -77,6 +80,9 @@ $(TEST_BIN_DIR)/test_gvv_fit_parameters.exe: tests/test_gvv_fit_parameters.cu te
 
 $(TEST_BIN_DIR)/test_model_definition.exe: tests/test_model_definition.cpp $(OBJ_DIR)/ModelDefinition.o | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(OBJ_DIR)/ModelDefinition.o $(INCLUDES) $(COMPILEFLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_gvv_process_model.exe: tests/test_gvv_process_model.cu $(OBJ_DIR)/GVVProcessModel.o $(OBJ_DIR)/ModelDefinition.o | $(TEST_BIN_DIR)
+	$(NVCC) -w $< $(OBJ_DIR)/GVVProcessModel.o $(OBJ_DIR)/ModelDefinition.o $(INCLUDES) $(COMPILEFLAGS) -o $@
 
 clean:
 	rm -f $(FIT_OBJECTS) $(POSTFIT_OBJECTS) $(BIN_DIR)/Fit.exe $(BIN_DIR)/PostFit.exe $(TEST_BIN_DIR)/*.exe
