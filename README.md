@@ -214,7 +214,9 @@ For a Resonance that uses an existing Wave:
    coherence class.
 4. To disable a contribution temporarily, set `"active": false` on its Term.
 
-No production source file needs to be edited for this workflow.
+Resonances referenced only by inactive Terms are omitted from the runtime GPU
+model and the Minuit parameter list. No production source file needs to be
+edited for this workflow.
 
 ### Add a new Wave
 

@@ -2,6 +2,9 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Omit Resonances referenced only by inactive Terms from the compiled GPU model
+  and Minuit parameter layout, so `active: false` is independent of propagator
+  type and free propagator parameters.
 - Isolated the projection ROOT schema and serialization in
   `process/ProjectionWriter`, leaving `FitLikelihood` responsible only for
   sample/GPU orchestration and likelihood evaluation.

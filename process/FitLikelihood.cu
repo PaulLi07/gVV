@@ -332,7 +332,7 @@ int FitLikelihood::NormalizationMCEntries() const
 void FitLikelihood::PrintModelSummary() const
 {
     std::cout << "GVV model '" << model_.definition.name << "': "
-              << NumberResonances() << " resonance definitions, "
+              << NumberResonances() << " active Resonances, "
               << NumberTerms() << " active coherent Terms, "
               << model_.active_wave_types.size() << " active Waves\n";
     for (int index = 0; index < NumberResonances(); ++index) {

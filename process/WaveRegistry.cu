@@ -236,28 +236,13 @@ GVVCompiledModel gvv_compile_model(
     GVVCompiledModel result;
     result.definition = definition;
 
-    for (const ctpwa::ResonanceDefinition& resonance : definition.resonances) {
-        const CompiledResonance compiled = compile_resonance(resonance);
-        result.resonances.push_back(compiled.propagator);
-        result.resonance_metadata.push_back({
-            resonance.id,
-            resonance.label,
-            resonance.propagator,
-            compiled.fit_sd_ratio,
-            compiled.fit_flatte_ratio});
-    }
-
-    std::unordered_map<int, int> active_wave_slots;
-    std::map<std::string, int> reference_counts;
+    // Resolve active Term dependencies first. Resonances referenced only by
+    // inactive Terms must not enter the device model or Minuit layout.
+    std::unordered_map<std::string, std::string> active_term_resonances;
+    std::unordered_set<std::string> active_resonance_ids;
     for (const ctpwa::TermDefinition& term : definition.terms) {
         if (!term.active) {
             continue;
-        }
-        const GVVWaveMetadata& wave = gvv_registered_wave(term.wave);
-        if (active_wave_slots.find(wave.wave_type) == active_wave_slots.end()) {
-            const int slot = static_cast<int>(result.active_wave_types.size());
-            active_wave_slots.emplace(wave.wave_type, slot);
-            result.active_wave_types.push_back(wave.wave_type);
         }
 
         const Json dynamics = Json::parse(term.dynamics_json);
@@ -283,6 +268,40 @@ GVVCompiledModel gvv_compile_model(
         }
         const std::string resonance_id =
             dynamics["resonance"].get<std::string>();
+        active_term_resonances.emplace(term.id, resonance_id);
+        active_resonance_ids.insert(resonance_id);
+    }
+
+    for (const ctpwa::ResonanceDefinition& resonance : definition.resonances) {
+        if (active_resonance_ids.find(resonance.id)
+            == active_resonance_ids.end()) {
+            continue;
+        }
+        const CompiledResonance compiled = compile_resonance(resonance);
+        result.resonances.push_back(compiled.propagator);
+        result.resonance_metadata.push_back({
+            resonance.id,
+            resonance.label,
+            resonance.propagator,
+            compiled.fit_sd_ratio,
+            compiled.fit_flatte_ratio});
+    }
+
+    std::unordered_map<int, int> active_wave_slots;
+    std::map<std::string, int> reference_counts;
+    for (const ctpwa::TermDefinition& term : definition.terms) {
+        if (!term.active) {
+            continue;
+        }
+        const GVVWaveMetadata& wave = gvv_registered_wave(term.wave);
+        if (active_wave_slots.find(wave.wave_type) == active_wave_slots.end()) {
+            const int slot = static_cast<int>(result.active_wave_types.size());
+            active_wave_slots.emplace(wave.wave_type, slot);
+            result.active_wave_types.push_back(wave.wave_type);
+        }
+
+        const std::string resonance_id =
+            active_term_resonances.at(term.id);
         const int resonance_index = result.find_resonance(resonance_id);
         if (resonance_index < 0) {
             throw std::runtime_error(

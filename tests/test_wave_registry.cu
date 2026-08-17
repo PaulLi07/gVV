@@ -119,17 +119,27 @@ int main(int argc, char* argv[])
                     1.0),
                 "global reference initial value mismatch");
 
-        // Runtime dimensions must follow the model rather than the nominal
-        // seven-Term fixture. Disabling a non-reference Term changes only the
-        // compiled dense layout.
+        // Runtime dimensions must follow active Terms rather than the nominal
+        // fixture. An inactive-only Resonance is omitted before its propagator
+        // is compiled.
         ctpwa::ModelDefinition reduced_definition = model.definition;
         reduced_definition.terms[0].active = false;
+        reduced_definition.resonances[0].propagator =
+            "ignored_for_inactive_term";
         const GVVCompiledModel reduced =
             gvv_compile_model(reduced_definition);
+        require(reduced.resonances.size() == 6,
+                "inactive-only Resonance was not removed");
         require(reduced.terms.size() == 6,
                 "disabled Term was not removed from runtime layout");
         require(reduced.active_wave_types.size() == 2,
                 "reduced active Wave layout mismatch");
+        require(reduced.find_resonance("f0_1500") == -1,
+                "inactive-only Resonance remained addressable");
+        require(reduced.find_resonance("f0_1710") == 0,
+                "active Resonance indices were not compacted");
+        require(reduced.terms[0].resonance_index == 0,
+                "active Term did not use the compacted Resonance index");
 
         // Likewise, a model larger than the nominal fixture compiles without
         // source-level count changes when it uses registered physics pieces.
