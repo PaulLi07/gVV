@@ -40,6 +40,7 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_propagator_registry.exe \
 	$(TEST_BIN_DIR)/test_fit_parameters.exe \
 	$(TEST_BIN_DIR)/test_fit_config.exe \
+	$(TEST_BIN_DIR)/test_fit_engine.exe \
 	$(TEST_BIN_DIR)/test_model.exe \
 	$(TEST_BIN_DIR)/test_wave_registry.exe \
 	$(TEST_BIN_DIR)/test_likelihood.exe
@@ -108,6 +109,10 @@ $(TEST_BIN_DIR)/test_fit_parameters.exe: tests/test_fit_parameters.cu $(OBJ_DIR)
 
 $(TEST_BIN_DIR)/test_fit_config.exe: tests/test_fit_config.cpp $(OBJ_DIR)/FitConfig.o | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(OBJ_DIR)/FitConfig.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_fit_engine.exe: tests/test_fit_engine.cpp $(OBJ_DIR)/FitEngine.o | $(TEST_BIN_DIR)
+	$(NVCC) -w $< $(OBJ_DIR)/FitEngine.o $(ROOT_LIBS) $(RPATH) \
+		$(ROOT_INCLUDES) $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_model.exe: tests/test_model.cpp $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(OBJ_DIR)/Model.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@

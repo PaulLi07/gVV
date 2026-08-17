@@ -225,6 +225,17 @@ FitRunConfig load_fit_run_config(const std::string& file_name)
         result.minimizer.random_magnitude_min = (*magnitude)[0].get<double>();
         result.minimizer.random_magnitude_max = (*magnitude)[1].get<double>();
     }
+    if (result.minimizer.number_starts <= 0
+        || result.minimizer.base_seed < 0
+        || !(result.minimizer.maximum_edm > 0.0)
+        || result.minimizer.maximum_calls <= 0
+        || !(result.minimizer.tolerance > 0.0)
+        || !(result.minimizer.error_definition > 0.0)
+        || !(result.minimizer.random_magnitude_min > 0.0)
+        || !(result.minimizer.random_magnitude_max
+             > result.minimizer.random_magnitude_min)) {
+        fail(file_name, "$.minimizer", "contains an invalid fit option");
+    }
 
     const Json& output = require_object(document, "output", file_name, "$");
     reject_unknown(

@@ -1,142 +1,64 @@
-# Modular architecture refactor log
+# 模块化等价重构工作日志
 
-Branch: `refactor/modular-architecture`
+工作分支：`refactor/modular-architecture`
 
-Scope: architecture-only refactor of the existing GVV model.  No new
-resonance, no new propagator physics, and no `2++` wave are introduced.  The
-nominal event intensity, normalization convention, sideband likelihood, and
-fit parameterization are regression invariants unless an entry explicitly
-states otherwise.
+规范仓库：`/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV_v1`
 
-## 2026-08-17 — baseline and isolation
+固定登录节点：`lxlogin005.ihep.ac.cn`；持久会话：`gvv_general`。
 
-- Selected fixed host `lxlogin005.ihep.ac.cn` and reused tmux session
-  `gvv_general`.
-- Audited repository `/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV_v1`.
-- Confirmed `main` and `origin/main` at `a29dfdd` (`gVV v1.0.0-rc1`).
-- Found pre-existing uncommitted user changes in
-  `nominal/include/GVVPlotUtils.h` and `nominal/scripts/subgpu.sh`.
-- Preserved those changes in the original worktree and created an isolated
-  worktree at `../gVV_v1_refactor_modular`.
-- Created branch `refactor/modular-architecture` from `main`.
-- Confirmed CUDA 12.9, ROOT 6.32.02, C++17, and availability of the system
-  `nlohmann/json.hpp` header.
-- Baseline verification passed:
-  - `test_dynamics.exe`
-  - `test_gvv_amplitude.exe`
-  - `test_gvv_model.exe`
-  - `test_gvv_fit_parameters.exe`
-  - `PostFit.exe --self-test`
+## 范围与不变量
 
-## Planned stages
+本次只做架构等价重构：不新增或删除物理共振态，不实现新的 `2++` Wave，不改变现有传播子公式、Wave 张量公式、omega 宽度表、MC 归一化或二维边带系数。拟合后绘图系统不在本次范围；用户已调整的投影绘图样式原样保存在 `postfit/`。
 
-1. Document boundaries and establish the tracked work log.
-2. Add the directly edited JSON model schema, loader, validator, and nominal
-   runtime model with stable string ids.
-3. Replace fixed resonance/term/active-wave storage with runtime vectors and
-   dense GPU indices while preserving the nominal calculation.
-4. Generate the parameter layout once from model metadata and reuse it in
-   Minuit, result I/O, covariance handling, and PostFit.
-5. Separate intensity, normalization, and likelihood composition; move GVV
-   event/wave/term responsibilities behind the process boundary.
-6. Replace fixed projection/component arrays and hard-coded JPC groups with
-   runtime model metadata.
-7. Update user documentation and run unit, build, self-test, and numerical
-   regression checks before the final branch audit.
+明确删除旧拟合结果读取兼容层。新的 Fit 只写当前输出协议，不读取旧 TXT，也不生成模型/fit 配置快照。
 
-## Change record
+## 仓库整理
 
-- 2026-08-17: Added the approved framework/process boundary and this log.  No
-  production code changed in this stage.
-- 2026-08-17: Added the framework-level `ModelDefinition`, strict JSON parser
-  and validator, schema v1, directly edited nominal `config/model.json`, and
-  model-definition unit tests.  The new layer is host-only and does not yet
-  replace the legacy hard-coded GPU model.  New and pre-existing unit tests
-  passed after the change.
-- 2026-08-17: Added the process-level GVV wave registry and model compiler.
-  Stable resonance, wave, and term ids from `model.json` are now validated and
-  compiled to dense runtime vectors used at the CUDA boundary.  The migration
-  regression test confirms that the nominal JSON compiles to exactly the same
-  seven resonance descriptors, seven Term descriptors, initial couplings, and
-  active wave set as the legacy hard-coded model.  No new wave or physics
-  formula was introduced.
-- 2026-08-17: Switched the production likelihood path to runtime model sizes.
-  The sample cache now stores only active Wave Gram-matrix entries and a
-  model-sized Term-coefficient workspace.  CUDA evaluation was separated into
-  process-specific GVV Term construction followed by a coherent contraction
-  whose loop bounds are supplied at runtime.  `NLL_estimator` now owns the
-  JSON-compiled model and uploads vectors instead of fixed-size arrays.  A
-  temporary compatibility overload remains only for PostFit and is scheduled
-  for removal in the next stage.  Full build and all tests passed.
-- 2026-08-17: Added a model-generated `GVVFitParameterSpec` layout and switched
-  Fit/Minuit to it.  Parameter names, order, transformed initial values,
-  steps, bounds, and mutation targets now come from one compiled-model view;
-  multistart randomization and boundary checks consume the same descriptors.
-  Fit accepts an optional model JSON path and writes the exact canonical model
-  beside the result as `<fit-result>.model.json`.  Legacy result-reading APIs
-  remain temporarily available until PostFit is migrated.  Build and tests,
-  including a runtime parameter round trip, passed.
-- 2026-08-17: Migrated PostFit to the compiled runtime model and removed the
-  fixed nominal fit-state, Resonance/Term enums, default-model factories, and
-  fixed component-pair APIs. PostFit now obtains Term labels, `J^PC` grouping,
-  fit parameters, pair counts, covariance dimensions, and model selection from
-  the result model snapshot. Historical nominal result rows remain readable by
-  resolving stable ids against the supplied snapshot; no hard-coded default
-  model is reconstructed.
-- 2026-08-17: Replaced projection's fixed component matrix and fixed `0++`/
-  `0-+` group construction with runtime vectors and metadata-generated groups.
-  Projection files now include `component_map`, `group_map`, `n_terms`, and
-  `n_groups`; nominal `weight_0pp`/`weight_0mp` branches remain presentation
-  aliases only. Plotting validates the runtime component-vector length.
-- 2026-08-17: Added process-neutral MC normalization and signed likelihood
-  functions under `framework/Likelihood.h`, with independent unit tests. The
-  GVV NLL layer now supplies event intensities and sample coefficients to this
-  module instead of owning the likelihood mathematics inline.
-- 2026-08-17: Exposed an optional model JSON through the Slurm submission
-  wrapper, tightened the C++ JSON loader to reject unknown fields, documented
-  all model editing/extension contracts, and added regression cases that
-  compile both a reduced 6-Term model and an expanded 8-Resonance/8-Term model.
-  This explicitly tests that nominal 7/7 counts are not production constants.
+- 早期隔离工作曾使用 `gVV_v1_refactor_modular` worktree；按用户“一份仓库”的要求，其内容已合回规范路径并删除临时 worktree。
+- 接受并保留用户对旧 `gVV_v1` 的绘图样式修改。
+- 从 `5033604` 继续工作，始终使用同一规范仓库和同一分支；没有创建第二个项目仓库。
+- 提交 `3fd30f5`：建立根级 `framework/`、`process/`、`app/`、`config/`、`tests/` 与 `postfit/` 边界。
 
-## 2026-08-17 — final verification
+## 阶段一：数学、动力学与 Wave 边界
 
-- Performed a clean rebuild with `make clean`, `make -j4`, and
-  `make tests -j4` on `lxlogin005.ihep.ac.cn` using CUDA 12.9, ROOT 6.32.02,
-  and C++17. The only compiler messages were nvcc's existing future
-  deprecation warnings for the configured `sm_70` target.
-- Passed all runtime checks after the clean build:
-  - `test_dynamics.exe`
-  - `test_gvv_amplitude.exe`
-  - `test_gvv_model.exe`
-  - `test_gvv_fit_parameters.exe`
-  - `test_model_definition.exe`
-  - `test_gvv_process_model.exe` (nominal 7/7 plus reduced/expanded layouts)
-  - `test_likelihood.exe`
-  - `PostFit.exe --self-test`
-- Passed `bash -n scripts/*.sh config/gvv_env.sh`, `git diff --check`, and a
-  production-source scan for removed fixed-model count/default-model symbols.
-- Confirmed the refactor worktree was clean before recording this final log.
-- Rechecked the original `gVV_v1` worktree: its pre-existing modifications are
-  still exactly the two paths observed at the start
-  (`nominal/include/GVVPlotUtils.h`, `nominal/scripts/subgpu.sh`).
-- No Slurm job or production fit was submitted, no physics result was
-  overwritten, and the branch was not pushed. A GPU/data numerical smoke fit
-  remains a separate release-validation action when the user chooses a model
-  hypothesis and result destination.
+- 从旧 `nominal/` 提取通用四矢量、复数、度规、Levi-Civita、张量、自旋投影、轨道张量和障碍因子。
+- 提取通用二体运动学与传播子注册/统一求值接口；GVV omega 常量留在过程层。
+- 把三个现有完整 Wave 分为：
+  - `process/waves/Scalar00.cuh`
+  - `process/waves/Scalar22.cuh`
+  - `process/waves/Pseudoscalar11.cuh`
+- 建立 Wave 的唯一主机注册点和唯一设备 dispatch。
+- Resonance、Wave、Term 和自由耦合全部使用运行时 vector；生产路径无固定总共振态数、Term 数或自由参数数。
+- 首轮真实 CUDA/ROOT 编译通过，七项单元检查全部通过。
 
-## 2026-08-17 — repository consolidation
+## 阶段二：拟合与输出边界
 
-- After user review, accepted the pre-existing projection presentation changes
-  as intentional: the blue/green component palette, solid smoothed component
-  curves, thinner component lines, and adjusted legend position. Normalized
-  indentation only; the requested presentation is preserved.
-- Integrated those changes into `refactor/modular-architecture` as commit
-  `04a930d` while retaining the runtime-sized `weight_component` handling and
-  the new optional `model.json` Slurm interface.
-- Removed the temporary `gVV_v1_refactor_modular` worktree used for isolation.
-  The sole project worktree is again the canonical repository path
-  `/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV_v1`,
-  now checked out on `refactor/modular-architecture`.
-- Repeated `make clean`, the production/test builds, all seven test executables,
-  `PostFit.exe --self-test`, and shell syntax checks from the canonical path;
-  every check passed.
+- `framework/fit/FitEngine`：过程无关的多起点 TMinuit、随机起点、收敛筛选和最优解选择。
+- `framework/fit/FitConfig`：严格读取唯一 `config/fit.json`。
+- `framework/fit/FitOutput`：统一机器可读参数行和协方差输出。
+- `framework/likelihood/Likelihood.h`：过程无关的 MC 归一化与有符号无分箱似然算术。
+- `process/FitLikelihood`：只负责编排 GVV 样本、F 矩阵、omega 宽度表、GPU 状态和过程 projection。
+- `process/ParameterMapping`：唯一的模型到 Minuit 参数映射；Minuit 层不认识 Resonance/Wave。
+- 删除旧结果解析器、旧 covariance 读取兼容接口及两份旧格式 fixture。
+- `app/Fit.cu` 缩为配置加载、过程对象组装、拟合调用和输出调用。
+- 新增配置契约测试；真实 CUDA 12 / ROOT 6.32.02 完整链接 `bin/Fit.exe` 成功，`make check` 八项检查全部通过。
+
+## 阶段三：运行接口与文档
+
+- 用根目录唯一 `submit.sh` 取代旧提交端/worker 两脚本；使用项目既有授权组合 `gpupwa/gpupwa/pwadedicate` 和一张 A100。
+- `output.tag` 同时决定 TXT、covariance、ROOT projection 和 Slurm log；同名直接覆盖。
+- 重写架构、配置和新 Wave 开发文档，明确未来更换末态时复用 framework、替换 process 的边界。
+- 原绘图和拟合后处理代码集中在 `postfit/`，此次不迁移其旧结果读取接口，也不纳入默认构建。
+
+## 核验记录
+
+截至架构编译阶段：
+
+- `bash -n submit.sh`：通过；
+- `make -j2 tests fit`：通过；
+- `make check`：9/9 通过（含通用 Minuit 二次函数收敛测试）；
+- `git diff --check`：通过；
+- `Fit.exe`：在 IHEP CUDA/ROOT 环境完整链接成功；
+- 未把 ROOT、二进制、构建目录或历史拟合结果加入 Git。
+
+最终 GPU 数值等价拟合、输出文件检查、Git 审计和对应提交号在实际核验完成后追加到本节。
