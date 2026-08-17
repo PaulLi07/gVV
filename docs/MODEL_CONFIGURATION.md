@@ -27,9 +27,19 @@
 }
 ```
 
-当前注册的传播子名包括 `nonresonant`、`fixed_width_bw`、`two_body_running_bw`、`scalar_sd_running_bw` 和 `subtracted_effective_flatte`。具体必需参数由过程编译器验证；通用公式位于 `framework/dynamics/`。
+当前传播子配置契约如下；缺少参数或额外/拼错的参数都会在 GPU 分配之前报错：
 
-参数对象支持 `value`、`fixed`、`transform`、`step` 和 `bounds`。当前过程允许拟合的正参数使用 `transform: "log"`，因此 Minuit 空间不会进入非物理负值。
+| `propagator` | 允许的 `parameters` |
+|---|---|
+| `nonresonant` | 空对象 |
+| `fixed_width_bw` | 固定 identity `mass`、`width` |
+| `two_body_running_bw` | 固定 identity `mass`、`width`、整数 `orbital_l`（当前 0 或 1） |
+| `scalar_sd_running_bw` | 固定 identity `mass`、`width`；正且 log 变换的 `sd_ratio` |
+| `subtracted_effective_flatte` | 固定 identity `mass`、`width`；正且 log 变换的 `omegaomega_ratio` |
+
+通用公式位于 `framework/dynamics/`；上表的字符串、允许字段和 GVV 参数策略只在 `process/WaveRegistry.cu` 映射。
+
+参数对象支持 `value`、`fixed`、`transform`、`step` 和 `bounds`。当前过程允许拟合的正参数使用 `transform: "log"`，因此 Minuit 空间不会进入非物理负值。对于 log 变换参数，`value` 是物理空间初值，而 `step` 和 `bounds` 是 `log(value)` 的 Minuit 空间量。
 
 ### Term
 
@@ -57,6 +67,8 @@
 - `fixed_complex`：尺度和相位参考，通常固定为 `1+0i`。
 
 每个 `coherence_class` 必须恰有一个相位参考。该类来自 Wave 注册表，不由用户在每个 Term 重复填写。
+
+当前 GVV Term 的 `dynamics` 必须且只能包含字符串字段 `type` 与 `resonance`；`type` 必须为 `gvv_x_to_omega_omega`，`resonance` 必须引用已定义的 Resonance id。这样拼写错误不会变成静默无效配置。
 
 ### 增删共振态
 

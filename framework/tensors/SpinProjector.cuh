@@ -1,3 +1,4 @@
+// Spin-1 transverse projector for the (+---) metric used by FV and tensor.
 #ifndef CTPWA_FRAMEWORK_TENSORS_SPIN_PROJECTOR_CUH
 #define CTPWA_FRAMEWORK_TENSORS_SPIN_PROJECTOR_CUH
 

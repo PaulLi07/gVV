@@ -1,3 +1,5 @@
+// CUDA kernels implementing the gVV event -> Term -> coherent intensity path.
+// Runtime dimensions come from the compiled model, never nominal model counts.
 #include "process/TermEvaluator.cuh"
 
 #include <cuda_runtime.h>
@@ -111,7 +113,7 @@ void CalGVVFmatrix(
 
 __global__ void CalGVVTermCoefficients_device(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
@@ -138,7 +140,7 @@ __global__ void CalGVVTermCoefficients_device(
     for (int term = 0; term < number_terms; ++term) {
         coefficients[output_offset + term] =
             couplings[term]
-            * evaluate_propagator(
+            * ctpwa::evaluate_propagator(
                 s_x,
                 resonances[terms[term].resonance_index],
                 GVV_OMEGA_MASS,
@@ -149,7 +151,7 @@ __global__ void CalGVVTermCoefficients_device(
 
 void CalGVVTermCoefficients(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
@@ -236,7 +238,7 @@ void CalCoherentIntensity(
 
 void CalGVVPDF(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
@@ -321,7 +323,7 @@ __global__ void CalGVVComponentMatrix_device(
 
 void CalGVVComponentMatrix(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,

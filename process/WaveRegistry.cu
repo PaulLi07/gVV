@@ -1,15 +1,37 @@
+// Host-side gVV compiler. It maps validated model strings to registered Waves,
+// propagator descriptors, dense device slots, and coupling policies.
 #include "process/WaveRegistry.cuh"
 
 #include <nlohmann/json.hpp>
 
 #include <cmath>
+#include <initializer_list>
 #include <map>
 #include <stdexcept>
+#include <unordered_set>
 #include <unordered_map>
 
 namespace {
 
 using Json = nlohmann::json;
+
+void require_exact_parameters(
+    const ctpwa::ResonanceDefinition& resonance,
+    std::initializer_list<const char*> allowed)
+{
+    std::unordered_set<std::string> names;
+    for (const char* name : allowed) {
+        names.insert(name);
+    }
+    for (const auto& parameter : resonance.parameters) {
+        if (names.find(parameter.first) == names.end()) {
+            throw std::runtime_error(
+                "resonance '" + resonance.id + "' propagator '"
+                + resonance.propagator + "' does not accept parameter '"
+                + parameter.first + "'");
+        }
+    }
+}
 
 const ctpwa::ParameterDefinition& require_parameter(
     const ctpwa::ResonanceDefinition& resonance,
@@ -44,17 +66,37 @@ void require_fixed_integer(
     output = static_cast<int>(rounded);
 }
 
-ResonanceParameters compile_resonance(
+struct CompiledResonance {
+    ctpwa::PropagatorParameters propagator;
+    bool fit_sd_ratio = false;
+    bool fit_flatte_ratio = false;
+};
+
+CompiledResonance compile_resonance(
     const ctpwa::ResonanceDefinition& input)
 {
     if (input.propagator == "nonresonant") {
-        if (!input.parameters.empty()) {
-            throw std::runtime_error(
-                "nonresonant component '" + input.id
-                + "' must not define propagator parameters");
-        }
-        return ResonanceParameters(
-            PROP_NONRESONANT, 0.0, 0.0, 0.0, 0);
+        require_exact_parameters(input, {});
+        return {ctpwa::PropagatorParameters(
+            ctpwa::PROP_NONRESONANT, 0.0, 0.0, 0.0, 0.0)};
+    }
+
+    // Reject misspelled or stale parameters here rather than silently
+    // carrying them through model.json. Each propagator has one exact process
+    // contract even though the generic model parser keeps parameters opaque.
+    if (input.propagator == "fixed_width_bw") {
+        require_exact_parameters(input, {"mass", "width"});
+    } else if (input.propagator == "two_body_running_bw") {
+        require_exact_parameters(input, {"mass", "width", "orbital_l"});
+    } else if (input.propagator == "scalar_sd_running_bw") {
+        require_exact_parameters(input, {"mass", "width", "sd_ratio"});
+    } else if (input.propagator == "subtracted_effective_flatte") {
+        require_exact_parameters(
+            input, {"mass", "width", "omegaomega_ratio"});
+    } else {
+        throw std::runtime_error(
+            "unsupported GVV propagator '" + input.propagator
+            + "' for resonance '" + input.id + "'");
     }
 
     const ctpwa::ParameterDefinition& mass =
@@ -64,7 +106,7 @@ ResonanceParameters compile_resonance(
     if (!mass.fixed || !width.fixed
         || mass.transform != "identity" || width.transform != "identity") {
         throw std::runtime_error(
-            "GVV v1 currently requires fixed identity mass/width for '"
+            "the gVV process currently requires fixed identity mass/width for '"
             + input.id + "'");
     }
     if (!(mass.value > 0.0) || !(width.value >= 0.0)) {
@@ -73,17 +115,17 @@ ResonanceParameters compile_resonance(
     }
 
     if (input.propagator == "fixed_width_bw") {
-        return ResonanceParameters(
-            PROP_FIXED_BW, mass.value, width.value, 0.0, 0);
+        return {ctpwa::PropagatorParameters(
+            ctpwa::PROP_FIXED_BW, mass.value, width.value, 0.0, 0.0)};
     }
     if (input.propagator == "two_body_running_bw") {
         int orbital_l = 0;
         require_fixed_integer(input, "orbital_l", 0, 1, orbital_l);
         const int model = orbital_l == 0
-                              ? PROP_SCALAR_SWAVE_BWR
-                              : PROP_PWAVE_BWR;
-        return ResonanceParameters(
-            model, mass.value, width.value, 0.0, 0);
+                              ? ctpwa::PROP_SCALAR_SWAVE_BWR
+                              : ctpwa::PROP_PWAVE_BWR;
+        return {ctpwa::PropagatorParameters(
+            model, mass.value, width.value, 0.0, 0.0)};
     }
     if (input.propagator == "scalar_sd_running_bw") {
         const ctpwa::ParameterDefinition& ratio =
@@ -93,12 +135,15 @@ ResonanceParameters compile_resonance(
                 "resonance '" + input.id
                 + "' requires positive log-transformed sd_ratio");
         }
-        return ResonanceParameters(
-            PROP_SCALAR_SD_BWR,
+        CompiledResonance result;
+        result.propagator = ctpwa::PropagatorParameters(
+            ctpwa::PROP_SCALAR_SD_BWR,
             mass.value,
             width.value,
             ratio.value,
-            ratio.fixed ? 0 : 1);
+            0.0);
+        result.fit_sd_ratio = !ratio.fixed;
+        return result;
     }
     if (input.propagator == "subtracted_effective_flatte") {
         const ctpwa::ParameterDefinition& ratio =
@@ -108,18 +153,17 @@ ResonanceParameters compile_resonance(
                 "resonance '" + input.id
                 + "' requires positive log-transformed omegaomega_ratio");
         }
-        return ResonanceParameters(
-            PROP_SUBTRACTED_FLATTE,
+        CompiledResonance result;
+        result.propagator = ctpwa::PropagatorParameters(
+            ctpwa::PROP_SUBTRACTED_FLATTE,
             mass.value,
             width.value,
             0.0,
-            0,
-            ratio.value,
-            ratio.fixed ? 0 : 1);
+            ratio.value);
+        result.fit_flatte_ratio = !ratio.fixed;
+        return result;
     }
-    throw std::runtime_error(
-        "unsupported GVV propagator '" + input.propagator
-        + "' for resonance '" + input.id + "'");
+    throw std::logic_error("unreachable GVV propagator compiler branch");
 }
 
 int coupling_parameterization(ctpwa::CouplingMode mode)
@@ -193,9 +237,14 @@ GVVCompiledModel gvv_compile_model(
     result.definition = definition;
 
     for (const ctpwa::ResonanceDefinition& resonance : definition.resonances) {
-        result.resonances.push_back(compile_resonance(resonance));
-        result.resonance_metadata.push_back(
-            {resonance.id, resonance.label, resonance.propagator});
+        const CompiledResonance compiled = compile_resonance(resonance);
+        result.resonances.push_back(compiled.propagator);
+        result.resonance_metadata.push_back({
+            resonance.id,
+            resonance.label,
+            resonance.propagator,
+            compiled.fit_sd_ratio,
+            compiled.fit_flatte_ratio});
     }
 
     std::unordered_map<int, int> active_wave_slots;
@@ -212,13 +261,28 @@ GVVCompiledModel gvv_compile_model(
         }
 
         const Json dynamics = Json::parse(term.dynamics_json);
-        const std::string type = dynamics.value("type", "");
+        for (const auto& item : dynamics.items()) {
+            if (item.key() != "type" && item.key() != "resonance") {
+                throw std::runtime_error(
+                    "term '" + term.id
+                    + "' has unknown dynamics field '" + item.key() + "'");
+            }
+        }
+        if (!dynamics.contains("type") || !dynamics["type"].is_string()
+            || !dynamics.contains("resonance")
+            || !dynamics["resonance"].is_string()) {
+            throw std::runtime_error(
+                "term '" + term.id
+                + "' dynamics requires string fields type and resonance");
+        }
+        const std::string type = dynamics["type"].get<std::string>();
         if (type != "gvv_x_to_omega_omega") {
             throw std::runtime_error(
                 "term '" + term.id + "' has unsupported dynamics type '"
                 + type + "'");
         }
-        const std::string resonance_id = dynamics.value("resonance", "");
+        const std::string resonance_id =
+            dynamics["resonance"].get<std::string>();
         const int resonance_index = result.find_resonance(resonance_id);
         if (resonance_index < 0) {
             throw std::runtime_error(

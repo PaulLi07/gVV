@@ -1,3 +1,5 @@
+// Applies one flat fit vector to gVV state and serializes the corresponding
+// physical coupling/propagator details into the result TXT.
 #include "process/ParameterMapping.h"
 
 #include "process/FitLikelihood.h"
@@ -88,22 +90,24 @@ void gvv_write_fit_details(
     for (int resonance = 0;
          resonance < likelihood.NumberResonances();
          ++resonance) {
-        const ResonanceParameters& state = likelihood.Resonance(resonance);
+        const ctpwa::PropagatorParameters& state = likelihood.Resonance(resonance);
+        const GVVResonanceMetadata& metadata =
+            model.resonance_metadata[resonance];
         output << "resonance " << model.resonance_metadata[resonance].id
-               << " model " << propagator_name(state.propagator_model)
+               << " model " << ctpwa::propagator_name(state.propagator_model)
                << " mass " << state.mass << " fixed";
-        if (state.propagator_model == PROP_SUBTRACTED_FLATTE) {
+        if (state.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
             output << " Gamma_rest " << state.pole_width << " fixed";
         } else {
             output << " width " << state.pole_width << " fixed";
         }
-        if (state.fit_sd_ratio) {
+        if (metadata.fit_sd_ratio) {
             output << " r_D_over_S " << state.sd_ratio
                    << " log_error " << best.errors.at(parameter++);
         }
-        if (state.propagator_model == PROP_SUBTRACTED_FLATTE) {
+        if (state.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
             output << " R_omegaomega " << state.flatte_ratio;
-            if (state.fit_flatte_ratio) {
+            if (metadata.fit_flatte_ratio) {
                 output << " log_error " << best.errors.at(parameter++);
             } else {
                 output << " fixed";

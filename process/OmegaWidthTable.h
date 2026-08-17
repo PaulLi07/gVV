@@ -1,3 +1,5 @@
+// gVV omega running-width lookup table shared by host validation and device
+// Term evaluation.
 #ifndef CTPWA_PROCESS_OMEGA_WIDTH_TABLE_H
 #define CTPWA_PROCESS_OMEGA_WIDTH_TABLE_H
 

@@ -1,3 +1,5 @@
+// gVV sample orchestration, normalized signed likelihood evaluation, and the
+// ROOT projection product that bridges fitting to deferred downstream tools.
 #include "process/FitLikelihood.h"
 #include "framework/likelihood/Likelihood.h"
 
@@ -24,6 +26,38 @@
 namespace {
 
 constexpr double kProjectionAxisTolerance = 1.0e-12;
+
+double positive_from_log(double value, const char* name)
+{
+    if (!std::isfinite(value)) {
+        throw std::invalid_argument(std::string(name) + " must be finite");
+    }
+    const double physical = std::exp(value);
+    if (!(physical > 0.0) || !std::isfinite(physical)) {
+        throw std::invalid_argument(
+            std::string(name) + " is outside the numerical range");
+    }
+    return physical;
+}
+
+void fill_tree(TTree& tree)
+{
+    if (tree.Fill() < 0) {
+        throw std::runtime_error(
+            "failed to fill projection tree '" + std::string(tree.GetName())
+            + "'");
+    }
+}
+
+template <std::size_t Size>
+void copy_checked(char (&destination)[Size], const std::string& source)
+{
+    if (source.size() >= Size) {
+        throw std::runtime_error(
+            "projection metadata string is too long: " + source);
+    }
+    std::snprintf(destination, Size, "%s", source.c_str());
+}
 
 enum ProjectionParticleIndex {
     kPip1 = 0,
@@ -238,7 +272,7 @@ struct ProjectionEvent {
         m_pip2_pi02 = (pip2 + pi02).M();
         m_pim2_pi02 = (pim2 + pi02).M();
 
-        std::array<TLorentzVector, 7> in_psi = {{
+        std::array<TLorentzVector, GVV_NFINAL_PARTICLES> in_psi = {{
             pip1, pim1, pi01, pip2, pim2, pi02, gamma}};
         const TVector3 boost_to_psi = -psi.BoostVector();
         for (TLorentzVector& vector : in_psi) {
@@ -253,7 +287,7 @@ struct ProjectionEvent {
             in_psi[kGamma].Vect(), TVector3(0.0, 0.0, 1.0))
                               .Dot(TVector3(0.0, 0.0, 1.0));
 
-        std::array<TLorentzVector, 7> in_x = in_psi;
+        std::array<TLorentzVector, GVV_NFINAL_PARTICLES> in_x = in_psi;
         const TVector3 boost_to_x = -x_psi.BoostVector();
         for (TLorentzVector& vector : in_x) {
             vector.Boost(boost_to_x);
@@ -290,6 +324,7 @@ FitLikelihood::FitLikelihood(
       prepared_(false)
 {
     if (model_.resonances.empty() || model_.terms.empty()
+        || model_.resonances.size() != model_.resonance_metadata.size()
         || model_.terms.size() != model_.initial_couplings.size()
         || model_.terms.size() != model_.term_metadata.size()
         || model_.active_wave_types.empty()) {
@@ -321,11 +356,19 @@ std::unique_ptr<GVVSample> FitLikelihood::LoadSample(
 
 void FitLikelihood::LoadNormalizationMC(const std::string& file_name)
 {
+    if (prepared_ || normalization_mc_ != nullptr) {
+        throw std::runtime_error(
+            "normalization MC may be loaded exactly once before Prepare()");
+    }
     normalization_mc_ = LoadSample(file_name, "normalization MC");
 }
 
 void FitLikelihood::LoadData(const std::string& file_name)
 {
+    if (prepared_ || data_ != nullptr) {
+        throw std::runtime_error(
+            "data may be loaded exactly once before Prepare()");
+    }
     data_ = LoadSample(file_name, "data");
 }
 
@@ -334,6 +377,14 @@ void FitLikelihood::AddBackground(
     double likelihood_coefficient,
     const std::string& label)
 {
+    if (prepared_) {
+        throw std::runtime_error(
+            "backgrounds must be added before Prepare()");
+    }
+    if (label.empty() || !std::isfinite(likelihood_coefficient)) {
+        throw std::invalid_argument(
+            "background label and likelihood coefficient are invalid");
+    }
     BackgroundSample background;
     background.sample = LoadSample(file_name, label);
     background.likelihood_coefficient = likelihood_coefficient;
@@ -347,7 +398,7 @@ void FitLikelihood::UploadModel()
     check_cuda(
         cudaMallocManaged(
             &device_resonances_,
-            number_resonances * sizeof(ResonanceParameters)),
+            number_resonances * sizeof(ctpwa::PropagatorParameters)),
         "cudaMallocManaged GVV resonances");
     check_cuda(
         cudaMallocManaged(&device_terms_, number_terms * sizeof(TermSpec)),
@@ -361,11 +412,15 @@ void FitLikelihood::UploadModel()
 
 void FitLikelihood::SynchronizeModel()
 {
+    if (device_resonances_ == nullptr || device_terms_ == nullptr
+        || device_couplings_ == nullptr) {
+        throw std::runtime_error("GVV device model has not been uploaded");
+    }
     check_cuda(
         cudaMemcpy(
             device_resonances_,
             model_.resonances.data(),
-            model_.resonances.size() * sizeof(ResonanceParameters),
+            model_.resonances.size() * sizeof(ctpwa::PropagatorParameters),
             cudaMemcpyHostToDevice),
         "cudaMemcpy GVV resonances");
     check_cuda(
@@ -386,6 +441,9 @@ void FitLikelihood::SynchronizeModel()
 
 void FitLikelihood::Prepare()
 {
+    if (prepared_) {
+        throw std::runtime_error("Prepare() may be called only once");
+    }
     if (normalization_mc_ == nullptr || data_ == nullptr) {
         throw std::runtime_error(
             "normalization MC and data must be loaded before Prepare()");
@@ -478,6 +536,9 @@ void FitLikelihood::SetCoupling(int term_index, double real, double imag)
     if (term_index < 0 || term_index >= NumberTerms()) {
         throw std::out_of_range("invalid GVV term index");
     }
+    if (!std::isfinite(real) || !std::isfinite(imag)) {
+        throw std::invalid_argument("GVV coupling must be finite");
+    }
     const int parameterization =
         model_.term_metadata[term_index].coupling_parameterization;
     if (parameterization == COUPLING_FIXED_SCALE_AND_PHASE
@@ -503,14 +564,8 @@ void FitLikelihood::SetLogCouplingMagnitude(
         throw std::invalid_argument(
             "log coupling magnitude is only valid for a phase reference");
     }
-    if (!std::isfinite(log_magnitude)) {
-        throw std::invalid_argument("log coupling magnitude must be finite");
-    }
-    const double magnitude = std::exp(log_magnitude);
-    if (!(magnitude > 0.0) || !std::isfinite(magnitude)) {
-        throw std::invalid_argument(
-            "log coupling magnitude is outside the numerical range");
-    }
+    const double magnitude = positive_from_log(
+        log_magnitude, "log coupling magnitude");
     model_.initial_couplings[term_index] = DeviceComplex(magnitude, 0.0);
 }
 
@@ -525,25 +580,25 @@ DeviceComplex FitLikelihood::Coupling(int term_index) const
 void FitLikelihood::SetLogSDRatio(int resonance_index, double log_ratio)
 {
     if (resonance_index < 0 || resonance_index >= NumberResonances()
-        || !model_.resonances[resonance_index].fit_sd_ratio) {
+        || !model_.resonance_metadata[resonance_index].fit_sd_ratio) {
         throw std::invalid_argument("S/D ratio is not fitted for this resonance");
     }
-    const double bounded = std::max(-30.0, std::min(30.0, log_ratio));
-    model_.resonances[resonance_index].sd_ratio = std::exp(bounded);
+    model_.resonances[resonance_index].sd_ratio = positive_from_log(
+        log_ratio, "log S/D ratio");
 }
 
 void FitLikelihood::SetLogFlatteRatio(int resonance_index, double log_ratio)
 {
     if (resonance_index < 0 || resonance_index >= NumberResonances()
-        || !model_.resonances[resonance_index].fit_flatte_ratio) {
+        || !model_.resonance_metadata[resonance_index].fit_flatte_ratio) {
         throw std::invalid_argument(
             "Flatte omega-omega ratio is not fitted for this resonance");
     }
-    const double bounded = std::max(-30.0, std::min(30.0, log_ratio));
-    model_.resonances[resonance_index].flatte_ratio = std::exp(bounded);
+    model_.resonances[resonance_index].flatte_ratio = positive_from_log(
+        log_ratio, "log Flatte omega-omega ratio");
 }
 
-const ResonanceParameters& FitLikelihood::Resonance(
+const ctpwa::PropagatorParameters& FitLikelihood::Resonance(
     int resonance_index) const
 {
     if (resonance_index < 0 || resonance_index >= NumberResonances()) {
@@ -584,23 +639,23 @@ void FitLikelihood::PrintModelSummary() const
               << NumberTerms() << " active coherent Terms, "
               << model_.active_wave_types.size() << " active Waves\n";
     for (int index = 0; index < NumberResonances(); ++index) {
-        const ResonanceParameters& resonance = model_.resonances[index];
+        const ctpwa::PropagatorParameters& resonance = model_.resonances[index];
         std::cout << "  " << std::setw(10)
                   << model_.resonance_metadata[index].id
                   << "  m=" << resonance.mass
-                  << "  model=" << propagator_name(
+                  << "  model=" << ctpwa::propagator_name(
                          resonance.propagator_model);
-        if (resonance.propagator_model == PROP_SUBTRACTED_FLATTE) {
+        if (resonance.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
             std::cout << "  Gamma_rest=" << resonance.pole_width;
         } else {
             std::cout << "  Gamma=" << resonance.pole_width;
         }
-        if (resonance.fit_sd_ratio) {
+        if (model_.resonance_metadata[index].fit_sd_ratio) {
             std::cout << "  fit r_D/S=" << resonance.sd_ratio;
         }
-        if (resonance.propagator_model == PROP_SUBTRACTED_FLATTE) {
+        if (resonance.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
             std::cout << "  R_omegaomega=" << resonance.flatte_ratio;
-            if (resonance.fit_flatte_ratio) {
+            if (model_.resonance_metadata[index].fit_flatte_ratio) {
                 std::cout << " (fitted as log R)";
             } else {
                 std::cout << " (fixed)";
@@ -806,7 +861,7 @@ void FitLikelihood::WriteProjection(
                 / closure_scale);
 
         event_values.Load(*normalization_mc_, event);
-        tree_mc.Fill();
+        fill_tree(tree_mc);
     }
     if (maximum_closure_residual > 1.0e-7) {
         throw std::runtime_error(
@@ -817,7 +872,7 @@ void FitLikelihood::WriteProjection(
     event_values.Book(tree_data);
     for (int event = 0; event < data_->Entries(); ++event) {
         event_values.Load(*data_, event);
-        tree_data.Fill();
+        fill_tree(tree_data);
     }
 
     TTree tree_background("bg", "combined two-dimensional sidebands");
@@ -836,7 +891,7 @@ void FitLikelihood::WriteProjection(
         weight_bg = -background.likelihood_coefficient;
         for (int event = 0; event < background.sample->Entries(); ++event) {
             event_values.Load(*background.sample, event);
-            tree_background.Fill();
+            fill_tree(tree_background);
         }
     }
 
@@ -857,17 +912,9 @@ void FitLikelihood::WriteProjection(
         component_index = term;
         resonance_index = model_.terms[term].resonance_index;
         wave_type = model_.term_metadata[term].registered_wave_type;
-        std::snprintf(
-            component_name,
-            sizeof(component_name),
-            "%s",
-            model_.term_metadata[term].id.c_str());
-        std::snprintf(
-            component_jpc,
-            sizeof(component_jpc),
-            "%s",
-            model_.term_metadata[term].jpc.c_str());
-        component_map.Fill();
+        copy_checked(component_name, model_.term_metadata[term].id);
+        copy_checked(component_jpc, model_.term_metadata[term].jpc);
+        fill_tree(component_map);
     }
 
     TTree group_map("group_map", "GVV JPC group index map");
@@ -877,9 +924,8 @@ void FitLikelihood::WriteProjection(
     group_map.Branch("jpc", group_jpc, "jpc/C");
     for (std::size_t group = 0; group < group_ids.size(); ++group) {
         group_index = static_cast<int>(group);
-        std::snprintf(
-            group_jpc, sizeof(group_jpc), "%s", group_ids[group].c_str());
-        group_map.Fill();
+        copy_checked(group_jpc, group_ids[group]);
+        fill_tree(group_map);
     }
 
     TTree metadata("metadata", "GVV projection provenance");
@@ -935,7 +981,7 @@ void FitLikelihood::WriteProjection(
         "maximum_component_closure_residual",
         &maximum_closure_residual,
         "maximum_component_closure_residual/D");
-    metadata.Fill();
+    fill_tree(metadata);
 
     if (output.Write() <= 0) {
         throw std::runtime_error(

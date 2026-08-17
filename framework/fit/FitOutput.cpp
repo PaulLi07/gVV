@@ -1,3 +1,4 @@
+// Writer for the compact, overwrite-in-place fit TXT and covariance products.
 #include "framework/fit/FitOutput.h"
 
 #include <fstream>

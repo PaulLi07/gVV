@@ -1,3 +1,5 @@
+// Reusable Blatt-Weisskopf barrier factors. Momentum is in GeV and the radius
+// is in fm; unsupported orbital angular momentum returns a controlled zero.
 #ifndef CTPWA_FRAMEWORK_TENSORS_BARRIER_FACTOR_CUH
 #define CTPWA_FRAMEWORK_TENSORS_BARRIER_FACTOR_CUH
 

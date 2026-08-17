@@ -1,3 +1,4 @@
+// Complete registered gVV 0-+(11) covariant tensor basis.
 #ifndef CTPWA_PROCESS_WAVES_PSEUDOSCALAR11_CUH
 #define CTPWA_PROCESS_WAVES_PSEUDOSCALAR11_CUH
 

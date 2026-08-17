@@ -1,3 +1,5 @@
+// Typed representation of one fit run: samples, minimizer settings, model
+// location, and the unified output tag.
 #ifndef CTPWA_FRAMEWORK_FIT_CONFIG_H
 #define CTPWA_FRAMEWORK_FIT_CONFIG_H
 

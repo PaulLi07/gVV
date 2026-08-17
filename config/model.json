@@ -3,7 +3,7 @@
   "process": "psi2s_to_gamma_omega_omega",
   "metadata": {
     "name": "nominal",
-    "description": "GVV v1 nominal seven-term amplitude model"
+    "description": "gVV nominal seven-term amplitude model"
   },
   "resonances": [
     {

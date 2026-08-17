@@ -1,3 +1,5 @@
+// Reads the configured ROOT tree into host [px,py,pz,E] arrays, uploads them,
+// and caches each sample's parameter-independent Wave Gram matrix.
 #include "process/SampleLoader.h"
 
 #include "TFile.h"
@@ -9,6 +11,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 namespace {
 
@@ -68,6 +71,19 @@ void GVVSample::Load(
     if (entries_ != 0 || F_matrix_ != nullptr || amp2_ != nullptr) {
         throw std::runtime_error("sample has already been loaded: " + label_);
     }
+    if (branches.tree_name.empty()
+        || (branches.input_order != GVV_PX_PY_PZ_E
+            && branches.input_order != GVV_E_PX_PY_PZ)) {
+        throw std::invalid_argument("invalid GVV ROOT branch configuration");
+    }
+
+    std::unordered_set<std::string> branch_names;
+    for (const std::string& branch : branches.branches) {
+        if (branch.empty() || !branch_names.insert(branch).second) {
+            throw std::invalid_argument(
+                "GVV ROOT branch names must be non-empty and unique");
+        }
+    }
 
     TFile input(file_name.c_str(), "READ");
     if (input.IsZombie()) {
@@ -79,14 +95,17 @@ void GVVSample::Load(
             "tree '" + branches.tree_name + "' is missing in " + file_name);
     }
 
-    double values[7][4] = {{0.0}};
-    for (int particle = 0; particle < 7; ++particle) {
+    double values[GVV_NFINAL_PARTICLES][4] = {{0.0}};
+    for (int particle = 0; particle < GVV_NFINAL_PARTICLES; ++particle) {
         const std::string& branch = branches.branches[particle];
         if (tree->GetBranch(branch.c_str()) == nullptr) {
             throw std::runtime_error(
                 "branch '" + branch + "' is missing in " + file_name);
         }
-        tree->SetBranchAddress(branch.c_str(), values[particle]);
+        if (tree->SetBranchAddress(branch.c_str(), values[particle]) < 0) {
+            throw std::runtime_error(
+                "cannot bind branch '" + branch + "' in " + file_name);
+        }
     }
 
     const Long64_t number_entries = tree->GetEntries();
@@ -97,15 +116,19 @@ void GVVSample::Load(
     }
 
     entries_ = static_cast<int>(number_entries);
-    for (int particle = 0; particle < 7; ++particle) {
+    for (int particle = 0; particle < GVV_NFINAL_PARTICLES; ++particle) {
         host_p4_[particle].resize(
             static_cast<std::size_t>(number_entries) * 4);
     }
 
     for (Long64_t event = 0; event < number_entries; ++event) {
-        tree->GetEntry(event);
+        if (tree->GetEntry(event) <= 0) {
+            throw std::runtime_error(
+                "cannot read event " + std::to_string(event)
+                + " from " + file_name);
+        }
         const std::size_t offset = static_cast<std::size_t>(event) * 4;
-        for (int particle = 0; particle < 7; ++particle) {
+        for (int particle = 0; particle < GVV_NFINAL_PARTICLES; ++particle) {
             double* destination = host_p4_[particle].data() + offset;
             if (branches.input_order == GVV_PX_PY_PZ_E) {
                 for (int component = 0; component < 4; ++component) {
@@ -142,7 +165,7 @@ void GVVSample::UploadAndBuildF(
     number_active_waves_ = static_cast<int>(active_wave_types.size());
     number_terms_ = number_terms;
 
-    for (int particle = 0; particle < 7; ++particle) {
+    for (int particle = 0; particle < GVV_NFINAL_PARTICLES; ++particle) {
         const std::size_t bytes = host_p4_[particle].size() * sizeof(double);
         check_cuda(
             cudaMallocManaged(&device_p4_[particle], bytes),
@@ -214,7 +237,7 @@ int GVVSample::Entries() const
 
 const double* GVVSample::HostMomentum(int particle, int event) const
 {
-    if (particle < 0 || particle >= 7) {
+    if (particle < 0 || particle >= GVV_NFINAL_PARTICLES) {
         throw std::out_of_range("invalid GVV particle index");
     }
     if (event < 0 || event >= entries_) {

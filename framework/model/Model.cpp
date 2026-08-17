@@ -1,3 +1,5 @@
+// Strict parser for the single model.json description layer. This validates
+// generic structure before a process compiler interprets dynamics_json.
 #include "framework/model/Model.h"
 
 #include <nlohmann/json.hpp>

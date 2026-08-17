@@ -1,3 +1,5 @@
+// Numerical three-pion phase-space integration and GPU upload for the omega
+// running-width lookup table.
 #include "process/OmegaWidthTable.h"
 
 #include "framework/dynamics/Propagators.cuh"
@@ -14,8 +16,6 @@ namespace {
 constexpr double MASS_PIP = 0.13957039;
 constexpr double MASS_PIM = 0.13957039;
 constexpr double MASS_PI0 = 0.1349768;
-constexpr double MASS_RHO = 0.77526;
-constexpr double WIDTH_RHO = 0.1474;
 
 double kallen(double x, double y, double z)
 {
@@ -37,8 +37,8 @@ DeviceComplex rho_factor(
     const double b_pair = ctpwa::blatt_weisskopf(q_pair, 1);
     const DeviceComplex rho = ctpwa::BWR(
         s_pair,
-        MASS_RHO,
-        WIDTH_RHO,
+        GVV_RHO_MASS,
+        GVV_RHO_WIDTH,
         1,
         first_mass2,
         second_mass2);

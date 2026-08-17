@@ -1,3 +1,5 @@
+// Generic runtime model description: Resonance, Wave reference, Term and
+// coupling metadata. Process-specific dynamics remain opaque JSON here.
 #ifndef CTPWA_FRAMEWORK_MODEL_DEFINITION_H
 #define CTPWA_FRAMEWORK_MODEL_DEFINITION_H
 
@@ -82,19 +84,5 @@ const char* coupling_mode_name(CouplingMode mode);
 const char* coupling_reference_name(CouplingReference reference);
 
 } // namespace ctpwa
-
-// Compact runtime objects shared by the compiled model and CUDA kernels.
-// Stable user-facing ids remain in ModelDefinition metadata.
-enum CouplingParameterization {
-    COUPLING_COMPLEX = 0,
-    COUPLING_FIXED_SCALE_AND_PHASE = 1,
-    COUPLING_POSITIVE_REAL = 2
-};
-
-struct TermSpec {
-    int resonance_index = 0;
-    int wave_slot = 0;
-    int registered_wave_type = 0;
-};
 
 #endif // CTPWA_FRAMEWORK_MODEL_DEFINITION_H

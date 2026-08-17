@@ -1,3 +1,5 @@
+// gVV Wave registration boundary: device enum/dispatch plus the compiled
+// process-model data structures shared with kernels.
 #ifndef CTPWA_PROCESS_WAVE_REGISTRY_CUH
 #define CTPWA_PROCESS_WAVE_REGISTRY_CUH
 
@@ -16,6 +18,20 @@ enum GVVWaveType {
     GVV_SCALAR_22 = 1,
     GVV_PSEUDOSCALAR_11 = 2,
     GVV_NBASIS = 3
+};
+
+// Dense process runtime objects. Stable user-facing ids remain in the host
+// metadata below; kernels need only integer slots and coupling policy codes.
+enum CouplingParameterization {
+    COUPLING_COMPLEX = 0,
+    COUPLING_FIXED_SCALE_AND_PHASE = 1,
+    COUPLING_POSITIVE_REAL = 2
+};
+
+struct TermSpec {
+    int resonance_index = 0;
+    int wave_slot = 0;
+    int registered_wave_type = 0;
 };
 
 // This is the only device dispatch point for complete process Waves.
@@ -95,6 +111,8 @@ struct GVVResonanceMetadata {
     std::string id;
     std::string label;
     std::string propagator_id;
+    bool fit_sd_ratio = false;
+    bool fit_flatte_ratio = false;
 };
 
 struct GVVTermMetadata {
@@ -113,7 +131,7 @@ struct GVVTermMetadata {
 // indices are dense, runtime-only device layout; stable ids live in metadata.
 struct GVVCompiledModel {
     ctpwa::ModelDefinition definition;
-    std::vector<ResonanceParameters> resonances;
+    std::vector<ctpwa::PropagatorParameters> resonances;
     std::vector<TermSpec> terms;
     std::vector<DeviceComplex> initial_couplings;
     std::vector<int> active_wave_types;

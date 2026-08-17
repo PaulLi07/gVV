@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Single submission/worker entry point for the gVV fit. The resource tuple
+# below is the project-approved IHEP GPU allocation; ordinary users normally
+# call only `./submit.sh config/fit.json` from the repository root.
 #SBATCH --partition=gpupwa
 #SBATCH --qos=pwadedicate
 #SBATCH --account=gpupwa
@@ -34,6 +37,9 @@ resolve_project_path()
 
 read_fit_fields()
 {
+    # Shell needs the tag and paths before Slurm starts so it can validate
+    # inputs and choose the log file. FitConfig.cpp remains the authoritative
+    # full semantic parser inside Fit.exe.
     python3 - "$1" <<'PY'
 import json
 import re
@@ -59,6 +65,8 @@ PY
 
 load_fields()
 {
+    # Convert every configured relative path to the canonical project root.
+    # This is essential because Slurm runs a spooled copy of this script.
     mapfile -t FIT_FIELDS < <(read_fit_fields "$1")
     if [[ ${#FIT_FIELDS[@]} -lt 6 ]]; then
         echo "[GVV] Cannot read the required fields from $1" >&2
@@ -82,6 +90,7 @@ load_fields()
 
 validate_inputs()
 {
+    # Fail before scheduling/starting a fit if any immutable input is missing.
     local input_file
     for input_file in \
         "$1" "$MODEL_FILE" "$DATA_FILE" "$NORMALIZATION_FILE" \
@@ -96,6 +105,8 @@ validate_inputs()
 
 run_worker()
 {
+    # Worker mode is entered by sbatch below. It performs environment setup,
+    # runs exactly one Fit.exe process, and verifies all numerical products.
     local fit_config=$1
     load_fields "$fit_config"
     validate_inputs "$fit_config"
@@ -150,6 +161,8 @@ if [[ ${1:-} == "--worker" ]]; then
     exit 0
 fi
 
+# Submission mode: preflight the same paths on the login node, create output
+# directories, then export the real repository root to the Slurm worker.
 if [[ $# -gt 1 ]]; then
     usage
     exit 2

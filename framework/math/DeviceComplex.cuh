@@ -1,12 +1,14 @@
-#ifndef DEVICE_COMPLEX_H
-#define DEVICE_COMPLEX_H
+// Minimal double-precision complex type shared by host and CUDA device code.
+// It exists because std::complex is not a portable device-side interface in
+// the CUDA toolchain used by this project.
+#ifndef CTPWA_FRAMEWORK_MATH_DEVICE_COMPLEX_CUH
+#define CTPWA_FRAMEWORK_MATH_DEVICE_COMPLEX_CUH
 
 //======================================================================
 //The complex number class used in GPU
 //======================================================================
 #include <cmath>
-#include <stdio.h>
-#include <iostream>
+#include <cstdio>
 
 
 class DeviceComplex {
@@ -64,10 +66,12 @@ public:
      __host__ __device__ double rho2() const {
         return real * real + imag * imag;
     }
+     // Principal direction represented on [0, 2*pi). atan2 also gives a
+     // defined zero for 0+0i on the supported host/device math libraries.
      __host__ __device__ double phi() const {
-        double theta = acos(real/sqrt(real * real + imag * imag));
-        if(imag>0){return theta;}
-        else{return theta+3.1415927;}
+        constexpr double two_pi = 6.28318530717958647692;
+        const double angle = atan2(imag, real);
+        return angle < 0.0 ? angle + two_pi : angle;
      }
 
      __host__ __device__ DeviceComplex reciprocal() const {
@@ -90,4 +94,4 @@ public:
     
 };
 
-#endif // DEVICE_COMPLEX_H
+#endif // CTPWA_FRAMEWORK_MATH_DEVICE_COMPLEX_CUH

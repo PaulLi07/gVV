@@ -1,7 +1,11 @@
+// Compact device representation and dispatch for reusable propagator models.
+// String-to-enum validation is owned by the active process compiler.
 #ifndef CTPWA_FRAMEWORK_DYNAMICS_PROPAGATOR_REGISTRY_CUH
 #define CTPWA_FRAMEWORK_DYNAMICS_PROPAGATOR_REGISTRY_CUH
 
 #include "framework/dynamics/Propagators.cuh"
+
+namespace ctpwa {
 
 // Device-level propagator dispatch.  The concrete resonance list and its
 // ordering remain exclusively in model.json and the compiled process model.
@@ -14,37 +18,33 @@ enum PropagatorModel {
     PROP_SUBTRACTED_FLATTE = 5
 };
 
-struct ResonanceParameters {
+// Pure numerical device descriptor. Whether a field is fixed or fitted is a
+// process/model-binding concern and must not be stored in this framework type.
+struct PropagatorParameters {
     int propagator_model;
     double mass;
     double pole_width;
     double sd_ratio;
-    int fit_sd_ratio;
     double flatte_ratio;
-    int fit_flatte_ratio;
 
-    __host__ __device__ ResonanceParameters(
+    __host__ __device__ PropagatorParameters(
         int model = PROP_NONRESONANT,
         double m = 0.0,
         double width = 0.0,
         double ratio = 0.0,
-        int fit_ratio = 0,
-        double omegaomega_ratio = 0.0,
-        int fit_omegaomega_ratio = 0)
+        double effective_channel_ratio = 0.0)
         : propagator_model(model),
           mass(m),
           pole_width(width),
           sd_ratio(ratio),
-          fit_sd_ratio(fit_ratio),
-          flatte_ratio(omegaomega_ratio),
-          fit_flatte_ratio(fit_omegaomega_ratio)
+          flatte_ratio(effective_channel_ratio)
     {
     }
 };
 
 __host__ __device__ inline DeviceComplex evaluate_propagator(
     double s,
-    const ResonanceParameters& resonance,
+    const PropagatorParameters& resonance,
     double daughter_mass1,
     double daughter_mass2,
     double radius_fm = ctpwa::DEFAULT_BARRIER_RADIUS_FM)
@@ -108,5 +108,7 @@ inline const char* propagator_name(int model)
     }
     return "unknown";
 }
+
+} // namespace ctpwa
 
 #endif // CTPWA_FRAMEWORK_DYNAMICS_PROPAGATOR_REGISTRY_CUH

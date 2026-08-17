@@ -1,3 +1,5 @@
+// Reusable covariant P- and D-wave orbital tensors built from a parent
+// momentum and a relative daughter momentum.
 #ifndef CTPWA_FRAMEWORK_TENSORS_ORBITAL_TENSOR_CUH
 #define CTPWA_FRAMEWORK_TENSORS_ORBITAL_TENSOR_CUH
 

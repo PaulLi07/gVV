@@ -89,6 +89,32 @@ I(x)   = sum_ij c_i c_j* D_i D_j* F_ij(x)
 
 `ParameterMapping` 是唯一的模型状态到拟合参数转换层。它根据耦合参考约定和未固定传播子参数生成通用 `FitParameterSpec`，同时保存如何把 Minuit vector 写回 GVV 状态的 binding。
 
+传播子设备描述 `ctpwa::PropagatorParameters` 只保存公式求值需要的数值。`sd_ratio` 或 Flatte ratio 是否参与拟合属于 GVV 模型编译策略，保存在过程层 metadata，不进入 `framework/dynamics/`。
+
+## 代码阅读索引
+
+建议按“配置 → 编译模型 → 样本 → 振幅 → 似然 → 拟合”的顺序阅读：
+
+| 文件 | 职责 |
+|---|---|
+| `app/Fit.cu` | 可执行程序胶水；组装配置、过程似然、通用拟合与输出 |
+| `framework/model/Model.*` | 严格解析通用 Resonance/Term/耦合描述 |
+| `process/WaveRegistry.*` | 注册完整 GVV Wave，并把通用模型编译为设备紧凑布局 |
+| `process/waves/*.cuh` | 每个文件实现一个完整过程 Wave |
+| `process/SampleLoader.*` | ROOT 七末态分支到主机/GPU 数组的唯一入口 |
+| `process/ProcessEvent.cuh` | 单个 GVV 事件在设备上的组合运动学视图 |
+| `process/ProcessKinematics.cuh` | omega 三体衰变流和 GVV 过程常量 |
+| `framework/dynamics/*` | 可复用二体运动学与传播子函数库 |
+| `framework/tensors/*` | 可复用投影、轨道张量、障碍因子和低阶张量代数 |
+| `process/TermEvaluator.*` | CUDA 上构造 Term 系数、F 矩阵和相干强度 |
+| `process/FitLikelihood.*` | 样本编排、MC 归一化、有符号似然与 projection ROOT |
+| `process/ParameterMapping.*`、`FitState.cu` | `model.json` 状态与 Minuit vector 的唯一双向映射 |
+| `framework/fit/FitEngine.*` | 与过程无关的多起点 MIGRAD/HESSE 驱动 |
+| `framework/fit/FitOutput.*` | 统一 TXT 和 covariance 输出 |
+| `submit.sh` | 唯一 Slurm 提交/worker 入口 |
+
+源码顶部说明文件边界；关键公式、索引布局、单位、参考振幅和状态转换在实现位置附近说明。JSON 不允许注释，因此所有可配置字段统一记录在 `MODEL_CONFIGURATION.md`。
+
 ## 一次振幅拟合的完整流程
 
 1. `FitConfig` 读取 `fit.json`，得到 `model.json`、样本、边带系数、Minuit 选项和输出 tag。

@@ -1,3 +1,5 @@
+// Builds the free-parameter layout from the compiled model. Adding/removing an
+// existing-Wave Term therefore requires no source-level parameter recounting.
 #include "process/ParameterMapping.h"
 
 #include <cmath>
@@ -77,7 +79,7 @@ std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
     for (std::size_t resonance = 0;
          resonance < model.resonances.size();
          ++resonance) {
-        const ResonanceParameters& values = model.resonances[resonance];
+        const ctpwa::PropagatorParameters& values = model.resonances[resonance];
         const GVVResonanceMetadata& metadata =
             model.resonance_metadata[resonance];
         const ctpwa::ResonanceDefinition& definition =
@@ -114,14 +116,14 @@ std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
             layout.push_back(parameter);
         };
 
-        if (values.fit_sd_ratio) {
+        if (metadata.fit_sd_ratio) {
             append_log_parameter(
                 "sd_ratio",
                 "log_rDS_",
                 GVVFitParameterTarget::ResonanceLogSDRatio,
                 values.sd_ratio);
         }
-        if (values.fit_flatte_ratio) {
+        if (metadata.fit_flatte_ratio) {
             append_log_parameter(
                 "omegaomega_ratio",
                 "log_Romega_",

@@ -1,3 +1,5 @@
+// Verifies that the model-generated Minuit layout has stable ordering for the
+// nominal fixture while remaining sized from runtime vectors.
 #include "process/ParameterMapping.h"
 #include "process/TermEvaluator.cuh"
 
@@ -25,6 +27,7 @@ int main()
                != ctpwa::ParameterRandomization::ComplexImaginary
         || parameters[2].randomization
                != ctpwa::ParameterRandomization::LogMagnitude
+        || !compiled.resonance_metadata[0].fit_flatte_ratio
         || layout[11].target
                != GVVFitParameterTarget::ResonanceLogFlatteRatio) {
         std::cerr << "runtime GVV fit parameter layout is wrong\n";

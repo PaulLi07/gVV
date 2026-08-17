@@ -1,3 +1,5 @@
+// gVV-specific omega->3pi currents and nominal particle constants. This file
+// is part of the process replacement boundary for a different final state.
 #ifndef CTPWA_PROCESS_KINEMATICS_CUH
 #define CTPWA_PROCESS_KINEMATICS_CUH
 
@@ -6,6 +8,8 @@
 
 constexpr double GVV_OMEGA_MASS = 0.78266;
 constexpr double GVV_OMEGA_WIDTH = 0.00868;
+constexpr double GVV_RHO_MASS = 0.77526;
+constexpr double GVV_RHO_WIDTH = 0.1474;
 
 // The pion convention used throughout this file is
 // p0 = pi0, p1 = pi+, p2 = pi-.
@@ -16,8 +20,8 @@ struct RhoBWRParameters {
     double rho_vertex_radius_fm;
 
     __host__ __device__ RhoBWRParameters(
-        double rho_mass = 0.77526,
-        double rho_width = 0.1474,
+        double rho_mass = GVV_RHO_MASS,
+        double rho_width = GVV_RHO_WIDTH,
         double omega_radius_fm = ctpwa::DEFAULT_BARRIER_RADIUS_FM,
         double rho_radius_fm = ctpwa::DEFAULT_BARRIER_RADIUS_FM)
         : mass(rho_mass),

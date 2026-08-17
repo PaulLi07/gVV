@@ -1,6 +1,6 @@
-# gVV_v1
+# gVV
 
-`gVV_v1` 是 `psi(2S) -> gamma omega omega` 协变张量分波拟合项目。当前版本把可复用的数理与拟合设施放在 `framework/`，把本衰变过程的末态、完整 Wave、Term 计算和 ROOT 输入约定放在 `process/`。在已有 Wave 范围内，改变模型只需要编辑 `config/model.json`，不再修改或重新计数 C++ 数组。
+`gVV` 是 `psi(2S) -> gamma omega omega` 协变张量分波拟合项目。当前版本把可复用的数理与拟合设施放在 `framework/`，把本衰变过程的末态、完整 Wave、Term 计算和 ROOT 输入约定放在 `process/`。在已有 Wave 范围内，改变模型只需要编辑 `config/model.json`，不再修改或重新计数 C++ 数组。
 
 ## 日常使用
 
@@ -45,7 +45,7 @@ bin/Fit.exe config/fit.json
 ## 目录
 
 ```text
-gVV_v1/
+gVV/
 ├── app/                    # Fit 可执行程序的薄胶水层
 ├── config/                 # model.json 与 fit.json
 ├── framework/              # 可迁移到其他末态的通用设施

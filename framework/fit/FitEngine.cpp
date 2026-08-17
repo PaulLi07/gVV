@@ -1,13 +1,17 @@
+// Multi-start TMinuit implementation, including randomized coupling starts,
+// convergence acceptance, and deterministic best-attempt selection.
 #include "framework/fit/FitEngine.h"
 
 #include "TMinuit.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace ctpwa {
 namespace {
@@ -19,6 +23,10 @@ constexpr double kFailedObjective = 1.0e100;
 
 const FitObjective* active_objective = nullptr;
 std::size_t active_parameter_count = 0;
+
+// TMinuit exposes a C-style callback and therefore cannot carry the objective
+// as user data. run_multistart_fit is intentionally single-fit/non-reentrant;
+// this bridge is active only while MIGRAD/HESSE evaluate one attempt.
 
 void minuit_objective(
     Int_t& number_parameters,
@@ -67,15 +75,24 @@ void validate_inputs(
              > options.random_magnitude_min)) {
         throw std::invalid_argument("invalid generic fit options");
     }
+    std::unordered_set<std::string> parameter_names;
     for (const FitParameterSpec& parameter : parameters) {
         if (parameter.name.empty() || !std::isfinite(parameter.initial_value)
             || !(parameter.step > 0.0)
             || parameter.has_lower_bound != parameter.has_upper_bound
             || (parameter.has_lower_bound
-                && !(parameter.lower_bound < parameter.upper_bound))) {
+                && (!std::isfinite(parameter.lower_bound)
+                    || !std::isfinite(parameter.upper_bound)
+                    || !(parameter.lower_bound < parameter.upper_bound)
+                    || parameter.initial_value < parameter.lower_bound
+                    || parameter.initial_value > parameter.upper_bound))) {
             throw std::invalid_argument(
                 "invalid fit parameter specification for '"
                 + parameter.name + "'");
+        }
+        if (!parameter_names.insert(parameter.name).second) {
+            throw std::invalid_argument(
+                "duplicate fit parameter name '" + parameter.name + "'");
         }
     }
 }
@@ -190,20 +207,27 @@ FitAttempt run_attempt(
     minuit.SetFCN(minuit_objective);
     for (std::size_t index = 0; index < parameters.size(); ++index) {
         const FitParameterSpec& parameter = parameters[index];
-        minuit.DefineParameter(
+        const Int_t definition_status = minuit.DefineParameter(
             static_cast<Int_t>(index),
             parameter.name.c_str(),
             initial_values[index],
             parameter.step,
             parameter.has_lower_bound ? parameter.lower_bound : 0.0,
             parameter.has_upper_bound ? parameter.upper_bound : 0.0);
+        if (definition_status != 0) {
+            throw std::runtime_error(
+                "TMinuit rejected parameter '" + parameter.name + "'");
+        }
     }
 
-    active_objective = &objective;
-    active_parameter_count = parameters.size();
     Int_t status = 0;
     Double_t arguments[2] = {options.error_definition, 0.0};
     minuit.mnexcm("SET ERR", arguments, 1, status);
+    if (status != 0) {
+        throw std::runtime_error("TMinuit rejected error_definition");
+    }
+    active_objective = &objective;
+    active_parameter_count = parameters.size();
     arguments[0] = options.maximum_calls;
     arguments[1] = options.tolerance;
     minuit.mnexcm("MIGRAD", arguments, 2, status);
@@ -233,12 +257,24 @@ FitAttempt run_attempt(
     attempt.elapsed_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - start_time).count();
     attempt.at_parameter_boundary = at_boundary(parameters, attempt.values);
+    const bool finite_values = std::all_of(
+        attempt.values.begin(), attempt.values.end(),
+        [](double value) { return std::isfinite(value); });
+    const bool valid_errors = std::all_of(
+        attempt.errors.begin(), attempt.errors.end(),
+        [](double value) { return value >= 0.0 && std::isfinite(value); });
+    const bool finite_covariance = std::all_of(
+        attempt.covariance.begin(), attempt.covariance.end(),
+        [](double value) { return std::isfinite(value); });
     attempt.valid = attempt.migrad_status == 0
                     && attempt.hesse_status == 0
                     && attempt.covariance_status >= 2
                     && std::isfinite(attempt.minimum)
                     && std::isfinite(attempt.edm)
-                    && attempt.edm <= options.maximum_edm;
+                    && attempt.edm <= options.maximum_edm
+                    && finite_values
+                    && valid_errors
+                    && finite_covariance;
 
     minuit.mnprin(3, attempt.minimum);
     print_parameters(

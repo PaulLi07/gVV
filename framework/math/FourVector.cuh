@@ -1,9 +1,11 @@
-#ifndef FV_H
-#define FV_H
+// Device-side Lorentz four-vector using the (+---) metric and component order
+// [E, px, py, pz]. ROOT input conversion into this order happens only in the
+// process TermEvaluator.
+#ifndef CTPWA_FRAMEWORK_MATH_FOUR_VECTOR_CUH
+#define CTPWA_FRAMEWORK_MATH_FOUR_VECTOR_CUH
 
 #include "framework/math/DeviceComplex.cuh"
-#include <iostream>
-using namespace std;
+#include <cstdio>
 
 class FV
 {
@@ -75,5 +77,4 @@ class FV
 
 };
 
-#endif // FV_H
-
+#endif // CTPWA_FRAMEWORK_MATH_FOUR_VECTOR_CUH

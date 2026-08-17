@@ -1,3 +1,6 @@
+// Process-neutral Monte-Carlo normalization and signed unbinned
+// log-likelihood arithmetic. Sample loading and intensity evaluation are
+// intentionally outside this header.
 #ifndef CTPWA_FRAMEWORK_LIKELIHOOD_H
 #define CTPWA_FRAMEWORK_LIKELIHOOD_H
 

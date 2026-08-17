@@ -1,3 +1,4 @@
+// Complete registered gVV 0++(00) covariant tensor basis.
 #ifndef CTPWA_PROCESS_WAVES_SCALAR00_CUH
 #define CTPWA_PROCESS_WAVES_SCALAR00_CUH
 

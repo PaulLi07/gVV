@@ -1,3 +1,5 @@
+// CUDA entry points for cached Wave contractions, process Term coefficients,
+// total intensity, and optional component decomposition.
 #ifndef CTPWA_PROCESS_TERM_EVALUATOR_CUH
 #define CTPWA_PROCESS_TERM_EVALUATOR_CUH
 
@@ -21,7 +23,7 @@ void CalGVVFmatrix(
 // boundary a future process (for example GPPP) replaces.
 void CalGVVTermCoefficients(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
@@ -42,7 +44,7 @@ void CalCoherentIntensity(
 
 void CalGVVPDF(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
@@ -55,7 +57,7 @@ void CalGVVPDF(
 
 void CalGVVComponentMatrix(
     GVVDeviceMomenta momenta,
-    const ResonanceParameters* resonances,
+    const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,

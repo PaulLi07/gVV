@@ -1,3 +1,5 @@
+// Strict fit.json loader. Unknown keys and unsafe output tags fail before any
+// data file is opened or GPU memory is allocated.
 #include "framework/fit/FitConfig.h"
 
 #include <nlohmann/json.hpp>

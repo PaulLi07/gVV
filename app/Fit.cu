@@ -1,3 +1,7 @@
+// Fit executable glue: load one run configuration, assemble the gVV process
+// likelihood, invoke the generic fit engine, and write the agreed outputs.
+// Physics formulae and Minuit implementation details deliberately live below
+// this layer.
 #include "framework/fit/FitConfig.h"
 #include "framework/fit/FitEngine.h"
 #include "framework/fit/FitOutput.h"

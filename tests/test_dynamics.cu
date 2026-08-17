@@ -1,3 +1,5 @@
+// Unit regression for reusable two-body dynamics plus compilation of the
+// complete device-side omega decay-current path.
 #include "process/ProcessKinematics.cuh"
 
 #include <cmath>
@@ -30,6 +32,14 @@ __global__ void compile_omega_device_path(double* output)
 
 int main()
 {
+    const DeviceComplex lower_half_plane(0.0, -1.0);
+    if (!close_to(
+            lower_half_plane.phi(),
+            1.5 * 3.14159265358979323846)) {
+        std::cerr << "DeviceComplex phase convention is wrong\n";
+        return 1;
+    }
+
     const double s_a = 2.25;
     const double s_b = 0.36;
     const double s_c = 0.16;

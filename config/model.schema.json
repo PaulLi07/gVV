@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ctpwa.local/schema/model-v1.json",
+  "$comment": "Human-readable field and process contracts are documented in docs/MODEL_CONFIGURATION.md.",
   "title": "CTPWA runtime amplitude model",
   "type": "object",
   "required": ["schema_version", "process", "resonances", "terms"],

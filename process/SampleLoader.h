@@ -1,3 +1,4 @@
+// ROOT-to-GPU sample boundary for the fixed seven-particle gVV topology.
 #ifndef GVV_SAMPLE_H
 #define GVV_SAMPLE_H
 
@@ -12,9 +13,13 @@ enum GVVFourVectorOrder {
     GVV_E_PX_PY_PZ = 1
 };
 
+// This count is fixed by the gVV final-state topology, not by model.json.
+// Resonance, Wave, Term, and fit-parameter counts remain fully dynamic.
+constexpr int GVV_NFINAL_PARTICLES = 7;
+
 struct GVVBranchConfig {
     std::string tree_name;
-    std::array<std::string, 7> branches;
+    std::array<std::string, GVV_NFINAL_PARTICLES> branches;
     GVVFourVectorOrder input_order;
 
     GVVBranchConfig();
@@ -52,8 +57,8 @@ public:
 private:
     std::string label_;
     int entries_;
-    std::array<std::vector<double>, 7> host_p4_;
-    std::array<double*, 7> device_p4_;
+    std::array<std::vector<double>, GVV_NFINAL_PARTICLES> host_p4_;
+    std::array<double*, GVV_NFINAL_PARTICLES> device_p4_;
     double* F_matrix_;
     DeviceComplex* term_coefficients_;
     double* amp2_;

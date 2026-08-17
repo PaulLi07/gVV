@@ -1,3 +1,5 @@
+// Process-compiler regression: validates nominal migration, dynamic model
+// sizing, and strict rejection of misspelled process fields.
 #include "process/WaveRegistry.cuh"
 
 #include <cmath>
@@ -18,6 +20,21 @@ bool close(double first, double second)
     return std::fabs(first - second) < 1.0e-14;
 }
 
+void require_compile_invalid(
+    const ctpwa::ModelDefinition& definition,
+    const std::string& expected)
+{
+    try {
+        (void)gvv_compile_model(definition);
+    } catch (const std::exception& error) {
+        require(
+            std::string(error.what()).find(expected) != std::string::npos,
+            "process-compiler diagnostic did not contain expected text");
+        return;
+    }
+    throw std::runtime_error("invalid process model was accepted");
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -31,13 +48,13 @@ int main(int argc, char* argv[])
             "f0_1500", "f0_1710", "eta_1760", "eta_c_1S",
             "X_1835", "X_2370", "NR_0mp"};
         const std::vector<int> propagators = {
-            PROP_SUBTRACTED_FLATTE,
-            PROP_SCALAR_SWAVE_BWR,
-            PROP_PWAVE_BWR,
-            PROP_PWAVE_BWR,
-            PROP_PWAVE_BWR,
-            PROP_PWAVE_BWR,
-            PROP_NONRESONANT};
+            ctpwa::PROP_SUBTRACTED_FLATTE,
+            ctpwa::PROP_SCALAR_SWAVE_BWR,
+            ctpwa::PROP_PWAVE_BWR,
+            ctpwa::PROP_PWAVE_BWR,
+            ctpwa::PROP_PWAVE_BWR,
+            ctpwa::PROP_PWAVE_BWR,
+            ctpwa::PROP_NONRESONANT};
         const std::vector<double> masses = {
             1.522, 1.723, 1.751, 2.98409, 1.8340, 2.377, 0.0};
         const std::vector<double> widths = {
@@ -136,6 +153,16 @@ int main(int argc, char* argv[])
                 "expanded Term layout mismatch");
         require(expanded.find_term("NR_extra_11") == 7,
                 "expanded stable Term id mismatch");
+
+        ctpwa::ModelDefinition bad_parameter = model.definition;
+        bad_parameter.resonances[1].parameters.emplace(
+            "widht", ctpwa::ParameterDefinition());
+        require_compile_invalid(bad_parameter, "does not accept parameter");
+
+        ctpwa::ModelDefinition bad_dynamics = model.definition;
+        bad_dynamics.terms[0].dynamics_json =
+            R"({"type":"gvv_x_to_omega_omega","resonance":"f0_1500","extra":1})";
+        require_compile_invalid(bad_dynamics, "unknown dynamics field");
 
         std::cout << "GVV process-model compilation tests passed\n";
     } catch (const std::exception& error) {

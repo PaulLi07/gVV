@@ -1,3 +1,5 @@
+// Sole translation layer between the generic flat Minuit vector and mutable
+// gVV couplings/propagator parameters.
 #ifndef CTPWA_PROCESS_PARAMETER_MAPPING_H
 #define CTPWA_PROCESS_PARAMETER_MAPPING_H
 

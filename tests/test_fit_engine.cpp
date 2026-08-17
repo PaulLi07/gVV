@@ -1,7 +1,9 @@
+// Generic Minuit smoke test plus validation of parameter-layout invariants.
 #include "framework/fit/FitEngine.h"
 
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 int main()
@@ -31,6 +33,38 @@ int main()
         || result.best.minimum > 1.0e-8) {
         std::cerr << "generic fit engine failed its quadratic test\n";
         return 1;
+    }
+
+    bool duplicate_rejected = false;
+    try {
+        (void)ctpwa::run_multistart_fit(
+            {x, x}, options, [](const std::vector<double>&) { return 0.0; });
+    } catch (const std::invalid_argument&) {
+        duplicate_rejected = true;
+    }
+    if (!duplicate_rejected) {
+        std::cerr << "duplicate parameter names were accepted\n";
+        return 2;
+    }
+
+    ctpwa::FitParameterSpec outside = x;
+    outside.has_lower_bound = true;
+    outside.has_upper_bound = true;
+    outside.lower_bound = 0.0;
+    outside.upper_bound = 2.0;
+    bool outside_rejected = false;
+    try {
+        (void)ctpwa::run_multistart_fit(
+            {outside}, options,
+            [](const std::vector<double>& values) {
+                return values[0] * values[0];
+            });
+    } catch (const std::invalid_argument&) {
+        outside_rejected = true;
+    }
+    if (!outside_rejected) {
+        std::cerr << "out-of-bound initial parameter was accepted\n";
+        return 3;
     }
     std::cout << "Generic fit engine tests passed\n";
     return 0;

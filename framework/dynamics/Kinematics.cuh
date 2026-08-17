@@ -1,3 +1,4 @@
+// Process-independent two-body breakup momentum and shared unit constants.
 #ifndef CTPWA_FRAMEWORK_DYNAMICS_KINEMATICS_CUH
 #define CTPWA_FRAMEWORK_DYNAMICS_KINEMATICS_CUH
 

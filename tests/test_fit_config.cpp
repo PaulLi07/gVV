@@ -1,3 +1,4 @@
+// Contract test for the nominal fit.json and unified output-name derivation.
 #include "framework/fit/FitConfig.h"
 
 #include <iostream>

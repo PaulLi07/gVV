@@ -1,3 +1,5 @@
+// Process-neutral coherent-intensity algebra. The process supplies dense Term
+// descriptors, complex coefficients, and the event Wave Gram matrix.
 #ifndef CTPWA_FRAMEWORK_AMPLITUDE_INTENSITY_ENGINE_CUH
 #define CTPWA_FRAMEWORK_AMPLITUDE_INTENSITY_ENGINE_CUH
 

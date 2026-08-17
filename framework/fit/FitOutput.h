@@ -1,3 +1,5 @@
+// Stable text and covariance output interface for a completed generic fit.
+// Process-specific physical state can be appended through FitDetailWriter.
 #ifndef CTPWA_FRAMEWORK_FIT_OUTPUT_H
 #define CTPWA_FRAMEWORK_FIT_OUTPUT_H
 

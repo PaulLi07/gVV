@@ -1,3 +1,5 @@
+// Process orchestrator for the gVV likelihood and projection output. Generic
+// minimizer policy and output naming remain in framework/fit/.
 #ifndef CTPWA_PROCESS_FIT_LIKELIHOOD_H
 #define CTPWA_PROCESS_FIT_LIKELIHOOD_H
 
@@ -41,7 +43,7 @@ public:
     DeviceComplex Coupling(int term_index) const;
     void SetLogSDRatio(int resonance_index, double log_ratio);
     void SetLogFlatteRatio(int resonance_index, double log_ratio);
-    const ResonanceParameters& Resonance(int resonance_index) const;
+    const ctpwa::PropagatorParameters& Resonance(int resonance_index) const;
     const GVVCompiledModel& Model() const;
     int NumberTerms() const;
     int NumberResonances() const;
@@ -79,7 +81,7 @@ private:
     std::vector<BackgroundSample> backgrounds_;
 
     OmegaWidthTable omega_width_table_;
-    ResonanceParameters* device_resonances_;
+    ctpwa::PropagatorParameters* device_resonances_;
     TermSpec* device_terms_;
     DeviceComplex* device_couplings_;
     bool prepared_;

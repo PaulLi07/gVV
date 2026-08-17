@@ -1,3 +1,5 @@
+// Device-side rank-two Lorentz tensor. The class intentionally contains only
+// low-level algebra; complete process Waves belong under process/waves/.
 #ifndef CTPWA_FRAMEWORK_TENSORS_TENSOR_CUH
 #define CTPWA_FRAMEWORK_TENSORS_TENSOR_CUH
 

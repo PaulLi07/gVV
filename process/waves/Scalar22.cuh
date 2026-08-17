@@ -1,3 +1,5 @@
+// Complete registered gVV 0++(22) covariant tensor basis. Despite the name,
+// this is the existing scalar L=S=2 basis, not a new 2++ resonance Wave.
 #ifndef CTPWA_PROCESS_WAVES_SCALAR22_CUH
 #define CTPWA_PROCESS_WAVES_SCALAR22_CUH
 

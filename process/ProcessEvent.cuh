@@ -1,3 +1,5 @@
+// Complete device event and barrier-parameter views consumed by every gVV
+// Wave. Input ROOT branch details are isolated in SampleLoader.
 #ifndef CTPWA_PROCESS_EVENT_CUH
 #define CTPWA_PROCESS_EVENT_CUH
 

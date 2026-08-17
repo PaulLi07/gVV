@@ -1,3 +1,5 @@
+// Reusable propagator-dispatch regression plus the process-owned omega width
+// table normalization check.
 #include "framework/dynamics/PropagatorRegistry.cuh"
 #include "process/OmegaWidthTable.h"
 
@@ -19,16 +21,16 @@ bool close_relative(double value, double reference, double tolerance)
 // the login node.
 __global__ void compile_gvv_propagators(double* output)
 {
-    const ResonanceParameters scalar(
-        PROP_SCALAR_SWAVE_BWR, 1.723, 0.149);
-    const ResonanceParameters pseudoscalar(
-        PROP_PWAVE_BWR, 1.751, 0.240);
-    output[0] = evaluate_propagator(
+    const ctpwa::PropagatorParameters scalar(
+        ctpwa::PROP_SCALAR_SWAVE_BWR, 1.723, 0.149);
+    const ctpwa::PropagatorParameters pseudoscalar(
+        ctpwa::PROP_PWAVE_BWR, 1.751, 0.240);
+    output[0] = ctpwa::evaluate_propagator(
         scalar.mass * scalar.mass,
         scalar,
         GVV_OMEGA_MASS,
         GVV_OMEGA_MASS).rho2();
-    output[1] = evaluate_propagator(
+    output[1] = ctpwa::evaluate_propagator(
         pseudoscalar.mass * pseudoscalar.mass,
         pseudoscalar,
         GVV_OMEGA_MASS,
@@ -37,21 +39,18 @@ __global__ void compile_gvv_propagators(double* output)
 
 int main()
 {
-    const ResonanceParameters f1500(
-        PROP_SUBTRACTED_FLATTE,
+    const ctpwa::PropagatorParameters f1500(
+        ctpwa::PROP_SUBTRACTED_FLATTE,
         1.522,
         0.108,
         0.0,
-        0,
-        1.0,
-        1);
-    if (f1500.propagator_model != PROP_SUBTRACTED_FLATTE
-        || f1500.fit_flatte_ratio != 1
+        1.0);
+    if (f1500.propagator_model != ctpwa::PROP_SUBTRACTED_FLATTE
         || !close_relative(f1500.flatte_ratio, 1.0, 1.0e-12)) {
         std::cerr << "subtracted Flatte device descriptor is wrong\n";
         return 1;
     }
-    if (!(evaluate_propagator(
+    if (!(ctpwa::evaluate_propagator(
               f1500.mass * f1500.mass,
               f1500,
               GVV_OMEGA_MASS,
@@ -60,8 +59,8 @@ int main()
         return 2;
     }
 
-    const ResonanceParameters f1710(
-        PROP_SCALAR_SWAVE_BWR, 1.723, 0.149);
+    const ctpwa::PropagatorParameters f1710(
+        ctpwa::PROP_SCALAR_SWAVE_BWR, 1.723, 0.149);
     const double scalar_pole_width = f1710.pole_width
         * ctpwa::two_body_width_shape(
             f1710.mass * f1710.mass,
@@ -74,8 +73,8 @@ int main()
         return 3;
     }
 
-    const ResonanceParameters eta1760(
-        PROP_PWAVE_BWR, 1.751, 0.240);
+    const ctpwa::PropagatorParameters eta1760(
+        ctpwa::PROP_PWAVE_BWR, 1.751, 0.240);
     const double p_wave_width = eta1760.pole_width
         * ctpwa::two_body_width_shape(
             eta1760.mass * eta1760.mass,
@@ -88,8 +87,8 @@ int main()
         return 4;
     }
 
-    const ResonanceParameters nonresonant;
-    const DeviceComplex nr = evaluate_propagator(
+    const ctpwa::PropagatorParameters nonresonant;
+    const DeviceComplex nr = ctpwa::evaluate_propagator(
         4.0, nonresonant, GVV_OMEGA_MASS, GVV_OMEGA_MASS);
     if (nr.real != 1.0 || nr.imag != 0.0) {
         std::cerr << "nonresonant propagator is not unity\n";

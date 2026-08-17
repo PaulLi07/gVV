@@ -1,3 +1,5 @@
+// Process-neutral multi-start Minuit API. The caller supplies a flat parameter
+// layout and an objective callback; no Resonance/Wave types enter this layer.
 #ifndef CTPWA_FRAMEWORK_FIT_ENGINE_H
 #define CTPWA_FRAMEWORK_FIT_ENGINE_H
 

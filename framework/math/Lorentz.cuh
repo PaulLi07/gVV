@@ -1,3 +1,5 @@
+// Common Lorentz-sign and Levi-Civita conventions used by tensor building
+// blocks. Keep process names and final-state assumptions out of this file.
 #ifndef CTPWA_FRAMEWORK_MATH_LORENTZ_CUH
 #define CTPWA_FRAMEWORK_MATH_LORENTZ_CUH
 

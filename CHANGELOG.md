@@ -2,6 +2,15 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Renamed the canonical project directory from `gVV_v1` to `gVV` without
+  creating a second repository or changing Git history.
+- Completed a production-source audit and added file-level/critical-path
+  comments throughout the fit system; downstream `postfit/` remains deferred.
+- Moved GVV fit-policy flags out of the reusable propagator descriptor, made
+  process parameter/dynamics contracts strict, and hardened sample/fit state
+  validation without changing the nominal physics model.
+- Enabled generated header dependencies and compiler warnings in the Makefile;
+  corrected project-local ROOT data and CUDA `lib64` environment paths.
 - Reorganized the canonical repository into reusable `framework/` and
   GVV-specific `process/` layers while preserving the current physics model.
 - Made `model.json` the only resonance/Term model description and `fit.json`

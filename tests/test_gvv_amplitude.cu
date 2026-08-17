@@ -1,3 +1,4 @@
+// Device compile test for all registered gVV Waves and coherent contraction.
 #include "framework/amplitude/IntensityEngine.cuh"
 #include "process/WaveRegistry.cuh"
 

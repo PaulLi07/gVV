@@ -2,7 +2,7 @@
 
 工作分支：`refactor/modular-architecture`
 
-规范仓库：`/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV_v1`
+规范仓库：`/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV`
 
 固定登录节点：`lxlogin005.ihep.ac.cn`；持久会话：`gvv_general`。
 
@@ -91,3 +91,31 @@
   ROOT、可执行文件、对象文件、批处理日志或生成图。
 - 最终工作树 clean；本轮主要提交依次为 `3fd30f5`、`c54c7e7`、
   `e878776`、`e71ae38` 和 `941c3f3`。分支未推送远端。
+
+## 项目更名与逐文件审查（2026-08-17）
+
+- 确认 `Release/gVV` 不存在且原工作树 clean 后，把唯一仓库目录从
+  `Release/gVV_v1` 更名为 `Release/gVV`；没有复制第二份仓库，Git 历史、
+  分支和 remote 均保持不变。README、活动配置说明和规范路径同步改名；
+  日志中的旧名称只作为历史记录保留。
+- 逐文件审查 `app/`、`framework/`、`process/`、`config/`、`tests/`、
+  `Makefile` 与 `submit.sh`；`postfit/` 仅检查更名影响，未修改其实现。
+  所有生产源码和测试源码均补充文件级职责注释，关键公式、布局、状态机、
+  配置编译和 Slurm 两阶段入口附近补充维护说明；架构文档新增代码阅读索引。
+- 修复审查中发现的问题：`GVV_DATA_DIR` 指向仓库内 `RootSet/`，CUDA 动态库
+  路径改为实际存在的 `lib64`；Makefile 生成并读取 `.d` 头文件依赖且不再用
+  `-w` 隐藏告警；传播子描述只保留通用数值，GVV 的拟合策略回到过程层；
+  传播子参数和 Term dynamics 拒绝多余/拼错字段；补充 Minuit 参数、样本状态、
+  ROOT 分支读取、CUDA 模型状态和 projection 写入检查。
+- 从零执行 `make clean && make -j2 tests fit && make check`，9/9 通过。
+  工程源码无编译告警；仅 ROOT 6.32.02 外部 `TStorage.h` 产生两条
+  `-Wattributes` 告警。自动依赖确认能从 `Scalar00.cuh` 追踪到
+  `WaveRegistry.o` 和 `TermEvaluator.o`。
+- GPU 回归 Job `20795` 在 `gpu041` 上以 `COMPLETED 0:0` 结束，用时
+  2 分 41 秒。最优解仍为 start 8 / seed `20260823`，NLL
+  `-37530.4571965`，与更名前回归完全一致；MIGRAD/HESSE 为 0，covariance
+  status 为 3，EDM `2.73749e-5`。结果含 12 参数和 `12x12` covariance。
+- projection ROOT 六棵树均可读：MC/data/bg 条目分别为
+  177374/23561/27820，component/group map 为 7/2；有效产额 17358，分量
+  闭合残差 `3.29041e-15`。framework 对 process 的 include/过程词扫描为空，
+  `postfit/` diff 为空，生成物仍由 Git 忽略。
