@@ -2,10 +2,46 @@
 #define GVV_FIT_PARAMETERS_H
 
 #include "GVVModel.h"
+#include "process/GVVProcessModel.h"
 
 #include <array>
 #include <string>
 #include <vector>
+
+enum class GVVFitParameterTarget {
+    CouplingReal,
+    CouplingImaginary,
+    CouplingLogMagnitude,
+    ResonanceLogSDRatio,
+    ResonanceLogFlatteRatio
+};
+
+// Generated once from the compiled model.  This is the only description of
+// Minuit/covariance ordering, initial values, steps, bounds, and state target.
+struct GVVFitParameterSpec {
+    std::string name;
+    GVVFitParameterTarget target = GVVFitParameterTarget::CouplingReal;
+    int target_index = -1;
+    double initial_value = 0.0;
+    double step = 0.1;
+    bool has_lower_bound = false;
+    bool has_upper_bound = false;
+    double lower_bound = 0.0;
+    double upper_bound = 0.0;
+};
+
+std::vector<GVVFitParameterSpec> gvv_fit_parameter_layout(
+    const GVVCompiledModel& model);
+
+std::vector<std::string> gvv_fit_parameter_names(
+    const GVVCompiledModel& model);
+
+std::vector<double> gvv_fit_parameters_from_model(
+    const GVVCompiledModel& model);
+
+void gvv_apply_fit_parameters_to_model(
+    GVVCompiledModel& model,
+    const std::vector<double>& parameters);
 
 // Single source of truth for the Minuit/covariance parameter ordering.  Both
 // Fit.exe and PostFit.exe use this structure; post-fit code must never infer a

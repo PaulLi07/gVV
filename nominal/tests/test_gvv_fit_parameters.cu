@@ -8,6 +8,43 @@
 
 int main(int argc, char* argv[])
 {
+    const GVVCompiledModel compiled =
+        gvv_load_compiled_model("config/model.json");
+    const std::vector<GVVFitParameterSpec> runtime_layout =
+        gvv_fit_parameter_layout(compiled);
+    const std::vector<std::string> runtime_names =
+        gvv_fit_parameter_names(compiled);
+    const std::vector<double> runtime_values =
+        gvv_fit_parameters_from_model(compiled);
+    if (runtime_layout.size() != 12
+        || runtime_names.size() != runtime_layout.size()
+        || runtime_values.size() != runtime_layout.size()
+        || runtime_names[0] != "Re_f0_1500_00"
+        || runtime_names[2] != "log_rho_f0_1710_00"
+        || runtime_names[11] != "log_Romega_f0_1500"
+        || !runtime_layout[11].has_lower_bound
+        || runtime_layout[11].lower_bound != -6.0
+        || runtime_layout[11].upper_bound != 3.0) {
+        std::cerr << "runtime GVV fit parameter layout is wrong\n";
+        return 10;
+    }
+    GVVCompiledModel runtime_round_trip = compiled;
+    std::vector<double> changed = runtime_values;
+    changed[0] = 0.37;
+    changed[1] = -0.29;
+    changed[2] = std::log(0.42);
+    changed[11] = std::log(1.7);
+    gvv_apply_fit_parameters_to_model(runtime_round_trip, changed);
+    const std::vector<double> reconstructed_runtime =
+        gvv_fit_parameters_from_model(runtime_round_trip);
+    for (std::size_t index = 0; index < changed.size(); ++index) {
+        if (std::fabs(reconstructed_runtime[index] - changed[index])
+            > 1.0e-12) {
+            std::cerr << "runtime parameter/model round trip failed\n";
+            return 11;
+        }
+    }
+
     const GVVFitState defaults = gvv_default_fit_state();
     const std::vector<std::string> names =
         gvv_fit_parameter_names(defaults.resonances);
@@ -91,7 +128,7 @@ int main(int argc, char* argv[])
             const int index = gvv_component_pair_index(first, second);
             if (index < 0 || index >= GVV_NCOMPONENT_PAIRS || seen[index]) {
                 std::cerr << "component-pair compact index is wrong\n";
-                return 9;
+            return 12;
             }
             seen[index] = true;
         }

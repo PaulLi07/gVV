@@ -1,4 +1,5 @@
 #include "../include/NLL_estimator.h"
+#include "../include/GVVFitParameters.h"
 
 #include "TFile.h"
 #include "TLorentzVector.h"
@@ -583,23 +584,7 @@ int NLL_estimator::NumberResonances() const
 
 int NLL_estimator::NumberFitParameters() const
 {
-    int count = 0;
-    for (const GVVTermMetadata& term : model_.term_metadata) {
-        if (term.coupling_parameterization == GVV_COUPLING_POSITIVE_REAL) {
-            ++count;
-        } else if (term.coupling_parameterization == GVV_COUPLING_COMPLEX) {
-            count += 2;
-        }
-    }
-    for (const GVVResonanceParameters& resonance : model_.resonances) {
-        if (resonance.fit_sd_ratio) {
-            ++count;
-        }
-        if (resonance.fit_flatte_ratio) {
-            ++count;
-        }
-    }
-    return count;
+    return static_cast<int>(gvv_fit_parameter_layout(model_).size());
 }
 
 int NLL_estimator::DataEntries() const

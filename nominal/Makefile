@@ -75,8 +75,8 @@ $(TEST_BIN_DIR)/test_gvv_amplitude.exe: tests/test_gvv_amplitude.cu | $(TEST_BIN
 $(TEST_BIN_DIR)/test_gvv_model.exe: tests/test_gvv_model.cu include/GVVModel.h include/Dynamics.h $(OBJ_DIR)/OmegaPropagator.o | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(OBJ_DIR)/OmegaPropagator.o $(INCLUDES) $(COMPILEFLAGS) -o $@
 
-$(TEST_BIN_DIR)/test_gvv_fit_parameters.exe: tests/test_gvv_fit_parameters.cu tests/fit_result_legacy_fixture.txt tests/fit_result_machine_fixture.txt $(OBJ_DIR)/GVVFitParameters.o | $(TEST_BIN_DIR)
-	$(NVCC) -w $< $(OBJ_DIR)/GVVFitParameters.o $(INCLUDES) $(COMPILEFLAGS) -o $@
+$(TEST_BIN_DIR)/test_gvv_fit_parameters.exe: tests/test_gvv_fit_parameters.cu tests/fit_result_legacy_fixture.txt tests/fit_result_machine_fixture.txt $(OBJ_DIR)/GVVFitParameters.o $(OBJ_DIR)/GVVProcessModel.o $(OBJ_DIR)/ModelDefinition.o | $(TEST_BIN_DIR)
+	$(NVCC) -w $< $(OBJ_DIR)/GVVFitParameters.o $(OBJ_DIR)/GVVProcessModel.o $(OBJ_DIR)/ModelDefinition.o $(INCLUDES) $(COMPILEFLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_model_definition.exe: tests/test_model_definition.cpp $(OBJ_DIR)/ModelDefinition.o | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(OBJ_DIR)/ModelDefinition.o $(INCLUDES) $(COMPILEFLAGS) -o $@

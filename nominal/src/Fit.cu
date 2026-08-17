@@ -51,7 +51,7 @@ void print_usage(const char* executable)
         << "Usage: " << executable
         << " data.root normalization_mc.root"
         << " SB1.root SB2.root"
-        << " [fit_result.txt [n_starts [base_seed]]]\n\n"
+        << " [fit_result.txt [n_starts [base_seed [model.json]]]]\n\n"
         << "Required tree/branch contract (Double_t[4], px,py,pz,E):\n"
         << "  tree: Pwa\n"
         << "  p4_pip1 p4_pim1 p4_pi01 p4_pip2 p4_pim2 p4_pi02 p4_gam\n"
@@ -59,7 +59,8 @@ void print_usage(const char* executable)
         << " SB2=+0.25.\n"
         << "n_starts defaults to 1. Only the best converged start writes "
         << "the fit result, results/Cova_matrix.dat, and "
-        << "results/projection0.root.\n";
+        << "results/projection0.root. model.json defaults to "
+        << "config/model.json.\n";
 }
 
 int parse_number_starts(const char* text)
@@ -89,6 +90,7 @@ long long parse_base_seed(const char* text)
 
 void randomize_free_couplings(
     std::vector<Double_t>& values,
+    const std::vector<GVVFitParameterSpec>& layout,
     long long seed)
 {
     std::mt19937_64 generator(static_cast<std::mt19937_64::result_type>(seed));
@@ -97,21 +99,29 @@ void randomize_free_couplings(
         std::log(kRandomCouplingMagnitudeMax));
     std::uniform_real_distribution<double> phase(-kPi, kPi);
 
-    int cursor = 0;
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int parameterization = gvv_coupling_parameterization(term);
-        if (parameterization == GVV_COUPLING_FIXED_SCALE_AND_PHASE) {
+    for (std::size_t cursor = 0; cursor < layout.size(); ++cursor) {
+        const GVVFitParameterSpec& parameter = layout[cursor];
+        const double random_log_magnitude = log_magnitude(generator);
+        if (parameter.target
+            == GVVFitParameterTarget::CouplingLogMagnitude) {
+            values[cursor] = random_log_magnitude;
             continue;
         }
-        const double random_log_magnitude = log_magnitude(generator);
-        if (parameterization == GVV_COUPLING_POSITIVE_REAL) {
-            values[cursor++] = random_log_magnitude;
+        if (parameter.target != GVVFitParameterTarget::CouplingReal) {
             continue;
+        }
+        if (cursor + 1 >= layout.size()
+            || layout[cursor + 1].target
+                   != GVVFitParameterTarget::CouplingImaginary
+            || layout[cursor + 1].target_index != parameter.target_index) {
+            throw std::runtime_error(
+                "complex coupling parameter layout is not adjacent");
         }
         const double magnitude = std::exp(random_log_magnitude);
         const double angle = phase(generator);
-        values[cursor++] = magnitude * std::cos(angle);
-        values[cursor++] = magnitude * std::sin(angle);
+        values[cursor] = magnitude * std::cos(angle);
+        values[cursor + 1] = magnitude * std::sin(angle);
+        ++cursor;
     }
     // Non-coupling physics parameters keep their nominal start values.  In
     // particular, fitted log_Romega starts from its documented nominal value.
@@ -119,72 +129,28 @@ void randomize_free_couplings(
 
 void define_fit_parameters(
     TMinuit& minuit,
-    const NLL_estimator& fitter,
+    const std::vector<GVVFitParameterSpec>& layout,
     const std::vector<Double_t>& initial_values)
 {
-    if (static_cast<int>(initial_values.size())
-        != fitter.NumberFitParameters()) {
+    if (initial_values.size() != layout.size()) {
         throw std::invalid_argument("incorrect number of initial parameters");
     }
 
-    int parameter = 0;
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int parameterization = gvv_coupling_parameterization(term);
-        if (parameterization == GVV_COUPLING_FIXED_SCALE_AND_PHASE) {
-            continue;
-        }
-        if (parameterization == GVV_COUPLING_POSITIVE_REAL) {
-            minuit.DefineParameter(
-                parameter,
-                (std::string("log_rho_") + gvv_term_name(term)).c_str(),
-                initial_values[parameter],
-                0.10,
-                0.0,
-                0.0);
-            ++parameter;
-            continue;
+    for (std::size_t parameter = 0;
+         parameter < layout.size();
+         ++parameter) {
+        const GVVFitParameterSpec& specification = layout[parameter];
+        if (specification.has_lower_bound != specification.has_upper_bound) {
+            throw std::runtime_error(
+                "TMinuit requires either two bounds or no bounds");
         }
         minuit.DefineParameter(
-            parameter,
-            (std::string("Re_") + gvv_term_name(term)).c_str(),
+            static_cast<int>(parameter),
+            specification.name.c_str(),
             initial_values[parameter],
-            0.05,
-            0.0,
-            0.0);
-        ++parameter;
-        minuit.DefineParameter(
-            parameter,
-            (std::string("Im_") + gvv_term_name(term)).c_str(),
-            initial_values[parameter],
-            0.05,
-            0.0,
-            0.0);
-        ++parameter;
-    }
-
-    for (int resonance = 0; resonance < GVV_NRESONANCES; ++resonance) {
-        if (fitter.Resonance(resonance).fit_sd_ratio) {
-            minuit.DefineParameter(
-                parameter,
-                (std::string("log_rDS_")
-                 + gvv_resonance_name(resonance)).c_str(),
-                initial_values[parameter],
-                0.10,
-                -10.0,
-                10.0);
-            ++parameter;
-        }
-        if (fitter.Resonance(resonance).fit_flatte_ratio) {
-            minuit.DefineParameter(
-                parameter,
-                (std::string("log_Romega_")
-                 + gvv_resonance_name(resonance)).c_str(),
-                initial_values[parameter],
-                0.10,
-                GVV_FLATTE_LOG_RATIO_MIN,
-                GVV_FLATTE_LOG_RATIO_MAX);
-            ++parameter;
-        }
+            specification.step,
+            specification.has_lower_bound ? specification.lower_bound : 0.0,
+            specification.has_upper_bound ? specification.upper_bound : 0.0);
     }
 }
 
@@ -206,27 +172,20 @@ void print_parameter_vector(
 }
 
 bool has_parameter_at_boundary(
-    const NLL_estimator& fitter,
+    const std::vector<GVVFitParameterSpec>& layout,
     const std::vector<Double_t>& values)
 {
-    int cursor = gvv_number_coupling_fit_parameters();
     constexpr double boundary_tolerance = 1.0e-6;
-    for (int resonance = 0; resonance < GVV_NRESONANCES; ++resonance) {
-        if (fitter.Resonance(resonance).fit_sd_ratio) {
-            if (std::fabs(values[cursor] - (-10.0)) < boundary_tolerance
-                || std::fabs(values[cursor] - 10.0) < boundary_tolerance) {
-                return true;
-            }
-            ++cursor;
+    for (std::size_t cursor = 0; cursor < layout.size(); ++cursor) {
+        if (layout[cursor].has_lower_bound
+            && std::fabs(values[cursor] - layout[cursor].lower_bound)
+                   < boundary_tolerance) {
+            return true;
         }
-        if (fitter.Resonance(resonance).fit_flatte_ratio) {
-            if (std::fabs(values[cursor] - GVV_FLATTE_LOG_RATIO_MIN)
-                    < boundary_tolerance
-                || std::fabs(values[cursor] - GVV_FLATTE_LOG_RATIO_MAX)
-                       < boundary_tolerance) {
-                return true;
-            }
-            ++cursor;
+        if (layout[cursor].has_upper_bound
+            && std::fabs(values[cursor] - layout[cursor].upper_bound)
+                   < boundary_tolerance) {
+            return true;
         }
     }
     return false;
@@ -235,6 +194,7 @@ bool has_parameter_at_boundary(
 FitAttempt run_fit_attempt(
     NLL_estimator& estimator,
     const std::vector<std::string>& parameter_names,
+    const std::vector<GVVFitParameterSpec>& parameter_layout,
     const std::vector<Double_t>& initial_values,
     int start_index,
     long long seed)
@@ -262,7 +222,7 @@ FitAttempt run_fit_attempt(
     TMinuit minuit(estimator.NumberFitParameters());
     minuit.SetObjectFit(&estimator);
     minuit.SetFCN(objective_function);
-    define_fit_parameters(minuit, estimator, initial_values);
+    define_fit_parameters(minuit, parameter_layout, initial_values);
 
     Int_t status = 0;
     Double_t arguments[2] = {0.0, 0.0};
@@ -296,7 +256,7 @@ FitAttempt run_fit_attempt(
     attempt.elapsed_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - start_time).count();
     attempt.at_parameter_boundary = has_parameter_at_boundary(
-        estimator, attempt.values);
+        parameter_layout, attempt.values);
 
     attempt.valid =
         attempt.migrad_status == 0
@@ -342,9 +302,7 @@ void save_fit_result(
     }
     output << std::setprecision(12);
     output << "# GVV fit result: best converged multistart solution\n";
-    output << "# PDG masses and widths are fixed; eta_1760_11 is 1+0i.\n";
-    output << "# f0_1710_00 is positive real: its phase is fixed to zero "
-              "and log(rho) is fitted.\n";
+    output << "# Model ids and reference conventions come from model.json.\n";
     output << "# SB1 coefficient -0.5; SB2 coefficient +0.25.\n";
     output << "# multistart n_starts " << number_starts
            << " base_seed " << base_seed
@@ -362,8 +320,9 @@ void save_fit_result(
            << " edm " << best.edm
            << " error_definition " << best.error_definition << "\n";
 
+    const GVVCompiledModel& model = fitter.Model();
     const std::vector<std::string> parameter_names =
-        gvv_fit_parameter_names(gvv_default_fit_state().resonances);
+        gvv_fit_parameter_names(model);
     if (parameter_names.size() != best.values.size()
         || best.errors.size() != best.values.size()) {
         throw std::runtime_error(
@@ -377,10 +336,13 @@ void save_fit_result(
     }
 
     int parameter = 0;
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int parameterization = gvv_coupling_parameterization(term);
+    for (int term = 0; term < fitter.NumberTerms(); ++term) {
+        const GVVTermMetadata& metadata = model.term_metadata[term];
+        const int parameterization = metadata.coupling_parameterization;
         if (parameterization == GVV_COUPLING_FIXED_SCALE_AND_PHASE) {
-            output << "coupling " << gvv_term_name(term) << " 1 0 fixed\n";
+            const DeviceComplex value = fitter.Coupling(term);
+            output << "coupling " << metadata.id << ' '
+                   << value.real << ' ' << value.imag << " fixed\n";
             continue;
         }
         if (parameterization == GVV_COUPLING_POSITIVE_REAL) {
@@ -388,7 +350,7 @@ void save_fit_result(
             const double magnitude = std::exp(log_magnitude);
             const double magnitude_error =
                 magnitude * best.errors[parameter];
-            output << "coupling " << gvv_term_name(term) << ' '
+            output << "coupling " << metadata.id << ' '
                    << magnitude << " 0 "
                    << magnitude_error << " 0 phase_fixed"
                    << " log_rho " << log_magnitude
@@ -396,16 +358,18 @@ void save_fit_result(
             ++parameter;
             continue;
         }
-        output << "coupling " << gvv_term_name(term) << ' '
+        output << "coupling " << metadata.id << ' '
                << best.values[parameter] << ' '
                << best.values[parameter + 1] << ' '
                << best.errors[parameter] << ' '
                << best.errors[parameter + 1] << '\n';
         parameter += 2;
     }
-    for (int resonance = 0; resonance < GVV_NRESONANCES; ++resonance) {
+    for (int resonance = 0;
+         resonance < fitter.NumberResonances();
+         ++resonance) {
         const GVVResonanceParameters& state = fitter.Resonance(resonance);
-        output << "resonance " << gvv_resonance_name(resonance)
+        output << "resonance " << model.resonance_metadata[resonance].id
                << " model " << gvv_propagator_name(state.propagator_model)
                << " mass " << state.mass << " fixed";
         if (state.propagator_model == GVV_PROP_SUBTRACTED_FLATTE) {
@@ -426,6 +390,23 @@ void save_fit_result(
             }
         }
         output << '\n';
+    }
+    output.close();
+    if (!output) {
+        throw std::runtime_error("failed to write fit result: " + file_name);
+    }
+
+    const std::string snapshot_name = file_name + ".model.json";
+    std::ofstream snapshot(snapshot_name.c_str());
+    if (!snapshot) {
+        throw std::runtime_error(
+            "cannot write fitted model snapshot: " + snapshot_name);
+    }
+    snapshot << model.definition.canonical_json;
+    snapshot.close();
+    if (!snapshot) {
+        throw std::runtime_error(
+            "failed to write fitted model snapshot: " + snapshot_name);
     }
 }
 
@@ -484,7 +465,7 @@ bool is_better_attempt(const FitAttempt& candidate, const FitAttempt& best)
 
 int main(int argc, char* argv[])
 {
-    if (argc < 5 || argc > 8) {
+    if (argc < 5 || argc > 9) {
         print_usage(argv[0]);
         return 2;
     }
@@ -495,6 +476,8 @@ int main(int argc, char* argv[])
     const std::string sb2_file = argv[4];
     const std::string result_file =
         argc >= 6 ? argv[5] : "results/fit_result.txt";
+    const std::string model_file =
+        argc >= 9 ? argv[8] : "config/model.json";
 
     try {
         const int number_starts = argc >= 7
@@ -516,7 +499,7 @@ int main(int argc, char* argv[])
         // -------------------------------------------------------------
 
         NLL_estimator estimator(
-            gvv_load_compiled_model("config/model.json"), branches);
+            gvv_load_compiled_model(model_file), branches);
         estimator.PrintModelSummary();
         estimator.LoadData(data_file);
         estimator.LoadNormalizationMC(normalization_mc_file);
@@ -526,11 +509,12 @@ int main(int argc, char* argv[])
             sb2_file, GVV_SB2_LIKELIHOOD_COEFFICIENT, "SB2");
         estimator.Prepare();
 
-        const GVVFitState nominal_state = gvv_default_fit_state();
+        const std::vector<GVVFitParameterSpec> parameter_layout =
+            gvv_fit_parameter_layout(estimator.Model());
         const std::vector<std::string> parameter_names =
-            gvv_fit_parameter_names(nominal_state.resonances);
+            gvv_fit_parameter_names(estimator.Model());
         const std::vector<Double_t> nominal_values =
-            gvv_fit_parameters_from_state(nominal_state);
+            gvv_fit_parameters_from_model(estimator.Model());
         if (parameter_names.size() != nominal_values.size()) {
             throw std::runtime_error(
                 "fit parameter name/value ordering is inconsistent");
@@ -549,11 +533,13 @@ int main(int argc, char* argv[])
             const long long seed = base_seed + start;
             std::vector<Double_t> initial_values = nominal_values;
             if (start > 0) {
-                randomize_free_couplings(initial_values, seed);
+                randomize_free_couplings(
+                    initial_values, parameter_layout, seed);
             }
             FitAttempt attempt = run_fit_attempt(
                 estimator,
                 parameter_names,
+                parameter_layout,
                 initial_values,
                 start,
                 seed);

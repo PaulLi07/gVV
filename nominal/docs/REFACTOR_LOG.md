@@ -68,3 +68,11 @@ states otherwise.
   JSON-compiled model and uploads vectors instead of fixed-size arrays.  A
   temporary compatibility overload remains only for PostFit and is scheduled
   for removal in the next stage.  Full build and all tests passed.
+- 2026-08-17: Added a model-generated `GVVFitParameterSpec` layout and switched
+  Fit/Minuit to it.  Parameter names, order, transformed initial values,
+  steps, bounds, and mutation targets now come from one compiled-model view;
+  multistart randomization and boundary checks consume the same descriptors.
+  Fit accepts an optional model JSON path and writes the exact canonical model
+  beside the result as `<fit-result>.model.json`.  Legacy result-reading APIs
+  remain temporarily available until PostFit is migrated.  Build and tests,
+  including a runtime parameter round trip, passed.

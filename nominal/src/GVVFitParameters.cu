@@ -65,6 +65,175 @@ int token_after(
 
 } // namespace
 
+std::vector<GVVFitParameterSpec> gvv_fit_parameter_layout(
+    const GVVCompiledModel& model)
+{
+    if (model.terms.size() != model.initial_couplings.size()
+        || model.terms.size() != model.term_metadata.size()
+        || model.resonances.size() != model.resonance_metadata.size()) {
+        throw std::invalid_argument("incomplete compiled GVV model layout");
+    }
+
+    std::vector<GVVFitParameterSpec> layout;
+    for (std::size_t term = 0; term < model.terms.size(); ++term) {
+        const GVVTermMetadata& metadata = model.term_metadata[term];
+        const DeviceComplex coupling = model.initial_couplings[term];
+        if (metadata.coupling_parameterization
+            == GVV_COUPLING_FIXED_SCALE_AND_PHASE) {
+            continue;
+        }
+        if (metadata.coupling_parameterization
+            == GVV_COUPLING_POSITIVE_REAL) {
+            if (!(coupling.real > 0.0) || coupling.imag != 0.0) {
+                throw std::runtime_error(
+                    "positive-real coupling '" + metadata.id
+                    + "' is invalid");
+            }
+            GVVFitParameterSpec parameter;
+            parameter.name = "log_rho_" + metadata.id;
+            parameter.target = GVVFitParameterTarget::CouplingLogMagnitude;
+            parameter.target_index = static_cast<int>(term);
+            parameter.initial_value = std::log(coupling.real);
+            parameter.step = 0.10;
+            layout.push_back(parameter);
+            continue;
+        }
+
+        GVVFitParameterSpec real;
+        real.name = "Re_" + metadata.id;
+        real.target = GVVFitParameterTarget::CouplingReal;
+        real.target_index = static_cast<int>(term);
+        real.initial_value = coupling.real;
+        real.step = 0.05;
+        layout.push_back(real);
+
+        GVVFitParameterSpec imaginary = real;
+        imaginary.name = "Im_" + metadata.id;
+        imaginary.target = GVVFitParameterTarget::CouplingImaginary;
+        imaginary.initial_value = coupling.imag;
+        layout.push_back(imaginary);
+    }
+
+    for (std::size_t resonance = 0;
+         resonance < model.resonances.size();
+         ++resonance) {
+        const GVVResonanceParameters& values = model.resonances[resonance];
+        const GVVResonanceMetadata& metadata =
+            model.resonance_metadata[resonance];
+        const ctpwa::ResonanceDefinition& definition =
+            model.definition.resonance(metadata.id);
+
+        auto append_log_parameter = [&](const std::string& source_name,
+                                        const std::string& fit_name,
+                                        GVVFitParameterTarget target,
+                                        double physical_value) {
+            const auto found = definition.parameters.find(source_name);
+            if (found == definition.parameters.end() || found->second.fixed
+                || found->second.transform != "log") {
+                throw std::runtime_error(
+                    "compiled fitted parameter '" + source_name
+                    + "' is inconsistent for resonance '" + metadata.id
+                    + "'");
+            }
+            if (!(physical_value > 0.0)) {
+                throw std::runtime_error(
+                    "non-positive fitted parameter for resonance '"
+                    + metadata.id + "'");
+            }
+            GVVFitParameterSpec parameter;
+            parameter.name = fit_name + metadata.id;
+            parameter.target = target;
+            parameter.target_index = static_cast<int>(resonance);
+            parameter.initial_value = std::log(physical_value);
+            parameter.step = found->second.step;
+            parameter.has_lower_bound = found->second.has_lower_bound;
+            parameter.has_upper_bound = found->second.has_upper_bound;
+            parameter.lower_bound = found->second.lower_bound;
+            parameter.upper_bound = found->second.upper_bound;
+            layout.push_back(parameter);
+        };
+
+        if (values.fit_sd_ratio) {
+            append_log_parameter(
+                "sd_ratio",
+                "log_rDS_",
+                GVVFitParameterTarget::ResonanceLogSDRatio,
+                values.sd_ratio);
+        }
+        if (values.fit_flatte_ratio) {
+            append_log_parameter(
+                "omegaomega_ratio",
+                "log_Romega_",
+                GVVFitParameterTarget::ResonanceLogFlatteRatio,
+                values.flatte_ratio);
+        }
+    }
+    return layout;
+}
+
+std::vector<std::string> gvv_fit_parameter_names(
+    const GVVCompiledModel& model)
+{
+    const std::vector<GVVFitParameterSpec> layout =
+        gvv_fit_parameter_layout(model);
+    std::vector<std::string> names;
+    names.reserve(layout.size());
+    for (const GVVFitParameterSpec& parameter : layout) {
+        names.push_back(parameter.name);
+    }
+    return names;
+}
+
+std::vector<double> gvv_fit_parameters_from_model(
+    const GVVCompiledModel& model)
+{
+    const std::vector<GVVFitParameterSpec> layout =
+        gvv_fit_parameter_layout(model);
+    std::vector<double> values;
+    values.reserve(layout.size());
+    for (const GVVFitParameterSpec& parameter : layout) {
+        values.push_back(parameter.initial_value);
+    }
+    return values;
+}
+
+void gvv_apply_fit_parameters_to_model(
+    GVVCompiledModel& model,
+    const std::vector<double>& parameters)
+{
+    const std::vector<GVVFitParameterSpec> layout =
+        gvv_fit_parameter_layout(model);
+    if (parameters.size() != layout.size()) {
+        throw std::invalid_argument("incorrect number of GVV fit parameters");
+    }
+    for (std::size_t index = 0; index < layout.size(); ++index) {
+        const double value = parameters[index];
+        if (!std::isfinite(value)) {
+            throw std::invalid_argument("non-finite GVV fit parameter");
+        }
+        const GVVFitParameterSpec& parameter = layout[index];
+        if (parameter.target == GVVFitParameterTarget::CouplingReal) {
+            model.initial_couplings[parameter.target_index].real = value;
+        } else if (
+            parameter.target == GVVFitParameterTarget::CouplingImaginary) {
+            model.initial_couplings[parameter.target_index].imag = value;
+        } else if (
+            parameter.target == GVVFitParameterTarget::CouplingLogMagnitude) {
+            model.initial_couplings[parameter.target_index] =
+                DeviceComplex(std::exp(value), 0.0);
+        } else if (
+            parameter.target == GVVFitParameterTarget::ResonanceLogSDRatio) {
+            model.resonances[parameter.target_index].sd_ratio =
+                std::exp(value);
+        } else if (
+            parameter.target
+            == GVVFitParameterTarget::ResonanceLogFlatteRatio) {
+            model.resonances[parameter.target_index].flatte_ratio =
+                std::exp(value);
+        }
+    }
+}
+
 GVVFitState gvv_default_fit_state()
 {
     GVVFitState state;

@@ -2,6 +2,7 @@
 #define MINUIT_FCN_H
 
 #include "NLL_estimator.h"
+#include "GVVFitParameters.h"
 
 #include "TMinuit.h"
 
@@ -12,28 +13,33 @@ inline void apply_gvv_fit_parameters(
     NLL_estimator& fitter,
     const Double_t* parameters)
 {
-    int cursor = 0;
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int parameterization = gvv_coupling_parameterization(term);
-        if (parameterization == GVV_COUPLING_FIXED_SCALE_AND_PHASE) {
-            continue;
-        }
-        if (parameterization == GVV_COUPLING_POSITIVE_REAL) {
-            fitter.SetLogCouplingMagnitude(term, parameters[cursor]);
-            ++cursor;
-            continue;
-        }
-        fitter.SetCoupling(term, parameters[cursor], parameters[cursor + 1]);
-        cursor += 2;
-    }
-    for (int resonance = 0; resonance < GVV_NRESONANCES; ++resonance) {
-        if (fitter.Resonance(resonance).fit_sd_ratio) {
-            fitter.SetLogSDRatio(resonance, parameters[cursor]);
-            ++cursor;
-        }
-        if (fitter.Resonance(resonance).fit_flatte_ratio) {
-            fitter.SetLogFlatteRatio(resonance, parameters[cursor]);
-            ++cursor;
+    const std::vector<GVVFitParameterSpec> layout =
+        gvv_fit_parameter_layout(fitter.Model());
+    for (std::size_t cursor = 0; cursor < layout.size(); ++cursor) {
+        const GVVFitParameterSpec& parameter = layout[cursor];
+        if (parameter.target == GVVFitParameterTarget::CouplingReal) {
+            const DeviceComplex current = fitter.Coupling(
+                parameter.target_index);
+            fitter.SetCoupling(
+                parameter.target_index, parameters[cursor], current.imag);
+        } else if (
+            parameter.target == GVVFitParameterTarget::CouplingImaginary) {
+            const DeviceComplex current = fitter.Coupling(
+                parameter.target_index);
+            fitter.SetCoupling(
+                parameter.target_index, current.real, parameters[cursor]);
+        } else if (
+            parameter.target == GVVFitParameterTarget::CouplingLogMagnitude) {
+            fitter.SetLogCouplingMagnitude(
+                parameter.target_index, parameters[cursor]);
+        } else if (
+            parameter.target == GVVFitParameterTarget::ResonanceLogSDRatio) {
+            fitter.SetLogSDRatio(parameter.target_index, parameters[cursor]);
+        } else if (
+            parameter.target
+            == GVVFitParameterTarget::ResonanceLogFlatteRatio) {
+            fitter.SetLogFlatteRatio(
+                parameter.target_index, parameters[cursor]);
         }
     }
 }
