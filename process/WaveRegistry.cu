@@ -157,8 +157,9 @@ int GVVCompiledModel::find_term(const std::string& id) const
 
 const std::vector<GVVWaveMetadata>& gvv_wave_registry()
 {
-    // This is the only host registration point for complete GVV waves.  The
-    // device tensor dispatch remains in framework/amplitude/IntensityEngine.cuh next to the formulae.
+    // This is the only host registration point for complete GVV waves. The
+    // matching device dispatch is the single gvv_wave_tensor function in
+    // WaveRegistry.cuh; individual formulae stay in process/waves/.
     static const std::vector<GVVWaveMetadata> registry = {
         {"gvv.scalar_00", "0++", "0^{++}(00)", "scalar", GVV_SCALAR_00},
         {"gvv.scalar_22", "0++", "0^{++}(22)", "scalar", GVV_SCALAR_22},

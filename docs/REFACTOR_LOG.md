@@ -69,3 +69,16 @@
   worker 从 spool 脚本路径错误推导项目根目录，找不到 `config/model.json`。
   修复为优先使用提交端导出的 `GVV_PROJECT_ROOT` 后重新核验；该失败不曾
   运行拟合或写入数值结果。
+- 修复后 Job `20730` 在 `gpu041` 上运行 2 分 50 秒并以 `COMPLETED 0:0`
+  结束。10 个起点的最优解仍为 start 8 / seed `20260823`；新 NLL
+  `-37530.4571965`，旧基线 `-37530.4571872`，差 `-9.3e-6`。12 个参数
+  的最大绝对差为 `9.23e-4`，在 Minuit 数值收敛波动范围内；MIGRAD、
+  HESSE 和 covariance status 均通过，EDM 为 `2.74e-5`。
+- 四个 tag 输出全部存在：结果 TXT 含 12 个参数，covariance 为规则
+  `12x12`，projection ROOT 为可读文件。ROOT 内含 `MC/data/bg`、
+  `component_map/group_map/metadata` 六棵树；metadata 给出 7 Terms、
+  2 JPC groups、23561 data、177374 normalization MC、有效产额 17358，
+  分量闭合残差 `3.29e-15`。
+- 仓库内残留的 209 MB 旧 `nominal/` 仅含生成二进制和历史输出，已移至
+  可恢复临时备份 `/tmp/gvv_v1_legacy_artifacts_20260817_2116`，使规范
+  项目树不再同时展示旧布局。
