@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "process": "psi2s_to_gamma_omega_omega",
+  "metadata": {
+    "name": "nominal",
+    "description": "gVV nominal seven-term amplitude model"
+  },
+  "resonances": [
+    {
+      "id": "f0_1500",
+      "label": "f0(1500)",
+      "propagator": "subtracted_effective_flatte",
+      "parameters": {
+        "mass": {"value": 1.522, "fixed": true},
+        "width": {"value": 0.108, "fixed": true},
+        "omegaomega_ratio": {
+          "value": 1.0,
+          "fixed": false,
+          "transform": "log",
+          "step": 0.1,
+          "bounds": [-6.0, 3.0]
+        }
+      }
+    },
+    {
+      "id": "f0_1710",
+      "label": "f0(1710)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 1.723, "fixed": true},
+        "width": {"value": 0.149, "fixed": true},
+        "orbital_l": {"value": 0, "fixed": true}
+      }
+    },
+    {
+      "id": "eta_1760",
+      "label": "eta(1760)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 1.751, "fixed": true},
+        "width": {"value": 0.240, "fixed": true},
+        "orbital_l": {"value": 1, "fixed": true}
+      }
+    },
+    {
+      "id": "eta_c_1S",
+      "label": "eta_c(1S)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 2.98409, "fixed": true},
+        "width": {"value": 0.0300, "fixed": true},
+        "orbital_l": {"value": 1, "fixed": true}
+      }
+    },
+    {
+      "id": "X_1835",
+      "label": "X(1835)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 1.8340, "fixed": true},
+        "width": {"value": 0.130, "fixed": true},
+        "orbital_l": {"value": 1, "fixed": true}
+      }
+    },
+    {
+      "id": "X_2370",
+      "label": "X(2370)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 2.377, "fixed": true},
+        "width": {"value": 0.148, "fixed": true},
+        "orbital_l": {"value": 1, "fixed": true}
+      }
+    },
+    {
+      "id": "NR_0mp",
+      "label": "nonresonant 0-+",
+      "propagator": "nonresonant",
+      "parameters": {}
+    }
+  ],
+  "terms": [
+    {
+      "id": "f0_1500_00",
+      "label": "f_{0}(1500)",
+      "wave": "gvv.scalar_00",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f0_1500"
+      }
+    },
+    {
+      "id": "f0_1710_00",
+      "label": "f_{0}(1710)",
+      "wave": "gvv.scalar_00",
+      "coupling": {
+        "mode": "positive_real",
+        "reference": "phase",
+        "initial": 0.1
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f0_1710"
+      }
+    },
+    {
+      "id": "eta_1760_11",
+      "label": "\\eta(1760)",
+      "wave": "gvv.pseudoscalar_11",
+      "coupling": {
+        "mode": "fixed_complex",
+        "reference": "scale_and_phase",
+        "initial": [1.0, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "eta_1760"
+      }
+    },
+    {
+      "id": "eta_c_11",
+      "label": "\\eta_{c}(1S)",
+      "wave": "gvv.pseudoscalar_11",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "eta_c_1S"
+      }
+    },
+    {
+      "id": "X_1835_11",
+      "label": "X(1835)",
+      "wave": "gvv.pseudoscalar_11",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "X_1835"
+      }
+    },
+    {
+      "id": "X_2370_11",
+      "label": "X(2370)",
+      "wave": "gvv.pseudoscalar_11",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "X_2370"
+      }
+    },
+    {
+      "id": "NR_0mp_11",
+      "label": "0^{-+}~\\mathrm{NR}",
+      "wave": "gvv.pseudoscalar_11",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "NR_0mp"
+      }
+    }
+  ]
+}

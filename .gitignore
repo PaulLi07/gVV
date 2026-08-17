@@ -3,9 +3,9 @@
 *.root
 
 # Compiled binaries and build products
-/nominal/bin/
-/nominal/build/
-/nominal/tests/bin/
+/bin/
+/build/
+/nominal/
 *.exe
 *.o
 *.so
@@ -15,14 +15,12 @@
 *.rootmap
 
 # Fit, PostFit, projection, and generated plot outputs
-/nominal/results/*
-!/nominal/results/plot/
-/nominal/results/plot/*
-!/nominal/results/plot/.gitkeep
+/results/*
+!/results/.gitkeep
 
 # Batch and build logs
-/nominal/runlog/*
-!/nominal/runlog/.gitkeep
+/runlog/*
+!/runlog/.gitkeep
 *.out
 *.log
 
