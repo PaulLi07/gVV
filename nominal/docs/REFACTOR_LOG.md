@@ -97,3 +97,29 @@ states otherwise.
   all model editing/extension contracts, and added regression cases that
   compile both a reduced 6-Term model and an expanded 8-Resonance/8-Term model.
   This explicitly tests that nominal 7/7 counts are not production constants.
+
+## 2026-08-17 — final verification
+
+- Performed a clean rebuild with `make clean`, `make -j4`, and
+  `make tests -j4` on `lxlogin005.ihep.ac.cn` using CUDA 12.9, ROOT 6.32.02,
+  and C++17. The only compiler messages were nvcc's existing future
+  deprecation warnings for the configured `sm_70` target.
+- Passed all runtime checks after the clean build:
+  - `test_dynamics.exe`
+  - `test_gvv_amplitude.exe`
+  - `test_gvv_model.exe`
+  - `test_gvv_fit_parameters.exe`
+  - `test_model_definition.exe`
+  - `test_gvv_process_model.exe` (nominal 7/7 plus reduced/expanded layouts)
+  - `test_likelihood.exe`
+  - `PostFit.exe --self-test`
+- Passed `bash -n scripts/*.sh config/gvv_env.sh`, `git diff --check`, and a
+  production-source scan for removed fixed-model count/default-model symbols.
+- Confirmed the refactor worktree was clean before recording this final log.
+- Rechecked the original `gVV_v1` worktree: its pre-existing modifications are
+  still exactly the two paths observed at the start
+  (`nominal/include/GVVPlotUtils.h`, `nominal/scripts/subgpu.sh`).
+- No Slurm job or production fit was submitted, no physics result was
+  overwritten, and the branch was not pushed. A GPU/data numerical smoke fit
+  remains a separate release-validation action when the user chooses a model
+  hypothesis and result destination.
