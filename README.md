@@ -1,68 +1,269 @@
 # gVV
 
-`gVV` 是 `psi(2S) -> gamma omega omega` 协变张量分波拟合项目。当前版本把可复用的数理与拟合设施放在 `framework/`，把本衰变过程的末态、完整 Wave、Term 计算和 ROOT 输入约定放在 `process/`。在已有 Wave 范围内，改变模型只需要编辑 `config/model.json`，不再修改或重新计数 C++ 数组。
+gVV is a CUDA/ROOT implementation of a covariant-tensor partial-wave fit for
 
-## 日常使用
+```text
+psi(2S) -> gamma X
+             X -> omega omega
+       omega -> pi+ pi- pi0
+```
+
+The project evaluates coherent amplitudes event by event, normalizes the
+intensity with accepted Monte Carlo, and fits resonance and coupling parameters
+with a multistart Minuit workflow. The current development version is
+`gVV v1.1.0-dev`.
+
+## Physics model
+
+A fit model is assembled from three concepts:
+
+- **Resonance**: a propagator instance and its physical parameters;
+- **Wave**: a complete process-specific covariant-tensor basis;
+- **Term**: one Resonance combined with one Wave and one complex coupling.
+
+The active Resonances and Terms are defined only in
+[`config/model.json`](config/model.json). Within the registered Wave basis,
+adding, removing, or disabling a resonance contribution does not require
+changing C++/CUDA array sizes or parameter counts.
+
+The currently registered Waves are:
+
+| Wave ID | Quantum numbers | Implementation |
+|---|---|---|
+| `gvv.scalar_00` | `0++ (00)` | `process/waves/Scalar00.cuh` |
+| `gvv.scalar_22` | `0++ (22)` | `process/waves/Scalar22.cuh` |
+| `gvv.pseudoscalar_11` | `0-+ (11)` | `process/waves/Pseudoscalar11.cuh` |
+
+`Scalar22` is the existing `0++ (22)` basis; it is not a `2++` Wave.
+
+## Features
+
+- Runtime model construction from JSON, with no hard-coded total number of
+  Resonances, Terms, or fit parameters;
+- reusable propagator, kinematics, tensor, likelihood, and fit components under
+  `framework/`;
+- explicit GVV event kinematics, Wave registration, amplitude contraction, and
+  sample loading under `process/`;
+- accepted-MC normalization of an unbinned coherent intensity;
+- signed background samples for sideband-subtracted likelihoods;
+- multistart MIGRAD/HESSE fitting with convergence and covariance selection;
+- detailed text results, covariance matrices, ROOT projection trees, and Slurm
+  logs under one configurable output tag.
+
+## Requirements
+
+The default build targets the IHEP AlmaLinux environment used by this analysis:
+
+- CUDA 12 at `/usr/local/cuda-12`;
+- ROOT 6.32.02 built with GCC 11.4;
+- a C++17-capable CUDA compiler;
+- GNU Make;
+- Python 3 for submission-time JSON preflight;
+- Slurm and an A100 allocation for the provided submission script.
+
+The CUDA and ROOT locations can be overridden before loading the project
+environment:
+
+```bash
+export GVV_CUDA_ROOT=/path/to/cuda
+export GVV_ROOTSYS=/path/to/root
+source config/gvv_env.sh
+```
+
+## Input data
+
+Input ROOT files are intentionally not tracked by Git. The default
+[`config/fit.json`](config/fit.json) expects:
+
+```text
+RootSet/
+├── data.root
+├── normalization_mc.root
+├── SB1.root
+└── SB2.root
+```
+
+Each file must contain a `Pwa` tree with the seven four-momentum branches
+
+```text
+p4_pip1  p4_pim1  p4_pi01
+p4_pip2  p4_pim2  p4_pi02
+p4_gam
+```
+
+stored in `(px, py, pz, E)` order. Alternative paths can be selected in
+`config/fit.json`.
+
+## Build and test
+
+From the repository root:
 
 ```bash
 source config/gvv_env.sh
 make -j2
 make check
-./submit.sh config/fit.json
 ```
 
-`Fit.exe` 也可以直接接受唯一的配置入口：
+Useful Make targets are:
+
+| Target | Purpose |
+|---|---|
+| `make` or `make fit` | Build `bin/Fit.exe` |
+| `make tests` | Build all test executables |
+| `make check` | Run the complete unit-test set |
+| `make clean` | Remove generated binaries, objects, and dependency files |
+
+Build products are written under `build/` and `bin/` and are ignored by
+Git.
+
+## Configure a fit
+
+A run is controlled by two JSON files.
+
+### `config/fit.json`
+
+This file selects:
+
+- the model file;
+- data, normalization-MC, and signed background samples;
+- multistart and Minuit settings;
+- result and log directories;
+- the output tag.
+
+Background coefficients enter the effective likelihood as
+
+```text
+ln L_eff += coefficient * sum_events ln P(event)
+```
+
+so the nominal `SB1 = -0.5` and `SB2 = +0.25` prescription is expressed
+entirely in configuration.
+
+### `config/model.json`
+
+This file defines:
+
+- propagator instances and their parameters;
+- active Terms;
+- registered Wave IDs;
+- coupling parameterizations and initial values;
+- reference amplitudes within each coherence class.
+
+The loader validates the model before GPU allocation. See
+[`docs/MODEL_CONFIGURATION.md`](docs/MODEL_CONFIGURATION.md) for the complete
+field contract.
+
+## Run a fit
+
+Build `bin/Fit.exe` and submit from the repository root:
+
+```bash
+./submit.sh
+```
+
+The default configuration is `config/fit.json`. A different run
+configuration may be supplied explicitly:
+
+```bash
+./submit.sh path/to/fit.json
+```
+
+`submit.sh` is both the submission entry point and the Slurm worker script. It
+validates all immutable inputs before submission, exports the canonical project
+root to the worker, requests the project-approved A100 resources, and checks
+that the expected numerical outputs were produced.
+
+The executable also accepts the run configuration directly:
 
 ```bash
 bin/Fit.exe config/fit.json
 ```
 
-实际 GPU 拟合应通过 Slurm 提交，不要在登录节点运行。`submit.sh` 同时承担提交端和计算节点 worker 的职责，因此仓库中不再维护一组相互依赖的脚本。
+Use direct execution only in a suitable GPU runtime environment. Do not run the
+fit on an IHEP login node.
 
-输出名由 `config/fit.json` 的 `output.tag` 统一控制。同名文件直接覆盖：
+## Outputs
 
-- `results/fit_result-<tag>.txt`
-- `results/Cova_matrix-<tag>.dat`
-- `results/projection-<tag>.root`
-- `runlog/fit-<tag>.log`
+The `output.tag` value in `config/fit.json` controls all output names:
 
-不会额外生成模型快照、拟合配置快照或 run 子目录。
+| Product | Default pattern |
+|---|---|
+| Detailed fit result | `results/fit_result-<tag>.txt` |
+| Covariance matrix | `results/Cova_matrix-<tag>.dat` |
+| Projection ROOT file | `results/projection-<tag>.root` |
+| Slurm log | `runlog/fit-<tag>.log` |
 
-## 模型修改边界
+Running again with the same tag overwrites the previous files. The fit does not
+create per-run directories or copies of the input configuration.
 
-增加或删除已有 Wave 上的共振态时，只改 `config/model.json`：
+The projection file contains fitted normalization-MC weights, selected data,
+combined sideband samples, Term and JPC index maps, and fit provenance in the
+`MC`, `data`, `bg`, `component_map`, `group_map`, and `metadata`
+trees.
 
-1. 在 `resonances` 中定义传播子和参数；
-2. 在 `terms` 中把该 Resonance、已注册 Wave 和复耦合连接起来；
-3. 保证每个相干类恰有一个相位参考。
+## Modify the amplitude model
 
-数组长度、Minuit 参数数、参数名称、GPU Term 布局和投影分量映射均由配置运行时生成。
+### Add or remove a Resonance
 
-增加新 Wave 时，用户只触及过程层：在 `process/waves/` 用 `framework/math/` 与 `framework/tensors/` 的积木实现完整过程 Wave，然后在 `process/WaveRegistry.cuh/.cu` 的唯一注册点登记。此次等价重构没有增加新的 `2++` Wave；`Scalar22.cuh` 是原有 `0++(22)` 基底。
+For a Resonance that uses an existing Wave:
 
-未来改造为另一个末态时，目标不是让一个程序同时容纳所有衰变道，而是复用 `framework/`，替换 `process/` 和少量 `app/` 胶水。传播子、张量积木、通用似然算术、多起点 Minuit 驱动和输出协议不依赖 GVV。
+1. Add or edit its propagator definition under `resonances` in
+   `config/model.json`.
+2. Add a Term that references the Resonance and a registered Wave.
+3. Choose the coupling mode and maintain exactly one phase reference in each
+   coherence class.
+4. To disable a contribution temporarily, set `"active": false` on its Term.
 
-## 目录
+No production source file needs to be edited for this workflow.
+
+### Add a new Wave
+
+A genuinely new covariant-tensor basis requires process code:
+
+1. implement the complete Wave in a new `process/waves/*.cuh` file using the
+   reusable blocks from `framework/math/` and `framework/tensors/`;
+2. add its device enum and dispatch in `process/WaveRegistry.cuh`;
+3. register its stable ID, JPC label, and coherence class in
+   `process/WaveRegistry.cu`;
+4. add finite-value, contraction, registry, and model-compilation tests;
+5. reference the new Wave ID from `config/model.json`.
+
+`process/ProcessAmplitude.cuh` normally remains unchanged because it applies
+the common GVV polarization sum and Wave-pair contraction to every registered
+Wave.
+
+## Repository layout
 
 ```text
 gVV/
-├── app/                    # Fit 可执行程序的薄胶水层
-├── config/                 # model.json 与 fit.json
-├── framework/              # 可迁移到其他末态的通用设施
-│   ├── amplitude/
-│   ├── dynamics/
-│   ├── fit/
-│   ├── likelihood/
-│   ├── math/
-│   ├── model/
-│   └── tensors/
-├── process/                # psi(2S)->gamma omega omega 专属实现
-│   └── waves/
-├── postfit/                # 原下游绘图样式，暂不在本次重构范围
-├── tests/
-├── docs/
+├── app/          Fit executable and application-level glue
+├── config/       Model, run configuration, and project environment
+├── framework/    Process-independent math, tensors, dynamics, model, fit,
+│                 likelihood, amplitude, and output components
+├── process/      psi(2S) -> gamma omega omega event and amplitude code
+│   └── waves/    Complete registered GVV Wave implementations
+├── postfit/      Preserved downstream plotting and post-fit sources
+├── tests/        Unit and model-contract tests
+├── docs/         Architecture, configuration, and Wave-development guides
+├── results/      Generated numerical outputs
+├── runlog/       Generated Slurm logs
 ├── Makefile
 └── submit.sh
 ```
 
-详细边界和调用流见 `docs/ARCHITECTURE.md`；模型字段见 `docs/MODEL_CONFIGURATION.md`；新 Wave 的实现步骤见 `docs/WAVE_DEVELOPMENT.md`；逐步操作和核验记录见 `docs/REFACTOR_LOG.md`。
+The dependency direction is deliberately one way: reusable `framework/`
+components do not include GVV-specific `process/` code. A different decay
+channel can reuse the framework while replacing its event representation,
+complete Waves, Term evaluation, sample loader, and projection writer.
+
+The sources under `postfit/` are not part of the default fit build. They are
+kept as the bridge to the existing downstream plotting workflow and will be
+maintained separately from the fit executable.
+
+## Documentation
+
+- [Architecture and data flow](docs/ARCHITECTURE.md)
+- [Model and fit configuration](docs/MODEL_CONFIGURATION.md)
+- [Adding a new Wave](docs/WAVE_DEVELOPMENT.md)
+- [Refactor and validation history](docs/REFACTOR_LOG.md)
+- [Post-fit source notes](postfit/README.md)
