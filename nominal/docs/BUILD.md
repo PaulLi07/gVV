@@ -48,12 +48,21 @@ cd scripts
 ./scripts/Sub.sh
 ```
 
-`Sub.sh [n_starts] [base_seed]` 默认使用 10 个起点和种子
+`Sub.sh [n_starts] [base_seed] [model.json]` 默认使用 10 个起点、种子
 `20260815`。例如显式选择 20 个起点：
 
 ```bash
 ./Sub.sh 20 20260815
 ```
+
+默认模型为 `config/model.json`；比较候选模型时可显式选择：
+
+```bash
+./Sub.sh 20 20260815 config/models/candidate.json
+```
+
+每次 Fit 会在结果旁写出 `<fit_result>.model.json`。PostFit 默认读取这份模型
+快照，而不是猜测当前 `config/model.json` 是否仍与拟合时一致。
 
 脚本会通过 `--chdir` 和 `GVV_PROJECT_ROOT` 把真实项目根传给 Slurm，避免 worker
 被复制成 `/var/spool/.../slurm_script` 后错误地从 `BASH_SOURCE` 推断路径。
@@ -94,11 +103,14 @@ source config/gvv_env.sh
 ./tests/bin/test_gvv_amplitude.exe
 ./tests/bin/test_gvv_model.exe
 ./tests/bin/test_gvv_fit_parameters.exe
+./tests/bin/test_model_definition.exe
+./tests/bin/test_gvv_process_model.exe
+./tests/bin/test_likelihood.exe
 ./bin/PostFit.exe --self-test
 bash -n scripts/*.sh config/gvv_env.sh
 ```
 
-`tests/` 保存四个 CUDA/C++ 测试源文件和 fit-result 解析 fixtures；`make tests`
+`tests/` 保存 CUDA/C++ 测试源文件和 fit-result 解析 fixtures；`make tests`
 只负责编译到 `tests/bin/`。已有真实拟合结果时，可额外运行：
 
 ```bash

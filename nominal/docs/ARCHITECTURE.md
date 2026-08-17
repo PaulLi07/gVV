@@ -66,8 +66,8 @@ They are built from reusable tensor primitives.
 
 ## Event intensity contract
 
-The reusable coherent engine consumes a process-provided scalar term factor and
-an event wave-bilinear matrix:
+The coherent kernel consumes a process-provided scalar Term coefficient and an
+event Wave-bilinear matrix:
 
 ```text
 d_i(e; theta) = coupling_i(theta) * process_term_dynamics_i(e; theta)
@@ -75,20 +75,24 @@ d_i(e; theta) = coupling_i(theta) * process_term_dynamics_i(e; theta)
 I(e; theta) = sum_ij Re[d_i d_j* F_(b_i,b_j)(e)]
 ```
 
-`F` is parameter independent and is built once for the active wave subset.
+`F` is parameter independent and is built once for the active Wave subset.
 The active process controls both the wave tensors used to build `F` and the
 dynamics used to build `d_i`.  The framework controls storage, coherent
 summation, component closure, and numerical validation.
 
 ## Likelihood boundary
 
-Intensity evaluation, normalization, PDF evaluation, and likelihood
-composition are separate responsibilities:
+Intensity evaluation and likelihood semantics are separate responsibilities:
 
-1. `IntensityEngine` evaluates `I(e; theta)`.
-2. `Normalizer` computes the weighted normalization-MC mean.
-3. `PdfEvaluator` validates and divides by that normalization.
-4. `LikelihoodStrategy` combines named samples with configured coefficients.
+1. `CalGVVTermCoefficients` is process code that builds `d_i`.
+2. `CalCoherentIntensity` contracts `d_i` with the compact `F` matrix using
+   runtime dimensions.
+3. `ctpwa::monte_carlo_normalization` computes and validates the normalization
+   MC mean.
+4. `ctpwa::log_likelihood_contribution` validates PDFs and returns one signed
+   sample contribution.
+5. `NLL_estimator` is the GVV application adapter that supplies data and
+   sideband samples and their configured coefficients.
 
 The current sideband-subtracted likelihood is one strategy, not a property of
 the GVV amplitude.  Sample paths, coefficients, and optimizer controls belong
@@ -106,9 +110,44 @@ Converting the project to a new decay process keeps the framework and replaces
 the process event, wave registry, term evaluator, projection registry, model
 configuration, and process tests.
 
+## Current source map
+
+```text
+include/framework/ModelDefinition.h + src/ModelDefinition.cpp
+    process-neutral JSON model and validation
+include/framework/Likelihood.h
+    process-neutral normalization and likelihood mathematics
+
+include/process/GVVProcessModel.h + src/GVVProcessModel.cu
+    GVV Wave registry, propagator/dynamics registration, dense model compiler
+include/GVVAmplitude.h
+    GVV event kinematics and complete covariant Wave tensors
+include/GVVModel.h
+    device-only GVV Resonance/Term representations and X propagator dispatch
+include/kernel.h + src/kernel.cu
+    GVV Term builder plus runtime-sized coherent contraction/component matrix
+include/GVVSample.h + src/GVVSample.cu
+    GVV ROOT event contract and process cache
+
+include/GVVFitParameters.h + src/GVVFitParameters.cu
+    compiled-model-derived parameter layout and result/covariance I/O
+include/NLL_estimator.h + src/NLL_estimator.cu
+    current GVV fit orchestration and process-specific projection output
+src/Fit.cu / src/PostFit.cu
+    user applications
+```
+
+Physical directory names express the intended dependency where practical. A
+few established GVV files remain at `include/`/`src/` root to avoid a large
+path-only rewrite; their GVV prefix is the process boundary. They are replaced,
+not generalized, when cloning the framework for another decay topology.
+
 ## Result provenance
 
-Fit and PostFit outputs must record the model schema version, process id,
-canonical model JSON, stable resonance/term/wave ids, parameter ordering,
-coupling reference policies, and component-pair mapping.  PostFit reads this
-metadata instead of guessing the active model from hard-coded indices.
+Fit writes the canonical model as `<fit-result>.model.json`; PostFit loads this
+snapshot by default. Fit text, PostFit ROOT output, and projection mapping trees
+record stable ids and runtime ordering. Numeric component indices are therefore
+interpreted through recorded metadata instead of a compiled-in nominal model.
+
+For concrete editing procedures and the GVV-to-GPPP replacement boundary, see
+`MODEL_CONFIGURATION.md`.

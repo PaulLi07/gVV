@@ -13,6 +13,12 @@ plotting macros, tests, and reproducibility documentation. The normalization
 work changes the project layout and entry points only; it does not change the
 current event selection, amplitude definitions, or fit conventions.
 
+The amplitude content is now selected at runtime from the directly edited
+`nominal/config/model.json`; Resonance/Term counts and the Minuit layout are not
+compiled-in nominal constants. See
+[`MODEL_CONFIGURATION.md`](nominal/docs/MODEL_CONFIGURATION.md) before adding or
+removing a component.
+
 > **Scope:** this README documents the active v1 implementation under
 > `nominal/`. Historical gKK/K-matrix utilities are intentionally excluded from
 > this release and are not part of the build, fit, PostFit, or plotting paths.
@@ -152,6 +158,9 @@ Run the local algebra and model tests:
 ./tests/bin/test_gvv_amplitude.exe
 ./tests/bin/test_gvv_model.exe
 ./tests/bin/test_gvv_fit_parameters.exe
+./tests/bin/test_model_definition.exe
+./tests/bin/test_gvv_process_model.exe
+./tests/bin/test_likelihood.exe
 ./bin/PostFit.exe --self-test
 ```
 
@@ -221,7 +230,7 @@ gVV_v1/
 └── nominal/              # active analysis variant and runtime root
     ├── bin/              # Fit.exe and PostFit.exe
     ├── build/obj/        # CUDA/C++ intermediate objects
-    ├── config/           # project-local CUDA/ROOT/data configuration
+    ├── config/           # runtime model JSON/schema and CUDA/ROOT/data config
     ├── docs/             # build guide and detailed architecture HTML
     ├── include/          # active headers and physics interfaces
     ├── results/          # fit/PostFit/projection numerical outputs
@@ -252,7 +261,9 @@ scripts/draw.sh
 - `include/GVVSample.h` and `src/GVVSample.cu` load ROOT four-vectors into host
   and device buffers.
 - `include/NLL_estimator.h` and `src/NLL_estimator.cu` own sample loading,
-  normalization, sideband weighting, and likelihood evaluation.
+  GVV intensity orchestration, sideband samples, and projection output.
+- `include/framework/Likelihood.h` owns process-neutral MC normalization, PDF
+  validation, and signed sample likelihood contributions.
 - The same `GVVBranchConfig` convention is used by data, selected MC, sidebands,
   and truth MC, while the fit and post-fit stages remain separate executables.
 
@@ -265,17 +276,21 @@ scripts/draw.sh
   geometric four-vector from the complex rho-isobar factor.
 - `include/OmegaPropagator.h` and `src/OmegaPropagator.cu` build and upload the
   omega running-width table used by the event propagator layer.
-- `include/GVVModel.h` is the single source of truth for resonance identities,
-  masses, widths, propagator choices, term ordering, coupling conventions, and
-  sideband coefficients.
+- `config/model.json` is the single user-edited Resonance/Term model.
+  `framework/ModelDefinition` validates generic fields, and
+  `process/GVVProcessModel` registers GVV propagators, Waves, and Term dynamics
+  before compiling stable ids to a dense runtime device layout.
+- `include/GVVModel.h` contains only device representations and propagator
+  dispatch; it contains no nominal Resonance or Term list.
 
 ### Tensors and amplitudes
 
 - `include/Tensor.h` implements Lorentz tensors, metric contractions, epsilon
   tensors, transverse projections, and orbital tensors.
-- `include/GVVAmplitude.h` builds the three active basis tensors, the photon
-  polarization projector, the real kinematic `F_ab` matrix, and the final
-  polarization-summed coherent intensity.
+- `include/GVVAmplitude.h` builds the three registered GVV basis tensors and
+  photon polarization projector. The model selects a compact active subset;
+  `src/kernel.cu` builds process Term coefficients and performs the generic
+  runtime-sized coherent contraction.
 - `include/GVVFitParameters.h` and `src/GVVFitParameters.cu` define one shared
   parameter ordering for Minuit, fit-result text, covariance matrices, and
   PostFit error propagation.
@@ -380,7 +395,7 @@ sum of separately squared resonance amplitudes.
 
 ### Current resonance content
 
-`include/GVVModel.h` defines the active terms:
+`config/model.json` defines the active terms:
 
 | Term | Quantum-number basis | Propagator and current role |
 |---|---|---|
@@ -396,8 +411,8 @@ The resonance masses and pole widths are fixed at the configured PDG central
 values. Complex couplings are fitted subject to the identifiability convention:
 the `eta(1760)` coefficient fixes the overall scale and phase, while the
 `f0(1710)` scalar reference removes the remaining scalar-sector common phase.
-The f0(1500) Flatte ratio is controlled by the `fit_flatte_ratio` configuration
-in `GVVModel.h`.
+The f0(1500) Flatte ratio is controlled by the `fixed`, `transform`, `step`, and
+`bounds` fields of `omegaomega_ratio` in `model.json`.
 
 ## Likelihood and background treatment
 
@@ -451,13 +466,22 @@ the spooled worker therefore never infers the project path from
 
 ```text
 Fit.exe data.root normalization_mc.root SB1.root SB2.root \
-        [fit_result.txt [n_starts [base_seed]]]
+        [fit_result.txt [n_starts [base_seed [model.json]]]]
 ```
 
 For `n_starts > 1`, start 0 uses the nominal parameter point and later starts
 randomize only free coupling magnitudes/phases. The log contains the status and
 NLL of every attempt. Only the best accepted start writes the final result,
 covariance, and projection files.
+
+`scripts/Sub.sh` accepts the same model choice as its third argument:
+
+```bash
+./scripts/Sub.sh 20 20260815 config/models/candidate.json
+```
+
+Every successful Fit writes the exact canonical model to
+`<fit_result>.model.json` for PostFit provenance.
 
 ### Fit outputs
 
@@ -492,7 +516,7 @@ The underlying executable accepts:
 
 ```text
 PostFit.exe fit_result.txt Cova_matrix.dat truth_mc.root \
-           normalization_mc.root [output_prefix]
+           normalization_mc.root [output_prefix [model.json]]
 ```
 
 With the default prefix `results/postfit_result`, the outputs are:
@@ -536,11 +560,14 @@ make tests -j4
 ./tests/bin/test_gvv_amplitude.exe
 ./tests/bin/test_gvv_model.exe
 ./tests/bin/test_gvv_fit_parameters.exe
+./tests/bin/test_model_definition.exe
+./tests/bin/test_gvv_process_model.exe
+./tests/bin/test_likelihood.exe
 ./bin/PostFit.exe --self-test
 ```
 
-`tests/` is the project test area: the four `.cu` files are unit/regression
-test sources, the two text fixtures exercise old/new fit-result parsing, and
+`tests/` is the project test area: its C++/CUDA files are unit/regression test
+sources, the two text fixtures exercise old/new fit-result parsing, and
 `tests/bin/` is generated by `make tests`. Supplying a real fit result to
 `test_gvv_fit_parameters.exe` is optional and should only be done after Fit has
 produced that file.
@@ -570,8 +597,10 @@ bash -n scripts/*.sh config/gvv_env.sh
    corresponding Slurm log as one result set.
 3. Keep truth MC and selected normalization MC from the same PHSP production.
 4. Do not overwrite a physics result without first copying it to a named backup.
-5. When changing a resonance or propagator, update `GVVModel.h`,
-   `GVVFitParameters.*`, tests, and this README together.
+5. For an existing registered Wave/propagator, change only `model.json` and
+   tests/notes for that physics hypothesis. Register new propagator physics in
+   `Dynamics.h`/`GVVProcessModel.cu`; register a new GVV Wave in
+   `GVVAmplitude.h`/`GVVProcessModel.cu`.
 
 ### Common checks
 
@@ -590,7 +619,10 @@ bash -n scripts/*.sh config/gvv_env.sh
 
 For the build details and command reference, see
 [`nominal/docs/BUILD.md`](nominal/docs/BUILD.md). The source-level architecture
-and physics-to-code map are in
+and model editing contracts are in
+[`nominal/docs/ARCHITECTURE.md`](nominal/docs/ARCHITECTURE.md) and
+[`nominal/docs/MODEL_CONFIGURATION.md`](nominal/docs/MODEL_CONFIGURATION.md).
+The original detailed physics-to-code map is in
 [`nominal/docs/gvv_project_architecture_guide.html`](nominal/docs/gvv_project_architecture_guide.html).
 The checks performed for this release candidate are recorded in
 [`nominal/docs/RELEASE_VALIDATION.md`](nominal/docs/RELEASE_VALIDATION.md).

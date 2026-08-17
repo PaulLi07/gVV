@@ -57,7 +57,7 @@ states otherwise.
   Stable resonance, wave, and term ids from `model.json` are now validated and
   compiled to dense runtime vectors used at the CUDA boundary.  The migration
   regression test confirms that the nominal JSON compiles to exactly the same
-  six resonance descriptors, eight term descriptors, initial couplings, and
+  seven resonance descriptors, seven Term descriptors, initial couplings, and
   active wave set as the legacy hard-coded model.  No new wave or physics
   formula was introduced.
 - 2026-08-17: Switched the production likelihood path to runtime model sizes.
@@ -76,3 +76,24 @@ states otherwise.
   beside the result as `<fit-result>.model.json`.  Legacy result-reading APIs
   remain temporarily available until PostFit is migrated.  Build and tests,
   including a runtime parameter round trip, passed.
+- 2026-08-17: Migrated PostFit to the compiled runtime model and removed the
+  fixed nominal fit-state, Resonance/Term enums, default-model factories, and
+  fixed component-pair APIs. PostFit now obtains Term labels, `J^PC` grouping,
+  fit parameters, pair counts, covariance dimensions, and model selection from
+  the result model snapshot. Historical nominal result rows remain readable by
+  resolving stable ids against the supplied snapshot; no hard-coded default
+  model is reconstructed.
+- 2026-08-17: Replaced projection's fixed component matrix and fixed `0++`/
+  `0-+` group construction with runtime vectors and metadata-generated groups.
+  Projection files now include `component_map`, `group_map`, `n_terms`, and
+  `n_groups`; nominal `weight_0pp`/`weight_0mp` branches remain presentation
+  aliases only. Plotting validates the runtime component-vector length.
+- 2026-08-17: Added process-neutral MC normalization and signed likelihood
+  functions under `framework/Likelihood.h`, with independent unit tests. The
+  GVV NLL layer now supplies event intensities and sample coefficients to this
+  module instead of owning the likelihood mathematics inline.
+- 2026-08-17: Exposed an optional model JSON through the Slurm submission
+  wrapper, tightened the C++ JSON loader to reject unknown fields, documented
+  all model editing/extension contracts, and added regression cases that
+  compile both a reduced 6-Term model and an expanded 8-Resonance/8-Term model.
+  This explicitly tests that nominal 7/7 counts are not production constants.
