@@ -64,7 +64,7 @@ $(BIN_DIR)/Fit.exe: $(FIT_OBJECTS) | $(BIN_DIR)
 $(BIN_DIR)/PostFit.exe: $(POSTFIT_OBJECTS) | $(BIN_DIR)
 	$(NVCC) -w $(POSTFIT_OBJECTS) $(LIBS) $(RPATH) $(CFLAGS) $(DVAR) $(COMPILEFLAGS) -o $@
 
-tests: $(TEST_BIN_DIR)/test_dynamics.exe $(TEST_BIN_DIR)/test_gvv_amplitude.exe $(TEST_BIN_DIR)/test_gvv_model.exe $(TEST_BIN_DIR)/test_gvv_fit_parameters.exe $(TEST_BIN_DIR)/test_model_definition.exe $(TEST_BIN_DIR)/test_gvv_process_model.exe
+tests: $(TEST_BIN_DIR)/test_dynamics.exe $(TEST_BIN_DIR)/test_gvv_amplitude.exe $(TEST_BIN_DIR)/test_gvv_model.exe $(TEST_BIN_DIR)/test_gvv_fit_parameters.exe $(TEST_BIN_DIR)/test_model_definition.exe $(TEST_BIN_DIR)/test_gvv_process_model.exe $(TEST_BIN_DIR)/test_likelihood.exe
 
 $(TEST_BIN_DIR)/test_dynamics.exe: tests/test_dynamics.cu include/Dynamics.h | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(INCLUDES) $(COMPILEFLAGS) -o $@
@@ -83,6 +83,9 @@ $(TEST_BIN_DIR)/test_model_definition.exe: tests/test_model_definition.cpp $(OBJ
 
 $(TEST_BIN_DIR)/test_gvv_process_model.exe: tests/test_gvv_process_model.cu $(OBJ_DIR)/GVVProcessModel.o $(OBJ_DIR)/ModelDefinition.o | $(TEST_BIN_DIR)
 	$(NVCC) -w $< $(OBJ_DIR)/GVVProcessModel.o $(OBJ_DIR)/ModelDefinition.o $(INCLUDES) $(COMPILEFLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_likelihood.exe: tests/test_likelihood.cpp include/framework/Likelihood.h | $(TEST_BIN_DIR)
+	$(NVCC) -w $< $(INCLUDES) $(COMPILEFLAGS) -o $@
 
 clean:
 	rm -f $(FIT_OBJECTS) $(POSTFIT_OBJECTS) $(BIN_DIR)/Fit.exe $(BIN_DIR)/PostFit.exe $(TEST_BIN_DIR)/*.exe

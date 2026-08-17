@@ -1,5 +1,6 @@
 #include "../include/NLL_estimator.h"
 #include "../include/GVVFitParameters.h"
+#include "../include/framework/Likelihood.h"
 
 #include "TFile.h"
 #include "TLorentzVector.h"
@@ -15,7 +16,6 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -24,7 +24,6 @@
 
 namespace {
 
-constexpr int kProjectionMaxComponents = 15;
 constexpr double kProjectionAxisTolerance = 1.0e-12;
 
 enum ProjectionParticleIndex {
@@ -427,15 +426,11 @@ double NLL_estimator::EvaluateSample(
         static_cast<int>(model_.active_wave_types.size()),
         sample.Entries());
 
-    double logarithm_sum = 0.0;
-    for (int event = 0; event < sample.Entries(); ++event) {
-        const double pdf = sample.IntensityBuffer()[event] / normalization;
-        if (!(pdf > 0.0) || !std::isfinite(pdf)) {
-            return -std::numeric_limits<double>::infinity();
-        }
-        logarithm_sum += std::log(pdf);
-    }
-    return likelihood_coefficient * logarithm_sum;
+    return ctpwa::log_likelihood_contribution(
+        sample.IntensityBuffer(),
+        static_cast<std::size_t>(sample.Entries()),
+        normalization,
+        likelihood_coefficient);
 }
 
 double NLL_estimator::Cal_log_likelihood()
@@ -458,18 +453,9 @@ double NLL_estimator::Cal_log_likelihood()
         static_cast<int>(model_.active_wave_types.size()),
         normalization_mc_->Entries());
 
-    double normalization = 0.0;
-    for (int event = 0; event < normalization_mc_->Entries(); ++event) {
-        const double intensity = normalization_mc_->IntensityBuffer()[event];
-        if (!(intensity >= 0.0) || !std::isfinite(intensity)) {
-            return -1.0e100;
-        }
-        normalization += intensity;
-    }
-    normalization /= normalization_mc_->Entries();
-    if (!(normalization > 0.0) || !std::isfinite(normalization)) {
-        return -1.0e100;
-    }
+    const double normalization = ctpwa::monte_carlo_normalization(
+        normalization_mc_->IntensityBuffer(),
+        static_cast<std::size_t>(normalization_mc_->Entries()));
 
     double log_likelihood = EvaluateSample(*data_, +1.0, normalization);
     if (!std::isfinite(log_likelihood)) {
@@ -652,11 +638,6 @@ void NLL_estimator::Project_fit_result(
             "call Prepare() before writing the GVV projection");
     }
     const int number_terms = NumberTerms();
-    if (number_terms > kProjectionMaxComponents) {
-        throw std::runtime_error(
-            "active Term count exceeds projection weight_component capacity");
-    }
-
     const std::vector<DeviceComplex> fitted_couplings =
         model_.initial_couplings;
     const int number_mc = normalization_mc_->Entries();
@@ -684,8 +665,14 @@ void NLL_estimator::Project_fit_result(
     };
 
     std::vector<double> total_intensity;
-    std::vector<double> scalar_intensity;
-    std::vector<double> pseudoscalar_intensity;
+    std::vector<std::string> group_ids;
+    for (const GVVTermMetadata& term : model_.term_metadata) {
+        if (std::find(group_ids.begin(), group_ids.end(), term.jpc)
+            == group_ids.end()) {
+            group_ids.push_back(term.jpc);
+        }
+    }
+    std::vector<std::vector<double>> group_intensity(group_ids.size());
     std::vector<std::vector<std::vector<double>>> pair_intensity(
         number_terms,
         std::vector<std::vector<double>>(number_terms));
@@ -695,21 +682,16 @@ void NLL_estimator::Project_fit_result(
 
         std::vector<DeviceComplex> selected(
             number_terms, DeviceComplex(0.0, 0.0));
-        for (int term = 0; term < number_terms; ++term) {
-            if (model_.term_metadata[term].jpc == "0++") {
-                selected[term] = fitted_couplings[term];
+        for (std::size_t group = 0; group < group_ids.size(); ++group) {
+            std::fill(
+                selected.begin(), selected.end(), DeviceComplex(0.0, 0.0));
+            for (int term = 0; term < number_terms; ++term) {
+                if (model_.term_metadata[term].jpc == group_ids[group]) {
+                    selected[term] = fitted_couplings[term];
+                }
             }
+            group_intensity[group] = evaluate_mc(selected);
         }
-        scalar_intensity = evaluate_mc(selected);
-
-        std::fill(
-            selected.begin(), selected.end(), DeviceComplex(0.0, 0.0));
-        for (int term = 0; term < number_terms; ++term) {
-            if (model_.term_metadata[term].jpc == "0-+") {
-                selected[term] = fitted_couplings[term];
-            }
-        }
-        pseudoscalar_intensity = evaluate_mc(selected);
 
         for (int first = 0; first < number_terms; ++first) {
             for (int second = first; second < number_terms; ++second) {
@@ -760,8 +742,9 @@ void NLL_estimator::Project_fit_result(
     double weight_0pp = 0.0;
     double weight_0mp = 0.0;
     double weight_int_0pp_0mp = 0.0;
-    double weight_component
-        [kProjectionMaxComponents][kProjectionMaxComponents];
+    std::vector<double> weight_group(group_ids.size(), 0.0);
+    std::vector<double> weight_component(
+        static_cast<std::size_t>(number_terms) * number_terms, 0.0);
     tree_mc.Branch("weight", &weight, "weight/D");
     tree_mc.Branch("weight_0pp", &weight_0pp, "weight_0pp/D");
     tree_mc.Branch("weight_0mp", &weight_0mp, "weight_0mp/D");
@@ -769,33 +752,39 @@ void NLL_estimator::Project_fit_result(
         "weight_int_0pp_0mp",
         &weight_int_0pp_0mp,
         "weight_int_0pp_0mp/D");
+    tree_mc.Branch("weight_group", &weight_group);
     tree_mc.Branch(
         "weight_component",
-        weight_component,
-        "weight_component[15][15]/D");
+        &weight_component);
 
     double maximum_closure_residual = 0.0;
     double sum_projection_weight = 0.0;
     for (int event = 0; event < number_mc; ++event) {
         weight = total_intensity[event] / sum_pdf * effective_yield;
-        weight_0pp = scalar_intensity[event] / sum_pdf * effective_yield;
-        weight_0mp = pseudoscalar_intensity[event] / sum_pdf * effective_yield;
-        weight_int_0pp_0mp = weight - weight_0pp - weight_0mp;
+        double sum_group_weight = 0.0;
+        weight_0pp = 0.0;
+        weight_0mp = 0.0;
+        for (std::size_t group = 0; group < group_ids.size(); ++group) {
+            weight_group[group] = group_intensity[group][event]
+                                  / sum_pdf * effective_yield;
+            sum_group_weight += weight_group[group];
+            if (group_ids[group] == "0++") weight_0pp = weight_group[group];
+            if (group_ids[group] == "0-+") weight_0mp = weight_group[group];
+        }
+        // Historical branch name retained for nominal plotting. With future
+        // groups this stores the total interference between all JPC groups.
+        weight_int_0pp_0mp = weight - sum_group_weight;
         sum_projection_weight += weight;
 
-        for (int first = 0; first < kProjectionMaxComponents; ++first) {
-            for (int second = 0;
-                 second < kProjectionMaxComponents;
-                 ++second) {
-                weight_component[first][second] = -1.0;
-            }
-        }
+        std::fill(
+            weight_component.begin(), weight_component.end(), -1.0);
 
         double reconstructed_intensity = 0.0;
         for (int first = 0; first < number_terms; ++first) {
             const double diagonal = pair_intensity[first][first][event];
             reconstructed_intensity += diagonal;
-            weight_component[first][first] =
+            weight_component[
+                static_cast<std::size_t>(first) * number_terms + first] =
                 diagonal / sum_pdf * effective_yield;
             for (int second = first + 1;
                  second < number_terms;
@@ -807,8 +796,12 @@ void NLL_estimator::Project_fit_result(
                 reconstructed_intensity += interference;
                 const double interference_weight =
                     interference / sum_pdf * effective_yield;
-                weight_component[first][second] = interference_weight;
-                weight_component[second][first] = interference_weight;
+                weight_component[
+                    static_cast<std::size_t>(first) * number_terms + second] =
+                    interference_weight;
+                weight_component[
+                    static_cast<std::size_t>(second) * number_terms + first] =
+                    interference_weight;
             }
         }
         const double closure_scale = std::max(
@@ -883,8 +876,21 @@ void NLL_estimator::Project_fit_result(
         component_map.Fill();
     }
 
+    TTree group_map("group_map", "GVV JPC group index map");
+    int group_index = 0;
+    char group_jpc[16] = {0};
+    group_map.Branch("group_index", &group_index, "group_index/I");
+    group_map.Branch("jpc", group_jpc, "jpc/C");
+    for (std::size_t group = 0; group < group_ids.size(); ++group) {
+        group_index = static_cast<int>(group);
+        std::snprintf(
+            group_jpc, sizeof(group_jpc), "%s", group_ids[group].c_str());
+        group_map.Fill();
+    }
+
     TTree metadata("metadata", "GVV projection provenance");
     int n_terms = number_terms;
+    int n_groups = static_cast<int>(group_ids.size());
     int n_data = data_->Entries();
     int n_normalization_mc = normalization_mc_->Entries();
     int n_background_samples = static_cast<int>(backgrounds_.size());
@@ -904,6 +910,7 @@ void NLL_estimator::Project_fit_result(
                                             : 0.0;
     long long stored_best_seed = best_seed;
     metadata.Branch("n_terms", &n_terms, "n_terms/I");
+    metadata.Branch("n_groups", &n_groups, "n_groups/I");
     metadata.Branch("n_data", &n_data, "n_data/I");
     metadata.Branch(
         "n_normalization_mc",

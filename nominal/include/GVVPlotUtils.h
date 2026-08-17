@@ -23,8 +23,6 @@
 
 namespace gvvplot {
 
-constexpr int kWeightMatrixSize = 15;
-
 enum Variable {
     kMassOmegaOmega = 0,
     kMassGammaOmega = 1,
@@ -133,7 +131,7 @@ struct Branches {
     double weight_0pp = 0.0;
     double weight_0mp = 0.0;
     double weight_bg = 1.0;
-    double weight_component[kWeightMatrixSize][kWeightMatrixSize] = {{0.0}};
+    std::vector<double>* weight_component = nullptr;
 
     void Bind(TTree* tree, bool is_mc, bool is_background)
     {
@@ -164,7 +162,7 @@ struct Branches {
             tree->SetBranchAddress("weight", &weight);
             tree->SetBranchAddress("weight_0pp", &weight_0pp);
             tree->SetBranchAddress("weight_0mp", &weight_0mp);
-            tree->SetBranchAddress("weight_component", weight_component);
+            tree->SetBranchAddress("weight_component", &weight_component);
         }
         if (is_background) {
             RequireBranch(tree, "weight_bg");
@@ -226,7 +224,7 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
     std::vector<ComponentInfo> result;
     for (Long64_t row = 0; row < tree->GetEntries(); ++row) {
         tree->GetEntry(row);
-        if (component_index < 0 || component_index >= kWeightMatrixSize) {
+        if (component_index < 0) {
             throw std::runtime_error("invalid component index in component_map");
         }
         result.push_back({component_index, name, jpc});
@@ -333,10 +331,20 @@ inline PanelHistograms BuildPanel(
                  component < components.size();
                  ++component) {
                 const int index = components[component].index;
+                const std::size_t matrix_size = components.size();
+                if (mc_values.weight_component == nullptr
+                    || mc_values.weight_component->size()
+                           != matrix_size * matrix_size
+                    || static_cast<std::size_t>(index) >= matrix_size) {
+                    throw std::runtime_error(
+                        "projection component-weight layout is inconsistent");
+                }
                 FillObservable(
                     result.components[component], mc_values,
                     specification.variable,
-                    mc_values.weight_component[index][index]);
+                    mc_values.weight_component->at(
+                        static_cast<std::size_t>(index) * matrix_size
+                        + index));
             }
         }
     }
