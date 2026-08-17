@@ -87,6 +87,21 @@ int main(int argc, char* argv[])
             })",
             "exactly one scale_and_phase reference");
 
+        require_invalid(
+            R"({
+              "schema_version": 1,
+              "process": "test_process",
+              "resonances": [
+                {"id":"r","propagator":"nonresonant","parameters":{},"widht":1}
+              ],
+              "terms": [{
+                "id":"t","wave":"test.wave",
+                "coupling":{"mode":"fixed_complex","reference":"scale_and_phase","initial":[1,0]},
+                "dynamics":{}
+              }]
+            })",
+            "unknown field");
+
         std::cout << "Runtime model-definition tests passed\n";
     } catch (const std::exception& error) {
         std::cerr << "Model-definition test failed: " << error.what() << '\n';

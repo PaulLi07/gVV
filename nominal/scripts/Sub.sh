@@ -9,11 +9,17 @@ source "$PROJECT/config/gvv_env.sh"
 DATA=${GVV_DATA_DIR:-$PROJECT/../RootSet}
 N_STARTS=${1:-10}
 BASE_SEED=${2:-20260815}
+MODEL=${3:-$PROJECT/config/model.json}
 
-if [[ $# -gt 2 || ! $N_STARTS =~ ^[1-9][0-9]*$ || ! $BASE_SEED =~ ^[0-9]+$ ]]; then
-    echo "Usage: $0 [n_starts=10] [base_seed=20260815]" >&2
+if [[ $# -gt 3 || ! $N_STARTS =~ ^[1-9][0-9]*$ || ! $BASE_SEED =~ ^[0-9]+$ ]]; then
+    echo "Usage: $0 [n_starts=10] [base_seed=20260815] [model.json]" >&2
     exit 2
 fi
+if [[ ! -r $MODEL ]]; then
+    echo "[GVV] Model JSON is missing or unreadable: $MODEL" >&2
+    exit 2
+fi
+MODEL=$(readlink -f -- "$MODEL")
 
 cd "$PROJECT" || exit 3
 mkdir -p "$PROJECT/results" "$PROJECT/runlog"
@@ -29,4 +35,5 @@ sbatch \
     "$DATA/SB2.root" \
     "$PROJECT/results/fit_result-initial.txt" \
     "$N_STARTS" \
-    "$BASE_SEED"
+    "$BASE_SEED" \
+    "$MODEL"

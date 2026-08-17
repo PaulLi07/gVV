@@ -25,10 +25,10 @@ fi
 
 usage()
 {
-    echo "Usage: sbatch $0 data.root normalization_mc.root SB1.root SB2.root [fit_result.txt [n_starts [base_seed]]]" >&2
+    echo "Usage: sbatch $0 data.root normalization_mc.root SB1.root SB2.root [fit_result.txt [n_starts [base_seed [model.json]]]]" >&2
 }
 
-if [[ $# -lt 4 || $# -gt 7 ]]; then
+if [[ $# -lt 4 || $# -gt 8 ]]; then
     usage
     exit 2
 fi
@@ -57,6 +57,11 @@ fi
 
 n_starts=${6:-1}
 base_seed=${7:-20260815}
+if [[ $# -ge 8 ]]; then
+    model_file=$(resolve_from_submission_dir "$8")
+else
+    model_file="$PROJECT_DIR/config/model.json"
+fi
 if [[ ! $n_starts =~ ^[1-9][0-9]*$ ]]; then
     echo "[GVV] n_starts must be a positive integer: $n_starts" >&2
     exit 2
@@ -75,7 +80,8 @@ for input_file in \
     "$data_file" \
     "$normalization_mc_file" \
     "$sb1_file" \
-    "$sb2_file"
+    "$sb2_file" \
+    "$model_file"
 do
     if [[ ! -r $input_file ]]; then
         echo "[GVV] Input file is missing or unreadable: $input_file" >&2
@@ -103,6 +109,7 @@ echo "[GVV] CUDA root: $GVV_CUDA_ROOT"
 echo "[GVV] ROOT: $GVV_ROOTSYS"
 echo "[GVV] Multistart fits: $n_starts"
 echo "[GVV] Base seed: $base_seed"
+echo "[GVV] Model: $model_file"
 
 if ! /usr/bin/nvidia-smi; then
     echo "[GVV] nvidia-smi failed; GPU allocation is not usable" >&2
@@ -118,7 +125,8 @@ printf ' %q' \
     "$sb2_file" \
     "$result_file" \
     "$n_starts" \
-    "$base_seed"
+    "$base_seed" \
+    "$model_file"
 printf '\n'
 
 srun --ntasks=1 "$PROJECT_DIR/bin/Fit.exe" \
@@ -128,7 +136,8 @@ srun --ntasks=1 "$PROJECT_DIR/bin/Fit.exe" \
     "$sb2_file" \
     "$result_file" \
     "$n_starts" \
-    "$base_seed"
+    "$base_seed" \
+    "$model_file"
 fit_status=$?
 
 if [[ $fit_status -ne 0 ]]; then
@@ -138,6 +147,10 @@ fi
 
 if [[ ! -s $result_file ]]; then
     echo "[GVV] Fit.exe returned success but the result file is missing or empty" >&2
+    exit 10
+fi
+if [[ ! -s ${result_file}.model.json ]]; then
+    echo "[GVV] Fit.exe returned success but the model snapshot is missing or empty" >&2
     exit 10
 fi
 
@@ -153,5 +166,6 @@ fi
 
 echo "[GVV] End: $(date --iso-8601=seconds)"
 echo "[GVV] Fit result: $result_file"
+echo "[GVV] Model snapshot: ${result_file}.model.json"
 echo "[GVV] Covariance matrix: $PROJECT_DIR/results/Cova_matrix.dat"
 echo "[GVV] Projection: $PROJECT_DIR/results/projection0.root"

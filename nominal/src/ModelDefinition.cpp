@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <initializer_list>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -13,6 +14,28 @@ namespace ctpwa {
 namespace {
 
 using Json = nlohmann::json;
+
+[[noreturn]] void fail(
+    const std::string& source,
+    const std::string& path,
+    const std::string& message);
+
+void reject_unknown_members(
+    const Json& object,
+    std::initializer_list<const char*> allowed,
+    const std::string& source,
+    const std::string& path)
+{
+    std::unordered_set<std::string> names;
+    for (const char* name : allowed) {
+        names.insert(name);
+    }
+    for (const auto& item : object.items()) {
+        if (names.find(item.key()) == names.end()) {
+            fail(source, path + "." + item.key(), "unknown field");
+        }
+    }
+}
 
 [[noreturn]] void fail(
     const std::string& source,
@@ -106,6 +129,11 @@ ParameterDefinition parse_parameter(
     if (!document.is_object()) {
         fail(source, path, "expected a parameter object");
     }
+    reject_unknown_members(
+        document,
+        {"value", "fixed", "transform", "step", "bounds"},
+        source,
+        path);
     ParameterDefinition result;
     result.value = require_finite_number(document, "value", source, path);
 
@@ -200,6 +228,11 @@ CouplingDefinition parse_coupling(
     const std::string& source,
     const std::string& path)
 {
+    reject_unknown_members(
+        document,
+        {"mode", "reference", "initial"},
+        source,
+        path);
     CouplingDefinition result;
     result.mode = parse_coupling_mode(
         require_string(document, "mode", source, path),
@@ -313,6 +346,11 @@ ModelDefinition parse_model_definition(
     if (!document.is_object()) {
         fail(source_name, "$", "expected a JSON object");
     }
+    reject_unknown_members(
+        document,
+        {"schema_version", "process", "metadata", "resonances", "terms"},
+        source_name,
+        "$");
 
     ModelDefinition result;
     const auto schema_version = document.find("schema_version");
@@ -331,6 +369,11 @@ ModelDefinition parse_model_definition(
         if (!metadata->is_object()) {
             fail(source_name, "$.metadata", "expected an object");
         }
+        reject_unknown_members(
+            *metadata,
+            {"name", "description"},
+            source_name,
+            "$.metadata");
         const auto name = metadata->find("name");
         if (name != metadata->end()) {
             if (!name->is_string()) {
@@ -359,6 +402,11 @@ ModelDefinition parse_model_definition(
         if (!entry.is_object()) {
             fail(source_name, path, "expected an object");
         }
+        reject_unknown_members(
+            entry,
+            {"id", "label", "propagator", "parameters"},
+            source_name,
+            path);
         ResonanceDefinition resonance;
         resonance.id = require_string(entry, "id", source_name, path);
         validate_id(resonance.id, source_name, path + ".id");
@@ -396,6 +444,11 @@ ModelDefinition parse_model_definition(
         if (!entry.is_object()) {
             fail(source_name, path, "expected an object");
         }
+        reject_unknown_members(
+            entry,
+            {"id", "label", "wave", "active", "coupling", "dynamics"},
+            source_name,
+            path);
         TermDefinition term;
         term.id = require_string(entry, "id", source_name, path);
         validate_id(term.id, source_name, path + ".id");
