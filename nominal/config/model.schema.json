@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctpwa.local/schema/model-v1.json",
+  "title": "CTPWA runtime amplitude model",
+  "type": "object",
+  "required": ["schema_version", "process", "resonances", "terms"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "process": {"$ref": "#/$defs/id"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"}
+      }
+    },
+    "resonances": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/resonance"}
+    },
+    "terms": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/term"}
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+    },
+    "parameter": {
+      "type": "object",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"type": "number"},
+        "fixed": {"type": "boolean", "default": true},
+        "transform": {
+          "enum": ["identity", "log"],
+          "default": "identity"
+        },
+        "step": {"type": "number", "exclusiveMinimum": 0},
+        "bounds": {
+          "type": "array",
+          "prefixItems": [{"type": "number"}, {"type": "number"}],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "resonance": {
+      "type": "object",
+      "required": ["id", "propagator", "parameters"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "label": {"type": "string"},
+        "propagator": {"$ref": "#/$defs/id"},
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/parameter"}
+        }
+      }
+    },
+    "coupling": {
+      "type": "object",
+      "required": ["mode", "initial"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": ["complex_cartesian", "fixed_complex", "positive_real"]
+        },
+        "reference": {
+          "enum": ["none", "phase", "scale_and_phase"],
+          "default": "none"
+        },
+        "initial": {
+          "oneOf": [
+            {"type": "number", "exclusiveMinimum": 0},
+            {
+              "type": "array",
+              "prefixItems": [{"type": "number"}, {"type": "number"}],
+              "minItems": 2,
+              "maxItems": 2
+            }
+          ]
+        }
+      }
+    },
+    "term": {
+      "type": "object",
+      "required": ["id", "wave", "coupling", "dynamics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "label": {"type": "string"},
+        "wave": {"$ref": "#/$defs/id"},
+        "active": {"type": "boolean", "default": true},
+        "coupling": {"$ref": "#/$defs/coupling"},
+        "dynamics": {"type": "object"}
+      }
+    }
+  }
+}

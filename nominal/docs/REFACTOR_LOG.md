@@ -48,3 +48,8 @@ states otherwise.
 
 - 2026-08-17: Added the approved framework/process boundary and this log.  No
   production code changed in this stage.
+- 2026-08-17: Added the framework-level `ModelDefinition`, strict JSON parser
+  and validator, schema v1, directly edited nominal `config/model.json`, and
+  model-definition unit tests.  The new layer is host-only and does not yet
+  replace the legacy hard-coded GPU model.  New and pre-existing unit tests
+  passed after the change.
