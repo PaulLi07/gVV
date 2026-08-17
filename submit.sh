@@ -12,7 +12,11 @@
 set -euo pipefail
 
 SCRIPT_PATH=$(readlink -f -- "${BASH_SOURCE[0]}")
-PROJECT_DIR=$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)
+# Slurm executes a spooled copy of this script. The submit side exports the
+# canonical repository path so the worker never mistakes the spool for the
+# project root.
+PROJECT_DIR=${GVV_PROJECT_ROOT:-$SCRIPT_DIR}
 
 usage()
 {
