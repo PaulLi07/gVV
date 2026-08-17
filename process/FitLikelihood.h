@@ -1,25 +1,25 @@
-#ifndef NLL_ESTIMATOR_H
-#define NLL_ESTIMATOR_H
+#ifndef CTPWA_PROCESS_FIT_LIKELIHOOD_H
+#define CTPWA_PROCESS_FIT_LIKELIHOOD_H
 
 #include "process/SampleLoader.h"
 #include "process/OmegaWidthTable.h"
 #include "process/WaveRegistry.cuh"
 
-#include "TObject.h"
-
 #include <memory>
 #include <string>
 #include <vector>
 
-class NLL_estimator : public TObject {
+// GVV-specific orchestration of samples, cached wave matrices, propagators,
+// and the generic likelihood arithmetic. No Minuit policy lives here.
+class FitLikelihood {
 public:
-    explicit NLL_estimator(
+    explicit FitLikelihood(
         GVVCompiledModel model,
         const GVVBranchConfig& branches = GVVBranchConfig());
-    ~NLL_estimator() override;
+    ~FitLikelihood();
 
-    NLL_estimator(const NLL_estimator&) = delete;
-    NLL_estimator& operator=(const NLL_estimator&) = delete;
+    FitLikelihood(const FitLikelihood&) = delete;
+    FitLikelihood& operator=(const FitLikelihood&) = delete;
 
     void LoadNormalizationMC(const std::string& file_name);
     void LoadData(const std::string& file_name);
@@ -34,7 +34,7 @@ public:
         const std::string& label);
 
     void Prepare();
-    double Cal_log_likelihood();
+    double LogLikelihood();
 
     void SetCoupling(int term_index, double real, double imag);
     void SetLogCouplingMagnitude(int term_index, double log_magnitude);
@@ -46,11 +46,10 @@ public:
     int NumberTerms() const;
     int NumberResonances() const;
 
-    int NumberFitParameters() const;
     int DataEntries() const;
     int NormalizationMCEntries() const;
     void PrintModelSummary() const;
-    void Project_fit_result(
+    void WriteProjection(
         const std::string& save_name,
         int best_start,
         long long best_seed,
@@ -86,4 +85,4 @@ private:
     bool prepared_;
 };
 
-#endif // NLL_ESTIMATOR_H
+#endif // CTPWA_PROCESS_FIT_LIKELIHOOD_H

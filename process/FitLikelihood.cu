@@ -1,5 +1,4 @@
-#include "framework/likelihood/GVVLikelihood.h"
-#include "framework/fit/FitParameters.h"
+#include "process/FitLikelihood.h"
 #include "framework/likelihood/Likelihood.h"
 
 #include "TFile.h"
@@ -280,7 +279,7 @@ struct ProjectionEvent {
 
 } // namespace
 
-NLL_estimator::NLL_estimator(
+FitLikelihood::FitLikelihood(
     GVVCompiledModel model,
     const GVVBranchConfig& branches)
     : branches_(branches),
@@ -298,7 +297,7 @@ NLL_estimator::NLL_estimator(
     }
 }
 
-NLL_estimator::~NLL_estimator()
+FitLikelihood::~FitLikelihood()
 {
     if (device_resonances_ != nullptr) {
         cudaFree(device_resonances_);
@@ -311,7 +310,7 @@ NLL_estimator::~NLL_estimator()
     }
 }
 
-std::unique_ptr<GVVSample> NLL_estimator::LoadSample(
+std::unique_ptr<GVVSample> FitLikelihood::LoadSample(
     const std::string& file_name,
     const std::string& label) const
 {
@@ -320,17 +319,17 @@ std::unique_ptr<GVVSample> NLL_estimator::LoadSample(
     return sample;
 }
 
-void NLL_estimator::LoadNormalizationMC(const std::string& file_name)
+void FitLikelihood::LoadNormalizationMC(const std::string& file_name)
 {
     normalization_mc_ = LoadSample(file_name, "normalization MC");
 }
 
-void NLL_estimator::LoadData(const std::string& file_name)
+void FitLikelihood::LoadData(const std::string& file_name)
 {
     data_ = LoadSample(file_name, "data");
 }
 
-void NLL_estimator::AddBackground(
+void FitLikelihood::AddBackground(
     const std::string& file_name,
     double likelihood_coefficient,
     const std::string& label)
@@ -341,7 +340,7 @@ void NLL_estimator::AddBackground(
     backgrounds_.push_back(std::move(background));
 }
 
-void NLL_estimator::UploadModel()
+void FitLikelihood::UploadModel()
 {
     const std::size_t number_resonances = model_.resonances.size();
     const std::size_t number_terms = model_.terms.size();
@@ -360,7 +359,7 @@ void NLL_estimator::UploadModel()
     SynchronizeModel();
 }
 
-void NLL_estimator::SynchronizeModel()
+void FitLikelihood::SynchronizeModel()
 {
     check_cuda(
         cudaMemcpy(
@@ -385,7 +384,7 @@ void NLL_estimator::SynchronizeModel()
         "cudaMemcpy GVV couplings");
 }
 
-void NLL_estimator::Prepare()
+void FitLikelihood::Prepare()
 {
     if (normalization_mc_ == nullptr || data_ == nullptr) {
         throw std::runtime_error(
@@ -408,7 +407,7 @@ void NLL_estimator::Prepare()
     std::cout << "GVV samples, F matrices, and omega width table prepared\n";
 }
 
-double NLL_estimator::EvaluateSample(
+double FitLikelihood::EvaluateSample(
     GVVSample& sample,
     double likelihood_coefficient,
     double normalization)
@@ -433,7 +432,7 @@ double NLL_estimator::EvaluateSample(
         likelihood_coefficient);
 }
 
-double NLL_estimator::Cal_log_likelihood()
+double FitLikelihood::LogLikelihood()
 {
     if (!prepared_) {
         throw std::runtime_error("call Prepare() before evaluating likelihood");
@@ -474,7 +473,7 @@ double NLL_estimator::Cal_log_likelihood()
     return log_likelihood;
 }
 
-void NLL_estimator::SetCoupling(int term_index, double real, double imag)
+void FitLikelihood::SetCoupling(int term_index, double real, double imag)
 {
     if (term_index < 0 || term_index >= NumberTerms()) {
         throw std::out_of_range("invalid GVV term index");
@@ -494,7 +493,7 @@ void NLL_estimator::SetCoupling(int term_index, double real, double imag)
     model_.initial_couplings[term_index] = DeviceComplex(real, imag);
 }
 
-void NLL_estimator::SetLogCouplingMagnitude(
+void FitLikelihood::SetLogCouplingMagnitude(
     int term_index,
     double log_magnitude)
 {
@@ -515,7 +514,7 @@ void NLL_estimator::SetLogCouplingMagnitude(
     model_.initial_couplings[term_index] = DeviceComplex(magnitude, 0.0);
 }
 
-DeviceComplex NLL_estimator::Coupling(int term_index) const
+DeviceComplex FitLikelihood::Coupling(int term_index) const
 {
     if (term_index < 0 || term_index >= NumberTerms()) {
         throw std::out_of_range("invalid GVV term index");
@@ -523,7 +522,7 @@ DeviceComplex NLL_estimator::Coupling(int term_index) const
     return model_.initial_couplings[term_index];
 }
 
-void NLL_estimator::SetLogSDRatio(int resonance_index, double log_ratio)
+void FitLikelihood::SetLogSDRatio(int resonance_index, double log_ratio)
 {
     if (resonance_index < 0 || resonance_index >= NumberResonances()
         || !model_.resonances[resonance_index].fit_sd_ratio) {
@@ -533,7 +532,7 @@ void NLL_estimator::SetLogSDRatio(int resonance_index, double log_ratio)
     model_.resonances[resonance_index].sd_ratio = std::exp(bounded);
 }
 
-void NLL_estimator::SetLogFlatteRatio(int resonance_index, double log_ratio)
+void FitLikelihood::SetLogFlatteRatio(int resonance_index, double log_ratio)
 {
     if (resonance_index < 0 || resonance_index >= NumberResonances()
         || !model_.resonances[resonance_index].fit_flatte_ratio) {
@@ -544,7 +543,7 @@ void NLL_estimator::SetLogFlatteRatio(int resonance_index, double log_ratio)
     model_.resonances[resonance_index].flatte_ratio = std::exp(bounded);
 }
 
-const ResonanceParameters& NLL_estimator::Resonance(
+const ResonanceParameters& FitLikelihood::Resonance(
     int resonance_index) const
 {
     if (resonance_index < 0 || resonance_index >= NumberResonances()) {
@@ -553,37 +552,32 @@ const ResonanceParameters& NLL_estimator::Resonance(
     return model_.resonances[resonance_index];
 }
 
-const GVVCompiledModel& NLL_estimator::Model() const
+const GVVCompiledModel& FitLikelihood::Model() const
 {
     return model_;
 }
 
-int NLL_estimator::NumberTerms() const
+int FitLikelihood::NumberTerms() const
 {
     return static_cast<int>(model_.terms.size());
 }
 
-int NLL_estimator::NumberResonances() const
+int FitLikelihood::NumberResonances() const
 {
     return static_cast<int>(model_.resonances.size());
 }
 
-int NLL_estimator::NumberFitParameters() const
-{
-    return static_cast<int>(gvv_fit_parameter_layout(model_).size());
-}
-
-int NLL_estimator::DataEntries() const
+int FitLikelihood::DataEntries() const
 {
     return data_ == nullptr ? 0 : data_->Entries();
 }
 
-int NLL_estimator::NormalizationMCEntries() const
+int FitLikelihood::NormalizationMCEntries() const
 {
     return normalization_mc_ == nullptr ? 0 : normalization_mc_->Entries();
 }
 
-void NLL_estimator::PrintModelSummary() const
+void FitLikelihood::PrintModelSummary() const
 {
     std::cout << "GVV model '" << model_.definition.name << "': "
               << NumberResonances() << " resonance definitions, "
@@ -627,7 +621,7 @@ void NLL_estimator::PrintModelSummary() const
     }
 }
 
-void NLL_estimator::Project_fit_result(
+void FitLikelihood::WriteProjection(
     const std::string& save_name,
     int best_start,
     long long best_seed,
