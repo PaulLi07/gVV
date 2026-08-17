@@ -515,7 +515,8 @@ int main(int argc, char* argv[])
         branches.input_order = GVV_PX_PY_PZ_E;
         // -------------------------------------------------------------
 
-        NLL_estimator estimator(branches);
+        NLL_estimator estimator(
+            gvv_load_compiled_model("config/model.json"), branches);
         estimator.PrintModelSummary();
         estimator.LoadData(data_file);
         estimator.LoadNormalizationMC(normalization_mc_file);

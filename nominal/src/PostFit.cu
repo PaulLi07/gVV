@@ -99,7 +99,8 @@ double sum_cross_groups(
 
 const char* component_jpc(int term)
 {
-    return gvv_default_term(term).wave_type == GVV_PSEUDOSCALAR_11
+    return gvv_default_term(term).registered_wave_type
+                   == GVV_PSEUDOSCALAR_11
                ? "0-+"
                : "0++";
 }
@@ -238,7 +239,10 @@ private:
             device_couplings_,
             omega_width_table_.DeviceView(),
             sample.FMatrix(),
+            sample.TermCoefficientBuffer(),
             component_buffer_,
+            GVV_NTERMS,
+            GVV_NBASIS,
             sample.Entries());
 
         std::array<double, GVV_NCOMPONENT_PAIRS> sums{};
@@ -270,7 +274,10 @@ private:
             device_couplings_,
             omega_width_table_.DeviceView(),
             sample.FMatrix(),
+            sample.TermCoefficientBuffer(),
             sample.IntensityBuffer(),
+            GVV_NTERMS,
+            GVV_NBASIS,
             sample.Entries());
         double direct_sum = 0.0;
         for (int event = 0; event < sample.Entries(); ++event) {

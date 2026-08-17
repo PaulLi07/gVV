@@ -280,27 +280,22 @@ struct ProjectionEvent {
 
 } // namespace
 
-NLL_estimator::NLL_estimator(const GVVBranchConfig& branches)
+NLL_estimator::NLL_estimator(
+    GVVCompiledModel model,
+    const GVVBranchConfig& branches)
     : branches_(branches),
+      model_(std::move(model)),
       device_resonances_(nullptr),
       device_terms_(nullptr),
       device_couplings_(nullptr),
       prepared_(false)
 {
-    for (int index = 0; index < GVV_NRESONANCES; ++index) {
-        resonances_[index] = gvv_default_resonance(index);
+    if (model_.resonances.empty() || model_.terms.empty()
+        || model_.terms.size() != model_.initial_couplings.size()
+        || model_.terms.size() != model_.term_metadata.size()
+        || model_.active_wave_types.empty()) {
+        throw std::invalid_argument("incomplete compiled GVV model");
     }
-    for (int index = 0; index < GVV_NTERMS; ++index) {
-        terms_[index] = gvv_default_term(index);
-        couplings_[index] = DeviceComplex(0.10, 0.0);
-    }
-    // Removes the global phase and normalization degeneracy.  The scalar
-    // phase reference keeps its initialized positive magnitude and zero
-    // phase; that magnitude remains a fit parameter.
-    couplings_[GVV_SCALE_AND_PHASE_REFERENCE_TERM] =
-        DeviceComplex(1.0, 0.0);
-    couplings_[GVV_SCALAR_PHASE_REFERENCE_TERM] =
-        DeviceComplex(0.10, 0.0);
 }
 
 NLL_estimator::~NLL_estimator()
@@ -348,17 +343,19 @@ void NLL_estimator::AddBackground(
 
 void NLL_estimator::UploadModel()
 {
+    const std::size_t number_resonances = model_.resonances.size();
+    const std::size_t number_terms = model_.terms.size();
     check_cuda(
         cudaMallocManaged(
             &device_resonances_,
-            GVV_NRESONANCES * sizeof(GVVResonanceParameters)),
+            number_resonances * sizeof(GVVResonanceParameters)),
         "cudaMallocManaged GVV resonances");
     check_cuda(
-        cudaMallocManaged(&device_terms_, GVV_NTERMS * sizeof(GVVTermSpec)),
+        cudaMallocManaged(&device_terms_, number_terms * sizeof(GVVTermSpec)),
         "cudaMallocManaged GVV terms");
     check_cuda(
         cudaMallocManaged(
-            &device_couplings_, GVV_NTERMS * sizeof(DeviceComplex)),
+            &device_couplings_, number_terms * sizeof(DeviceComplex)),
         "cudaMallocManaged GVV couplings");
     SynchronizeModel();
 }
@@ -368,22 +365,22 @@ void NLL_estimator::SynchronizeModel()
     check_cuda(
         cudaMemcpy(
             device_resonances_,
-            resonances_.data(),
-            GVV_NRESONANCES * sizeof(GVVResonanceParameters),
+            model_.resonances.data(),
+            model_.resonances.size() * sizeof(GVVResonanceParameters),
             cudaMemcpyHostToDevice),
         "cudaMemcpy GVV resonances");
     check_cuda(
         cudaMemcpy(
             device_terms_,
-            terms_.data(),
-            GVV_NTERMS * sizeof(GVVTermSpec),
+            model_.terms.data(),
+            model_.terms.size() * sizeof(GVVTermSpec),
             cudaMemcpyHostToDevice),
         "cudaMemcpy GVV terms");
     check_cuda(
         cudaMemcpy(
             device_couplings_,
-            couplings_.data(),
-            GVV_NTERMS * sizeof(DeviceComplex),
+            model_.initial_couplings.data(),
+            model_.initial_couplings.size() * sizeof(DeviceComplex),
             cudaMemcpyHostToDevice),
         "cudaMemcpy GVV couplings");
 }
@@ -399,10 +396,13 @@ void NLL_estimator::Prepare()
     omega_width_table_.Upload();
     UploadModel();
 
-    normalization_mc_->UploadAndBuildF();
-    data_->UploadAndBuildF();
+    const int number_terms = NumberTerms();
+    normalization_mc_->UploadAndBuildF(
+        model_.active_wave_types, number_terms);
+    data_->UploadAndBuildF(model_.active_wave_types, number_terms);
     for (BackgroundSample& background : backgrounds_) {
-        background.sample->UploadAndBuildF();
+        background.sample->UploadAndBuildF(
+            model_.active_wave_types, number_terms);
     }
     prepared_ = true;
     std::cout << "GVV samples, F matrices, and omega width table prepared\n";
@@ -420,7 +420,10 @@ double NLL_estimator::EvaluateSample(
         device_couplings_,
         omega_width_table_.DeviceView(),
         sample.FMatrix(),
+        sample.TermCoefficientBuffer(),
         sample.IntensityBuffer(),
+        NumberTerms(),
+        static_cast<int>(model_.active_wave_types.size()),
         sample.Entries());
 
     double logarithm_sum = 0.0;
@@ -448,7 +451,10 @@ double NLL_estimator::Cal_log_likelihood()
         device_couplings_,
         omega_width_table_.DeviceView(),
         normalization_mc_->FMatrix(),
+        normalization_mc_->TermCoefficientBuffer(),
         normalization_mc_->IntensityBuffer(),
+        NumberTerms(),
+        static_cast<int>(model_.active_wave_types.size()),
         normalization_mc_->Entries());
 
     double normalization = 0.0;
@@ -483,10 +489,11 @@ double NLL_estimator::Cal_log_likelihood()
 
 void NLL_estimator::SetCoupling(int term_index, double real, double imag)
 {
-    if (term_index < 0 || term_index >= GVV_NTERMS) {
+    if (term_index < 0 || term_index >= NumberTerms()) {
         throw std::out_of_range("invalid GVV term index");
     }
-    const int parameterization = gvv_coupling_parameterization(term_index);
+    const int parameterization =
+        model_.term_metadata[term_index].coupling_parameterization;
     if (parameterization == GVV_COUPLING_FIXED_SCALE_AND_PHASE
         && (real != 1.0 || imag != 0.0)) {
         throw std::invalid_argument(
@@ -497,15 +504,15 @@ void NLL_estimator::SetCoupling(int term_index, double real, double imag)
         throw std::invalid_argument(
             "phase-reference coupling must remain positive real");
     }
-    couplings_[term_index] = DeviceComplex(real, imag);
+    model_.initial_couplings[term_index] = DeviceComplex(real, imag);
 }
 
 void NLL_estimator::SetLogCouplingMagnitude(
     int term_index,
     double log_magnitude)
 {
-    if (term_index < 0 || term_index >= GVV_NTERMS
-        || gvv_coupling_parameterization(term_index)
+    if (term_index < 0 || term_index >= NumberTerms()
+        || model_.term_metadata[term_index].coupling_parameterization
                != GVV_COUPLING_POSITIVE_REAL) {
         throw std::invalid_argument(
             "log coupling magnitude is only valid for a phase reference");
@@ -518,51 +525,73 @@ void NLL_estimator::SetLogCouplingMagnitude(
         throw std::invalid_argument(
             "log coupling magnitude is outside the numerical range");
     }
-    couplings_[term_index] = DeviceComplex(magnitude, 0.0);
+    model_.initial_couplings[term_index] = DeviceComplex(magnitude, 0.0);
 }
 
 DeviceComplex NLL_estimator::Coupling(int term_index) const
 {
-    if (term_index < 0 || term_index >= GVV_NTERMS) {
+    if (term_index < 0 || term_index >= NumberTerms()) {
         throw std::out_of_range("invalid GVV term index");
     }
-    return couplings_[term_index];
+    return model_.initial_couplings[term_index];
 }
 
 void NLL_estimator::SetLogSDRatio(int resonance_index, double log_ratio)
 {
-    if (resonance_index < 0 || resonance_index >= GVV_NRESONANCES
-        || !resonances_[resonance_index].fit_sd_ratio) {
+    if (resonance_index < 0 || resonance_index >= NumberResonances()
+        || !model_.resonances[resonance_index].fit_sd_ratio) {
         throw std::invalid_argument("S/D ratio is not fitted for this resonance");
     }
     const double bounded = std::max(-30.0, std::min(30.0, log_ratio));
-    resonances_[resonance_index].sd_ratio = std::exp(bounded);
+    model_.resonances[resonance_index].sd_ratio = std::exp(bounded);
 }
 
 void NLL_estimator::SetLogFlatteRatio(int resonance_index, double log_ratio)
 {
-    if (resonance_index < 0 || resonance_index >= GVV_NRESONANCES
-        || !resonances_[resonance_index].fit_flatte_ratio) {
+    if (resonance_index < 0 || resonance_index >= NumberResonances()
+        || !model_.resonances[resonance_index].fit_flatte_ratio) {
         throw std::invalid_argument(
             "Flatte omega-omega ratio is not fitted for this resonance");
     }
     const double bounded = std::max(-30.0, std::min(30.0, log_ratio));
-    resonances_[resonance_index].flatte_ratio = std::exp(bounded);
+    model_.resonances[resonance_index].flatte_ratio = std::exp(bounded);
 }
 
 const GVVResonanceParameters& NLL_estimator::Resonance(
     int resonance_index) const
 {
-    if (resonance_index < 0 || resonance_index >= GVV_NRESONANCES) {
+    if (resonance_index < 0 || resonance_index >= NumberResonances()) {
         throw std::out_of_range("invalid GVV resonance index");
     }
-    return resonances_[resonance_index];
+    return model_.resonances[resonance_index];
+}
+
+const GVVCompiledModel& NLL_estimator::Model() const
+{
+    return model_;
+}
+
+int NLL_estimator::NumberTerms() const
+{
+    return static_cast<int>(model_.terms.size());
+}
+
+int NLL_estimator::NumberResonances() const
+{
+    return static_cast<int>(model_.resonances.size());
 }
 
 int NLL_estimator::NumberFitParameters() const
 {
-    int count = gvv_number_coupling_fit_parameters();
-    for (const GVVResonanceParameters& resonance : resonances_) {
+    int count = 0;
+    for (const GVVTermMetadata& term : model_.term_metadata) {
+        if (term.coupling_parameterization == GVV_COUPLING_POSITIVE_REAL) {
+            ++count;
+        } else if (term.coupling_parameterization == GVV_COUPLING_COMPLEX) {
+            count += 2;
+        }
+    }
+    for (const GVVResonanceParameters& resonance : model_.resonances) {
         if (resonance.fit_sd_ratio) {
             ++count;
         }
@@ -585,11 +614,14 @@ int NLL_estimator::NormalizationMCEntries() const
 
 void NLL_estimator::PrintModelSummary() const
 {
-    std::cout << "GVV model: " << GVV_NRESONANCES << " physical components, "
-              << GVV_NTERMS << " coherent terms\n";
-    for (int index = 0; index < GVV_NRESONANCES; ++index) {
-        const GVVResonanceParameters& resonance = resonances_[index];
-        std::cout << "  " << std::setw(10) << gvv_resonance_name(index)
+    std::cout << "GVV model '" << model_.definition.name << "': "
+              << NumberResonances() << " resonance definitions, "
+              << NumberTerms() << " active coherent Terms, "
+              << model_.active_wave_types.size() << " active Waves\n";
+    for (int index = 0; index < NumberResonances(); ++index) {
+        const GVVResonanceParameters& resonance = model_.resonances[index];
+        std::cout << "  " << std::setw(10)
+                  << model_.resonance_metadata[index].id
                   << "  m=" << resonance.mass
                   << "  model=" << gvv_propagator_name(
                          resonance.propagator_model);
@@ -611,12 +643,17 @@ void NLL_estimator::PrintModelSummary() const
         }
         std::cout << '\n';
     }
-    std::cout << "  scale-and-phase reference amplitude: "
-              << gvv_term_name(GVV_SCALE_AND_PHASE_REFERENCE_TERM)
-              << " = 1 + 0i\n"
-              << "  scalar phase reference amplitude: "
-              << gvv_term_name(GVV_SCALAR_PHASE_REFERENCE_TERM)
-              << " = rho + 0i, rho > 0 and fitted as log(rho)\n";
+    for (int term = 0; term < NumberTerms(); ++term) {
+        const GVVTermMetadata& metadata = model_.term_metadata[term];
+        if (metadata.reference == ctpwa::CouplingReference::ScaleAndPhase) {
+            std::cout << "  scale-and-phase reference amplitude: "
+                      << metadata.id << " = 1 + 0i\n";
+        } else if (metadata.reference == ctpwa::CouplingReference::Phase) {
+            std::cout << "  " << metadata.coherence_class
+                      << " phase reference amplitude: " << metadata.id
+                      << " = rho + 0i, rho > 0 and fitted as log(rho)\n";
+        }
+    }
 }
 
 void NLL_estimator::Project_fit_result(
@@ -629,15 +666,17 @@ void NLL_estimator::Project_fit_result(
         throw std::runtime_error(
             "call Prepare() before writing the GVV projection");
     }
-    if (GVV_NTERMS > kProjectionMaxComponents) {
+    const int number_terms = NumberTerms();
+    if (number_terms > kProjectionMaxComponents) {
         throw std::runtime_error(
-            "GVV_NTERMS exceeds projection weight_component capacity");
+            "active Term count exceeds projection weight_component capacity");
     }
 
-    const std::array<DeviceComplex, GVV_NTERMS> fitted_couplings = couplings_;
+    const std::vector<DeviceComplex> fitted_couplings =
+        model_.initial_couplings;
     const int number_mc = normalization_mc_->Entries();
-    auto evaluate_mc = [&](const std::array<DeviceComplex, GVV_NTERMS>& values) {
-        couplings_ = values;
+    auto evaluate_mc = [&](const std::vector<DeviceComplex>& values) {
+        model_.initial_couplings = values;
         SynchronizeModel();
         CalGVVPDF(
             normalization_mc_->Momenta(),
@@ -646,7 +685,10 @@ void NLL_estimator::Project_fit_result(
             device_couplings_,
             omega_width_table_.DeviceView(),
             normalization_mc_->FMatrix(),
+            normalization_mc_->TermCoefficientBuffer(),
             normalization_mc_->IntensityBuffer(),
+            number_terms,
+            static_cast<int>(model_.active_wave_types.size()),
             number_mc);
         std::vector<double> result(number_mc, 0.0);
         std::copy(
@@ -659,45 +701,48 @@ void NLL_estimator::Project_fit_result(
     std::vector<double> total_intensity;
     std::vector<double> scalar_intensity;
     std::vector<double> pseudoscalar_intensity;
-    std::array<
-        std::array<std::vector<double>, GVV_NTERMS>,
-        GVV_NTERMS> pair_intensity;
+    std::vector<std::vector<std::vector<double>>> pair_intensity(
+        number_terms,
+        std::vector<std::vector<double>>(number_terms));
 
     try {
         total_intensity = evaluate_mc(fitted_couplings);
 
-        std::array<DeviceComplex, GVV_NTERMS> selected;
-        selected.fill(DeviceComplex(0.0, 0.0));
-        for (int term = 0; term < GVV_NTERMS; ++term) {
-            if (terms_[term].wave_type == GVV_SCALAR_00
-                || terms_[term].wave_type == GVV_SCALAR_22) {
+        std::vector<DeviceComplex> selected(
+            number_terms, DeviceComplex(0.0, 0.0));
+        for (int term = 0; term < number_terms; ++term) {
+            if (model_.term_metadata[term].jpc == "0++") {
                 selected[term] = fitted_couplings[term];
             }
         }
         scalar_intensity = evaluate_mc(selected);
 
-        selected.fill(DeviceComplex(0.0, 0.0));
-        for (int term = 0; term < GVV_NTERMS; ++term) {
-            if (terms_[term].wave_type == GVV_PSEUDOSCALAR_11) {
+        std::fill(
+            selected.begin(), selected.end(), DeviceComplex(0.0, 0.0));
+        for (int term = 0; term < number_terms; ++term) {
+            if (model_.term_metadata[term].jpc == "0-+") {
                 selected[term] = fitted_couplings[term];
             }
         }
         pseudoscalar_intensity = evaluate_mc(selected);
 
-        for (int first = 0; first < GVV_NTERMS; ++first) {
-            for (int second = first; second < GVV_NTERMS; ++second) {
-                selected.fill(DeviceComplex(0.0, 0.0));
+        for (int first = 0; first < number_terms; ++first) {
+            for (int second = first; second < number_terms; ++second) {
+                std::fill(
+                    selected.begin(),
+                    selected.end(),
+                    DeviceComplex(0.0, 0.0));
                 selected[first] = fitted_couplings[first];
                 selected[second] = fitted_couplings[second];
                 pair_intensity[first][second] = evaluate_mc(selected);
             }
         }
     } catch (...) {
-        couplings_ = fitted_couplings;
+        model_.initial_couplings = fitted_couplings;
         SynchronizeModel();
         throw;
     }
-    couplings_ = fitted_couplings;
+    model_.initial_couplings = fitted_couplings;
     SynchronizeModel();
 
     const double sum_pdf = std::accumulate(
@@ -762,13 +807,13 @@ void NLL_estimator::Project_fit_result(
         }
 
         double reconstructed_intensity = 0.0;
-        for (int first = 0; first < GVV_NTERMS; ++first) {
+        for (int first = 0; first < number_terms; ++first) {
             const double diagonal = pair_intensity[first][first][event];
             reconstructed_intensity += diagonal;
             weight_component[first][first] =
                 diagonal / sum_pdf * effective_yield;
             for (int second = first + 1;
-                 second < GVV_NTERMS;
+                 second < number_terms;
                  ++second) {
                 const double interference =
                     pair_intensity[first][second][event]
@@ -836,25 +881,25 @@ void NLL_estimator::Project_fit_result(
     component_map.Branch("wave_type", &wave_type, "wave_type/I");
     component_map.Branch("name", component_name, "name/C");
     component_map.Branch("jpc", component_jpc, "jpc/C");
-    for (int term = 0; term < GVV_NTERMS; ++term) {
+    for (int term = 0; term < number_terms; ++term) {
         component_index = term;
-        resonance_index = terms_[term].resonance_index;
-        wave_type = terms_[term].wave_type;
+        resonance_index = model_.terms[term].resonance_index;
+        wave_type = model_.term_metadata[term].registered_wave_type;
         std::snprintf(
             component_name,
             sizeof(component_name),
             "%s",
-            gvv_term_name(term));
+            model_.term_metadata[term].id.c_str());
         std::snprintf(
             component_jpc,
             sizeof(component_jpc),
             "%s",
-            wave_type == GVV_PSEUDOSCALAR_11 ? "0-+" : "0++");
+            model_.term_metadata[term].jpc.c_str());
         component_map.Fill();
     }
 
     TTree metadata("metadata", "GVV projection provenance");
-    int n_terms = GVV_NTERMS;
+    int n_terms = number_terms;
     int n_data = data_->Entries();
     int n_normalization_mc = normalization_mc_->Entries();
     int n_background_samples = static_cast<int>(backgrounds_.size());

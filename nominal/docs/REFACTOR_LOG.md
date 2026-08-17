@@ -60,3 +60,11 @@ states otherwise.
   six resonance descriptors, eight term descriptors, initial couplings, and
   active wave set as the legacy hard-coded model.  No new wave or physics
   formula was introduced.
+- 2026-08-17: Switched the production likelihood path to runtime model sizes.
+  The sample cache now stores only active Wave Gram-matrix entries and a
+  model-sized Term-coefficient workspace.  CUDA evaluation was separated into
+  process-specific GVV Term construction followed by a coherent contraction
+  whose loop bounds are supplied at runtime.  `NLL_estimator` now owns the
+  JSON-compiled model and uploads vectors instead of fixed-size arrays.  A
+  temporary compatibility overload remains only for PostFit and is scheduled
+  for removal in the next stage.  Full build and all tests passed.

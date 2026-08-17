@@ -29,26 +29,38 @@ struct GVVDeviceMomenta {
     }
 };
 
-// F is flat [event][GVV_NBASIS][GVV_NBASIS].
-__global__ void CalGVVFmatrix_device(
-    GVVDeviceMomenta momenta,
-    double* F_matrix,
-    int nevt);
-
+// F is compact and model-dependent: [event][active wave][active wave].
+// active_wave_types maps each dense slot back to the registered GVV wave.
 void CalGVVFmatrix(
     GVVDeviceMomenta momenta,
+    const int* active_wave_types,
+    int number_active_waves,
     double* F_matrix,
-    int nevt);
+    int number_events);
 
-__global__ void CalGVVPDF_device(
+// Process-specific Term construction. The output is the complex dynamical
+// coefficient for every [event][term], before Wave contraction. This is the
+// boundary a future process (for example GPPP) replaces.
+void CalGVVTermCoefficients(
     GVVDeviceMomenta momenta,
     const GVVResonanceParameters* resonances,
     const GVVTermSpec* terms,
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
+    DeviceComplex* coefficients,
+    int number_terms,
+    int number_events);
+
+// Process-neutral coherent contraction of Term coefficients with the Wave
+// Gram matrix. TermSpec supplies only the dense wave slot.
+void CalCoherentIntensity(
+    const GVVTermSpec* terms,
+    const DeviceComplex* coefficients,
     const double* F_matrix,
-    double* amp2,
-    int nevt);
+    double* intensity,
+    int number_terms,
+    int number_active_waves,
+    int number_events);
 
 void CalGVVPDF(
     GVVDeviceMomenta momenta,
@@ -57,36 +69,45 @@ void CalGVVPDF(
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
     const double* F_matrix,
-    double* amp2,
-    int nevt);
+    DeviceComplex* coefficient_workspace,
+    double* intensity,
+    int number_terms,
+    int number_active_waves,
+    int number_events);
 
+__host__ __device__ inline int gvv_number_component_pairs(int number_terms)
+{
+    return number_terms * (number_terms + 1) / 2;
+}
+
+// Removed with the legacy fixed-layout PostFit migration.
 constexpr int GVV_NCOMPONENT_PAIRS =
     GVV_NTERMS * (GVV_NTERMS + 1) / 2;
 
-// Compact upper-triangle ordering used by PostFit:
+// Compact upper-triangle ordering:
 //   diagonal: |A_i|^2
 //   i<j:      2 Re(A_i A_j*) including both ordered F contractions.
-__host__ __device__ inline int gvv_component_pair_index(int first, int second)
+__host__ __device__ inline int gvv_component_pair_index(
+    int first,
+    int second,
+    int number_terms)
 {
     if (first > second) {
         const int temporary = first;
         first = second;
         second = temporary;
     }
-    return first * GVV_NTERMS
+    return first * number_terms
            - first * (first - 1) / 2
            + (second - first);
 }
 
-__global__ void CalGVVComponentMatrix_device(
-    GVVDeviceMomenta momenta,
-    const GVVResonanceParameters* resonances,
-    const GVVTermSpec* terms,
-    const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
-    const double* F_matrix,
-    double* component_matrix,
-    int nevt);
+__host__ __device__ inline int gvv_component_pair_index(
+    int first,
+    int second)
+{
+    return gvv_component_pair_index(first, second, GVV_NTERMS);
+}
 
 void CalGVVComponentMatrix(
     GVVDeviceMomenta momenta,
@@ -95,7 +116,10 @@ void CalGVVComponentMatrix(
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
     const double* F_matrix,
+    DeviceComplex* coefficient_workspace,
     double* component_matrix,
-    int nevt);
+    int number_terms,
+    int number_active_waves,
+    int number_events);
 
 #endif // KERNEL_H

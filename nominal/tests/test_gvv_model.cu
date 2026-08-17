@@ -88,12 +88,12 @@ int main()
 
     int number_scalar_22_terms = 0;
     for (int term = 0; term < GVV_NTERMS; ++term) {
-        if (gvv_default_term(term).wave_type == GVV_SCALAR_22) {
+        if (gvv_default_term(term).registered_wave_type == GVV_SCALAR_22) {
             ++number_scalar_22_terms;
         }
     }
     if (GVV_NTERMS != 7 || number_scalar_22_terms != 0
-        || gvv_default_term(GVV_TERM_NR_0MP_11).wave_type
+        || gvv_default_term(GVV_TERM_NR_0MP_11).registered_wave_type
                != GVV_PSEUDOSCALAR_11) {
         std::cerr << "GVV term-to-wave mapping is wrong\n";
         return 6;

@@ -35,6 +35,11 @@ public:
     void Load(
         const std::string& file_name,
         const GVVBranchConfig& branches);
+    void UploadAndBuildF(
+        const std::vector<int>& active_wave_types,
+        int number_terms);
+    // Transitional overload for legacy post-fit code. Production fitting
+    // always supplies the runtime model layout explicitly.
     void UploadAndBuildF();
 
     const std::string& Label() const;
@@ -42,7 +47,10 @@ public:
     const double* HostMomentum(int particle, int event) const;
     GVVDeviceMomenta Momenta() const;
     const double* FMatrix() const;
+    DeviceComplex* TermCoefficientBuffer();
     double* IntensityBuffer();
+    int NumberActiveWaves() const;
+    int NumberTerms() const;
 
 private:
     std::string label_;
@@ -50,7 +58,10 @@ private:
     std::array<std::vector<double>, 7> host_p4_;
     std::array<double*, 7> device_p4_;
     double* F_matrix_;
+    DeviceComplex* term_coefficients_;
     double* amp2_;
+    int number_active_waves_;
+    int number_terms_;
 };
 
 #endif // GVV_SAMPLE_H

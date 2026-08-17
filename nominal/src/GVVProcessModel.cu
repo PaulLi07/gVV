@@ -225,7 +225,10 @@ GVVCompiledModel gvv_compile_model(
                 + resonance_id + "'");
         }
 
-        result.terms.emplace_back(resonance_index, wave.wave_type);
+        result.terms.emplace_back(
+            resonance_index,
+            active_wave_slots.at(wave.wave_type),
+            wave.wave_type);
         result.initial_couplings.emplace_back(
             term.coupling.initial_real, term.coupling.initial_imag);
         result.term_metadata.push_back({

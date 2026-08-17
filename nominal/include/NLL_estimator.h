@@ -1,20 +1,21 @@
 #ifndef NLL_ESTIMATOR_H
 #define NLL_ESTIMATOR_H
 
-#include "GVVModel.h"
 #include "GVVSample.h"
 #include "OmegaPropagator.h"
+#include "process/GVVProcessModel.h"
 
 #include "TObject.h"
 
-#include <array>
 #include <memory>
 #include <string>
 #include <vector>
 
 class NLL_estimator : public TObject {
 public:
-    explicit NLL_estimator(const GVVBranchConfig& branches = GVVBranchConfig());
+    explicit NLL_estimator(
+        GVVCompiledModel model,
+        const GVVBranchConfig& branches = GVVBranchConfig());
     ~NLL_estimator() override;
 
     NLL_estimator(const NLL_estimator&) = delete;
@@ -41,6 +42,9 @@ public:
     void SetLogSDRatio(int resonance_index, double log_ratio);
     void SetLogFlatteRatio(int resonance_index, double log_ratio);
     const GVVResonanceParameters& Resonance(int resonance_index) const;
+    const GVVCompiledModel& Model() const;
+    int NumberTerms() const;
+    int NumberResonances() const;
 
     int NumberFitParameters() const;
     int DataEntries() const;
@@ -69,9 +73,7 @@ private:
         double normalization);
 
     GVVBranchConfig branches_;
-    std::array<GVVResonanceParameters, GVV_NRESONANCES> resonances_;
-    std::array<GVVTermSpec, GVV_NTERMS> terms_;
-    std::array<DeviceComplex, GVV_NTERMS> couplings_;
+    GVVCompiledModel model_;
 
     std::unique_ptr<GVVSample> normalization_mc_;
     std::unique_ptr<GVVSample> data_;

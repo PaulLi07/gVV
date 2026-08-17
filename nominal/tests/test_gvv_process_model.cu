@@ -68,7 +68,8 @@ int main(int argc, char* argv[])
                 model.terms[index].resonance_index == expected.resonance_index,
                 "term resonance migration mismatch");
             require(
-                model.terms[index].wave_type == expected.wave_type,
+                model.terms[index].registered_wave_type
+                    == expected.registered_wave_type,
                 "term wave migration mismatch");
             require(
                 model.term_metadata[index].id == gvv_term_name(index),

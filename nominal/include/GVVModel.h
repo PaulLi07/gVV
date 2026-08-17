@@ -133,12 +133,19 @@ struct GVVResonanceParameters {
 
 struct GVVTermSpec {
     int resonance_index;
-    int wave_type;
+    // wave_slot is a dense, model-local index into the compact F matrix.
+    // registered_wave_type is retained for diagnostics and never indexes F.
+    int wave_slot;
+    int registered_wave_type;
 
     __host__ __device__ GVVTermSpec(
         int resonance = GVV_RES_NR_0MP,
-        int wave = GVV_PSEUDOSCALAR_11)
-        : resonance_index(resonance), wave_type(wave)
+        int slot = GVV_PSEUDOSCALAR_11,
+        int registered_wave = -1)
+        : resonance_index(resonance),
+          wave_slot(slot),
+          registered_wave_type(
+              registered_wave < 0 ? slot : registered_wave)
     {
     }
 };
@@ -186,24 +193,41 @@ gvv_default_resonance(int index)
 __host__ __device__ inline GVVTermSpec gvv_default_term(int index)
 {
     if (index == GVV_TERM_F0_1500_00) {
-        return GVVTermSpec(GVV_RES_F0_1500, GVV_SCALAR_00);
+        return GVVTermSpec(
+            GVV_RES_F0_1500, GVV_SCALAR_00, GVV_SCALAR_00);
     }
     if (index == GVV_TERM_F0_1710_00) {
-        return GVVTermSpec(GVV_RES_F0_1710, GVV_SCALAR_00);
+        return GVVTermSpec(
+            GVV_RES_F0_1710, GVV_SCALAR_00, GVV_SCALAR_00);
     }
     if (index == GVV_TERM_ETA_1760_11) {
-        return GVVTermSpec(GVV_RES_ETA_1760, GVV_PSEUDOSCALAR_11);
+        return GVVTermSpec(
+            GVV_RES_ETA_1760,
+            GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11);
     }
     if (index == GVV_TERM_ETA_C_11) {
-        return GVVTermSpec(GVV_RES_ETA_C_1S, GVV_PSEUDOSCALAR_11);
+        return GVVTermSpec(
+            GVV_RES_ETA_C_1S,
+            GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11);
     }
     if (index == GVV_TERM_X_1835_11) {
-        return GVVTermSpec(GVV_RES_X_1835, GVV_PSEUDOSCALAR_11);
+        return GVVTermSpec(
+            GVV_RES_X_1835,
+            GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11);
     }
     if (index == GVV_TERM_X_2370_11) {
-        return GVVTermSpec(GVV_RES_X_2370, GVV_PSEUDOSCALAR_11);
+        return GVVTermSpec(
+            GVV_RES_X_2370,
+            GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11);
     }
-    return GVVTermSpec(GVV_RES_NR_0MP, GVV_PSEUDOSCALAR_11);
+    return GVVTermSpec(
+        GVV_RES_NR_0MP,
+        GVV_PSEUDOSCALAR_11,
+        GVV_PSEUDOSCALAR_11);
 }
 
 __host__ __device__ inline DeviceComplex gvv_x_propagator(
