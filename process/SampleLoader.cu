@@ -237,12 +237,8 @@ int GVVSample::Entries() const
 
 const double* GVVSample::HostMomentum(int particle, int event) const
 {
-    if (particle < 0 || particle >= GVV_NFINAL_PARTICLES) {
-        throw std::out_of_range("invalid GVV particle index");
-    }
-    if (event < 0 || event >= entries_) {
-        throw std::out_of_range("invalid GVV event index");
-    }
+    // Projection traversal owns these loop bounds; avoid rechecking them for
+    // every particle of every event after the sample has been loaded.
     return host_p4_[particle].data()
            + static_cast<std::size_t>(event) * 4;
 }

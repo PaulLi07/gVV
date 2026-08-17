@@ -3,9 +3,14 @@
 #ifndef CTPWA_FRAMEWORK_TENSORS_BARRIER_FACTOR_CUH
 #define CTPWA_FRAMEWORK_TENSORS_BARRIER_FACTOR_CUH
 
-#include "framework/dynamics/Kinematics.cuh"
+#include <cmath>
 
 namespace ctpwa {
+
+// Barrier-factor units and the nominal radius belong to this module. Keeping
+// them here prevents tensors/ from depending back on dynamics/.
+constexpr double HBARC_GEV_FM = 0.197321;
+constexpr double DEFAULT_BARRIER_RADIUS_FM = 0.59;
 
 // Blatt-Weisskopf factors in the normalization used by the original project.
 // The radius is in fm and the breakup momentum is in GeV.

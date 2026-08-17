@@ -9,8 +9,6 @@
 #include <iosfwd>
 #include <vector>
 
-class FitLikelihood;
-
 enum class GVVFitParameterTarget {
     CouplingReal,
     CouplingImaginary,
@@ -26,7 +24,8 @@ struct GVVFitParameterBinding {
 };
 
 // This is the single translation layer between generic Minuit ordering and
-// process-specific GVV model state. It is generated entirely from model.json.
+// process-specific GVV model state. It is generated entirely from model.json
+// and acts directly on GVVCompiledModel, without depending on FitLikelihood.
 std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
     const GVVCompiledModel& model);
 
@@ -34,13 +33,13 @@ std::vector<ctpwa::FitParameterSpec> gvv_fit_parameter_specs(
     const std::vector<GVVFitParameterBinding>& layout);
 
 void gvv_apply_fit_parameters(
-    FitLikelihood& likelihood,
+    GVVCompiledModel& model,
     const std::vector<GVVFitParameterBinding>& layout,
     const std::vector<double>& values);
 
 void gvv_write_fit_details(
     std::ostream& output,
-    const FitLikelihood& likelihood,
+    const GVVCompiledModel& model,
     const std::vector<GVVFitParameterBinding>& layout,
     const ctpwa::FitAttempt& best);
 

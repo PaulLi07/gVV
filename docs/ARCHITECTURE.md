@@ -25,6 +25,9 @@ config/fit.json ──> framework/fit ───────> app/Fit.cu
 ```
 
 硬约束是 `framework/` 不包含 `process/` 头文件。过程层可以依赖框架层，反方向不允许。
+框架内部的物理工具也保持单向依赖：`math <- tensors <- dynamics <- process`。
+`BarrierFactor` 自己拥有单位与默认半径，`dynamics` 可以调用障碍因子，但
+`tensors` 不再反向包含 `dynamics`。
 
 ## framework
 
@@ -75,6 +78,12 @@ I(x)   = sum_ij c_i c_j* D_i D_j* F_ij(x)
 
 `WaveRegistry.cuh` 是设备 dispatch 的唯一位置；`WaveRegistry.cu` 是字符串 id、JPC、相干类与数值 wave type 的唯一主机注册位置。
 
+当前 `WaveRegistry.cuh` 还包含三段过程振幅公共计算：光子偏振投影
+`gvv_photon_projector`、两个 Wave 的偏振缩并 `gvv_wave_contraction`，以及组装
+`F_ij` 的 `gvv_cal_F`。它们不是注册元数据；若后续继续收窄注册表，应整体移到
+`process/ProcessAmplitude.cuh`，由 `TermEvaluator` 包含。枚举、设备 dispatch、
+Wave 元数据和编译模型类型仍留在 `WaveRegistry`。本轮只记录这个边界，不扩大改动范围。
+
 ### Resonance、Wave、Term
 
 - Resonance：传播子实例和动力学参数；
@@ -86,6 +95,12 @@ I(x)   = sum_ij c_i c_j* D_i D_j* F_ij(x)
 ### 目标函数与参数映射
 
 `FitLikelihood` 管理 GVV 样本、缓存的 F 矩阵、omega 宽度表和 GPU 模型状态，并调用通用似然算术。它不决定 Minuit 起点、收敛选择或输出命名。
+
+它目前具体负责四组工作：加载并持有 data/normalization MC/带权背景；在
+`Prepare()` 中构建 omega 宽度表、上传紧凑模型并缓存每个样本的 F 矩阵；每次
+目标函数调用时同步可变传播子/耦合、计算 MC 归一化和有符号 log-likelihood；在
+拟合完成后写包含运动学、分量权重和元数据的 projection ROOT。最后一项占据文件
+的大部分辅助代码，是拟合到下游处理的输出桥梁，但不参与 Minuit 决策。
 
 `ParameterMapping` 是唯一的模型状态到拟合参数转换层。它根据耦合参考约定和未固定传播子参数生成通用 `FitParameterSpec`，同时保存如何把 Minuit vector 写回 GVV 状态的 binding。
 
@@ -108,7 +123,7 @@ I(x)   = sum_ij c_i c_j* D_i D_j* F_ij(x)
 | `framework/tensors/*` | 可复用投影、轨道张量、障碍因子和低阶张量代数 |
 | `process/TermEvaluator.*` | CUDA 上构造 Term 系数、F 矩阵和相干强度 |
 | `process/FitLikelihood.*` | 样本编排、MC 归一化、有符号似然与 projection ROOT |
-| `process/ParameterMapping.*`、`FitState.cu` | `model.json` 状态与 Minuit vector 的唯一双向映射 |
+| `process/ParameterMapping.*` | `model.json` 状态与 Minuit vector 的唯一双向映射及物理参数 TXT 明细 |
 | `framework/fit/FitEngine.*` | 与过程无关的多起点 MIGRAD/HESSE 驱动 |
 | `framework/fit/FitOutput.*` | 统一 TXT 和 covariance 输出 |
 | `submit.sh` | 唯一 Slurm 提交/worker 入口 |

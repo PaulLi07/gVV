@@ -38,12 +38,9 @@ public:
     void Prepare();
     double LogLikelihood();
 
-    void SetCoupling(int term_index, double real, double imag);
-    void SetLogCouplingMagnitude(int term_index, double log_magnitude);
-    DeviceComplex Coupling(int term_index) const;
-    void SetLogSDRatio(int resonance_index, double log_ratio);
-    void SetLogFlatteRatio(int resonance_index, double log_ratio);
-    const ctpwa::PropagatorParameters& Resonance(int resonance_index) const;
+    // ParameterMapping mutates this host state; LogLikelihood synchronizes it
+    // to the already allocated device model before evaluating any sample.
+    GVVCompiledModel& MutableModel();
     const GVVCompiledModel& Model() const;
     int NumberTerms() const;
     int NumberResonances() const;

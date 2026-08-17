@@ -3,12 +3,13 @@
 #include "process/ParameterMapping.h"
 #include "process/TermEvaluator.cuh"
 
+#include <cmath>
 #include <iostream>
 #include <vector>
 
 int main()
 {
-    const GVVCompiledModel compiled =
+    GVVCompiledModel compiled =
         gvv_load_compiled_model("config/model.json");
     const std::vector<GVVFitParameterBinding> layout =
         gvv_fit_parameter_layout(compiled);
@@ -34,6 +35,32 @@ int main()
         return 1;
     }
 
+    std::vector<double> values;
+    values.reserve(parameters.size());
+    for (const ctpwa::FitParameterSpec& parameter : parameters) {
+        values.push_back(parameter.initial_value);
+    }
+    values[0] = 0.25;
+    values[1] = -0.50;
+    values[2] = std::log(2.0);
+    values[11] = std::log(0.75);
+    gvv_apply_fit_parameters(compiled, layout, values);
+    const int cartesian_term = layout[0].target_index;
+    const int phase_reference_term = layout[2].target_index;
+    const int flatte_resonance = layout[11].target_index;
+    if (compiled.initial_couplings[cartesian_term].real != 0.25
+        || compiled.initial_couplings[cartesian_term].imag != -0.50
+        || std::fabs(
+               compiled.initial_couplings[phase_reference_term].real - 2.0)
+               > 1.0e-12
+        || compiled.initial_couplings[phase_reference_term].imag != 0.0
+        || std::fabs(
+               compiled.resonances[flatte_resonance].flatte_ratio - 0.75)
+               > 1.0e-12) {
+        std::cerr << "GVV fit-parameter application is wrong\n";
+        return 2;
+    }
+
     const int number_terms = static_cast<int>(compiled.terms.size());
     const int number_pairs = ctpwa::component_pair_count(number_terms);
     std::vector<bool> seen(number_pairs, false);
@@ -43,7 +70,7 @@ int main()
                 first, second, number_terms);
             if (index < 0 || index >= number_pairs || seen[index]) {
                 std::cerr << "component-pair compact index is wrong\n";
-                return 2;
+                return 3;
             }
             seen[index] = true;
         }

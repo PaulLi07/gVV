@@ -109,7 +109,8 @@ int main(int argc, char* argv[])
 
         const ctpwa::FitObjective objective =
             [&](const std::vector<double>& values) {
-                gvv_apply_fit_parameters(likelihood, mapping, values);
+                gvv_apply_fit_parameters(
+                    likelihood.MutableModel(), mapping, values);
                 return -likelihood.LogLikelihood();
             };
         const ctpwa::FitSummary summary = ctpwa::run_multistart_fit(
@@ -121,7 +122,8 @@ int main(int argc, char* argv[])
                 "no final fit output was written");
         }
 
-        gvv_apply_fit_parameters(likelihood, mapping, summary.best.values);
+        gvv_apply_fit_parameters(
+            likelihood.MutableModel(), mapping, summary.best.values);
         std::cout << "Selected best start " << summary.best.start_index
                   << " (seed " << summary.best.seed << ") with NLL "
                   << std::setprecision(12) << summary.best.minimum << '\n';
@@ -141,7 +143,7 @@ int main(int argc, char* argv[])
             context,
             [&](std::ostream& output) {
                 gvv_write_fit_details(
-                    output, likelihood, mapping, summary.best);
+                    output, likelihood.Model(), mapping, summary.best);
             });
         ctpwa::write_covariance_matrix(
             config.output.covariance_file(), summary.best);

@@ -119,3 +119,21 @@
   177374/23561/27820，component/group map 为 7/2；有效产额 17358，分量
   闭合残差 `3.29041e-15`。framework 对 process 的 include/过程词扫描为空，
   `postfit/` diff 为空，生成物仍由 Git 忽略。
+
+## 架构收尾：依赖与检查归位（2026-08-17）
+
+- 把 `HBARC_GEV_FM` 和默认障碍半径归还 `BarrierFactor.cuh`，使
+  `framework/tensors/` 不再反向包含 `framework/dynamics/`；框架物理工具
+  恢复为 `math <- tensors <- dynamics <- process` 的单向依赖。
+- 将 `FitState.cu` 的参数应用和物理结果明细合入 `ParameterMapping.cu`，删除
+  单独对象和构建规则。模型到 Minuit vector 的布局、应用与序列化现在集中在
+  一个模块中。
+- 保留 JSON、ROOT/CUDA I/O、`Prepare()` 生命周期和似然数值边界检查；删除
+  编译模型后的布局复查、每次参数写回时的索引/策略复查，以及组合 CUDA 入口
+  已检查尺寸后对子阶段的重复检查。传播子不再静默截断负的 S/D 比例。
+- `FitLikelihood` 与 `WaveRegistry` 的当前职责和后续可收窄边界补入架构文档。
+  本轮验证不提交 Slurm、HTCondor 或 GPU 作业；集群运行验证由用户执行。
+- `git diff --check`、Shell/JSON 静态检查和依赖方向扫描通过；执行
+  `make clean && make -j2 tests fit && make check`，干净编译及 9/9 单元测试
+  通过。未运行 `Fit.exe`。编译输出只有既有的 sm70 目标弃用提示与 ROOT
+  `TStorage.h` 外部头文件告警，没有项目源码告警。

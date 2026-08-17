@@ -149,7 +149,7 @@ __global__ void CalGVVTermCoefficients_device(
     }
 }
 
-void CalGVVTermCoefficients(
+static void CalGVVTermCoefficients(
     GVVDeviceMomenta momenta,
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
@@ -159,9 +159,6 @@ void CalGVVTermCoefficients(
     int number_terms,
     int number_events)
 {
-    if (number_terms <= 0 || number_events < 0) {
-        throw std::invalid_argument("invalid GVV Term dimensions");
-    }
     if (number_events == 0) {
         return;
     }
@@ -207,7 +204,7 @@ __global__ void CalCoherentIntensity_device(
         number_active_waves);
 }
 
-void CalCoherentIntensity(
+static void CalCoherentIntensity(
     const TermSpec* terms,
     const DeviceComplex* coefficients,
     const double* F_matrix,
@@ -216,7 +213,6 @@ void CalCoherentIntensity(
     int number_active_waves,
     int number_events)
 {
-    require_layout(number_terms, number_active_waves, number_events);
     if (number_events == 0) {
         return;
     }

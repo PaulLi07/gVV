@@ -1,8 +1,9 @@
-// Builds the free-parameter layout from the compiled model. Adding/removing an
-// existing-Wave Term therefore requires no source-level parameter recounting.
+// Complete translation layer between compiled gVV model state and the flat
+// Minuit vector: layout construction, state application, and TXT details.
 #include "process/ParameterMapping.h"
 
 #include <cmath>
+#include <ostream>
 #include <stdexcept>
 
 namespace {
@@ -19,17 +20,21 @@ ctpwa::FitParameterSpec make_fit_spec(
     return result;
 }
 
+double positive_from_log(double value, const char* name)
+{
+    const double physical = std::exp(value);
+    if (!(physical > 0.0) || !std::isfinite(physical)) {
+        throw std::invalid_argument(
+            std::string(name) + " is outside the numerical range");
+    }
+    return physical;
+}
+
 } // namespace
 
 std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
     const GVVCompiledModel& model)
 {
-    if (model.terms.size() != model.initial_couplings.size()
-        || model.terms.size() != model.term_metadata.size()
-        || model.resonances.size() != model.resonance_metadata.size()) {
-        throw std::invalid_argument("incomplete compiled GVV model layout");
-    }
-
     std::vector<GVVFitParameterBinding> layout;
     for (std::size_t term = 0; term < model.terms.size(); ++term) {
         const GVVTermMetadata& metadata = model.term_metadata[term];
@@ -40,11 +45,6 @@ std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
         }
         if (metadata.coupling_parameterization
             == COUPLING_POSITIVE_REAL) {
-            if (!(coupling.real > 0.0) || coupling.imag != 0.0) {
-                throw std::runtime_error(
-                    "positive-real coupling '" + metadata.id
-                    + "' is invalid");
-            }
             GVVFitParameterBinding parameter;
             parameter.fit = make_fit_spec(
                 "log_rho_" + metadata.id, std::log(coupling.real), 0.10);
@@ -89,28 +89,19 @@ std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
                                         const std::string& fit_name,
                                         GVVFitParameterTarget target,
                                         double physical_value) {
-            const auto found = definition.parameters.find(source_name);
-            if (found == definition.parameters.end() || found->second.fixed
-                || found->second.transform != "log") {
-                throw std::runtime_error(
-                    "compiled fitted parameter '" + source_name
-                    + "' is inconsistent for resonance '" + metadata.id
-                    + "'");
-            }
-            if (!(physical_value > 0.0)) {
-                throw std::runtime_error(
-                    "non-positive fitted parameter for resonance '"
-                    + metadata.id + "'");
-            }
+            // WaveRegistry has already validated the process contract and
+            // marked only free log-transformed parameters as fitted.
+            const ctpwa::ParameterDefinition& source =
+                definition.parameters.at(source_name);
             GVVFitParameterBinding parameter;
             parameter.fit = make_fit_spec(
                 fit_name + metadata.id,
                 std::log(physical_value),
-                found->second.step);
-            parameter.fit.has_lower_bound = found->second.has_lower_bound;
-            parameter.fit.has_upper_bound = found->second.has_upper_bound;
-            parameter.fit.lower_bound = found->second.lower_bound;
-            parameter.fit.upper_bound = found->second.upper_bound;
+                source.step);
+            parameter.fit.has_lower_bound = source.has_lower_bound;
+            parameter.fit.has_upper_bound = source.has_upper_bound;
+            parameter.fit.lower_bound = source.lower_bound;
+            parameter.fit.upper_bound = source.upper_bound;
             parameter.target = target;
             parameter.target_index = static_cast<int>(resonance);
             layout.push_back(parameter);
@@ -143,4 +134,107 @@ std::vector<ctpwa::FitParameterSpec> gvv_fit_parameter_specs(
         result.push_back(parameter.fit);
     }
     return result;
+}
+
+void gvv_apply_fit_parameters(
+    GVVCompiledModel& model,
+    const std::vector<GVVFitParameterBinding>& layout,
+    const std::vector<double>& values)
+{
+    if (layout.size() != values.size()) {
+        throw std::invalid_argument("incorrect number of GVV fit parameters");
+    }
+    for (std::size_t cursor = 0; cursor < layout.size(); ++cursor) {
+        const GVVFitParameterBinding& parameter = layout[cursor];
+        if (parameter.target == GVVFitParameterTarget::CouplingReal) {
+            model.initial_couplings[parameter.target_index].real =
+                values[cursor];
+        } else if (
+            parameter.target == GVVFitParameterTarget::CouplingImaginary) {
+            model.initial_couplings[parameter.target_index].imag =
+                values[cursor];
+        } else if (
+            parameter.target == GVVFitParameterTarget::CouplingLogMagnitude) {
+            model.initial_couplings[parameter.target_index] = DeviceComplex(
+                positive_from_log(values[cursor], "log coupling magnitude"),
+                0.0);
+        } else if (
+            parameter.target == GVVFitParameterTarget::ResonanceLogSDRatio) {
+            model.resonances[parameter.target_index].sd_ratio =
+                positive_from_log(values[cursor], "log S/D ratio");
+        } else {
+            model.resonances[parameter.target_index].flatte_ratio =
+                positive_from_log(
+                    values[cursor], "log Flatte omega-omega ratio");
+        }
+    }
+}
+
+void gvv_write_fit_details(
+    std::ostream& output,
+    const GVVCompiledModel& model,
+    const std::vector<GVVFitParameterBinding>& layout,
+    const ctpwa::FitAttempt& best)
+{
+    if (layout.size() != best.values.size()
+        || layout.size() != best.errors.size()) {
+        throw std::invalid_argument("GVV fit detail layout mismatch");
+    }
+    output << "# process-specific physical model state\n";
+    std::size_t parameter = 0;
+    for (std::size_t term = 0; term < model.terms.size(); ++term) {
+        const GVVTermMetadata& metadata = model.term_metadata[term];
+        const int parameterization = metadata.coupling_parameterization;
+        if (parameterization == COUPLING_FIXED_SCALE_AND_PHASE) {
+            const DeviceComplex value = model.initial_couplings[term];
+            output << "coupling " << metadata.id << ' '
+                   << value.real << ' ' << value.imag << " fixed\n";
+            continue;
+        }
+        if (parameterization == COUPLING_POSITIVE_REAL) {
+            const double log_magnitude = best.values.at(parameter);
+            const double magnitude = std::exp(log_magnitude);
+            output << "coupling " << metadata.id << ' '
+                   << magnitude << " 0 "
+                   << magnitude * best.errors.at(parameter)
+                   << " 0 phase_fixed log_rho " << log_magnitude
+                   << " log_error " << best.errors.at(parameter) << '\n';
+            ++parameter;
+            continue;
+        }
+        output << "coupling " << metadata.id << ' '
+               << best.values.at(parameter) << ' '
+               << best.values.at(parameter + 1) << ' '
+               << best.errors.at(parameter) << ' '
+               << best.errors.at(parameter + 1) << '\n';
+        parameter += 2;
+    }
+    for (std::size_t resonance = 0;
+         resonance < model.resonances.size();
+         ++resonance) {
+        const ctpwa::PropagatorParameters& state = model.resonances[resonance];
+        const GVVResonanceMetadata& metadata =
+            model.resonance_metadata[resonance];
+        output << "resonance " << metadata.id
+               << " model " << ctpwa::propagator_name(state.propagator_model)
+               << " mass " << state.mass << " fixed";
+        if (state.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
+            output << " Gamma_rest " << state.pole_width << " fixed";
+        } else {
+            output << " width " << state.pole_width << " fixed";
+        }
+        if (metadata.fit_sd_ratio) {
+            output << " r_D_over_S " << state.sd_ratio
+                   << " log_error " << best.errors.at(parameter++);
+        }
+        if (state.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
+            output << " R_omegaomega " << state.flatte_ratio;
+            if (metadata.fit_flatte_ratio) {
+                output << " log_error " << best.errors.at(parameter++);
+            } else {
+                output << " fixed";
+            }
+        }
+        output << '\n';
+    }
 }

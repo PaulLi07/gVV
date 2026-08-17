@@ -185,9 +185,6 @@ __host__ __device__ inline double scalar_sd_running_width(
     double daughter_mass,
     double radius_fm = DEFAULT_BARRIER_RADIUS_FM)
 {
-    if (sd_ratio < 0.0) {
-        sd_ratio = 0.0;
-    }
     const double phi_s = two_body_width_shape(
         s, resonance_mass, 0, daughter_mass, daughter_mass, radius_fm);
     const double phi_d = two_body_width_shape(

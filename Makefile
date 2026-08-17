@@ -37,7 +37,6 @@ PROCESS_OBJECTS = \
 	$(OBJ_DIR)/OmegaWidthTable.o \
 	$(OBJ_DIR)/SampleLoader.o \
 	$(OBJ_DIR)/ParameterMapping.o \
-	$(OBJ_DIR)/FitState.o \
 	$(OBJ_DIR)/FitLikelihood.o
 FIT_OBJECTS = $(FRAMEWORK_OBJECTS) $(PROCESS_OBJECTS) $(OBJ_DIR)/Fit.o
 
@@ -91,9 +90,6 @@ $(OBJ_DIR)/SampleLoader.o: process/SampleLoader.cu process/SampleLoader.h | $(OB
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(OBJ_DIR)/ParameterMapping.o: process/ParameterMapping.cu process/ParameterMapping.h | $(OBJ_DIR)
-	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
-
-$(OBJ_DIR)/FitState.o: process/FitState.cu process/ParameterMapping.h process/FitLikelihood.h | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(OBJ_DIR)/FitLikelihood.o: process/FitLikelihood.cu process/FitLikelihood.h framework/likelihood/Likelihood.h | $(OBJ_DIR)

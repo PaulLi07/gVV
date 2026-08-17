@@ -18,30 +18,8 @@ void CalGVVFmatrix(
     double* F_matrix,
     int number_events);
 
-// Process-specific Term construction. The output is the complex dynamical
-// coefficient for every [event][term], before Wave contraction. This is the
-// boundary a future process (for example GPPP) replaces.
-void CalGVVTermCoefficients(
-    GVVDeviceMomenta momenta,
-    const ctpwa::PropagatorParameters* resonances,
-    const TermSpec* terms,
-    const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
-    DeviceComplex* coefficients,
-    int number_terms,
-    int number_events);
-
-// Process-neutral coherent contraction of Term coefficients with the Wave
-// Gram matrix. TermSpec supplies only the dense wave slot.
-void CalCoherentIntensity(
-    const TermSpec* terms,
-    const DeviceComplex* coefficients,
-    const double* F_matrix,
-    double* intensity,
-    int number_terms,
-    int number_active_waves,
-    int number_events);
-
+// These public composite operations validate their dimensions once. Their
+// coefficient/contraction kernel stages are private implementation details.
 void CalGVVPDF(
     GVVDeviceMomenta momenta,
     const ctpwa::PropagatorParameters* resonances,

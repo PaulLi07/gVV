@@ -27,19 +27,6 @@ namespace {
 
 constexpr double kProjectionAxisTolerance = 1.0e-12;
 
-double positive_from_log(double value, const char* name)
-{
-    if (!std::isfinite(value)) {
-        throw std::invalid_argument(std::string(name) + " must be finite");
-    }
-    const double physical = std::exp(value);
-    if (!(physical > 0.0) || !std::isfinite(physical)) {
-        throw std::invalid_argument(
-            std::string(name) + " is outside the numerical range");
-    }
-    return physical;
-}
-
 void fill_tree(TTree& tree)
 {
     if (tree.Fill() < 0) {
@@ -323,13 +310,6 @@ FitLikelihood::FitLikelihood(
       device_couplings_(nullptr),
       prepared_(false)
 {
-    if (model_.resonances.empty() || model_.terms.empty()
-        || model_.resonances.size() != model_.resonance_metadata.size()
-        || model_.terms.size() != model_.initial_couplings.size()
-        || model_.terms.size() != model_.term_metadata.size()
-        || model_.active_wave_types.empty()) {
-        throw std::invalid_argument("incomplete compiled GVV model");
-    }
 }
 
 FitLikelihood::~FitLikelihood()
@@ -381,10 +361,6 @@ void FitLikelihood::AddBackground(
         throw std::runtime_error(
             "backgrounds must be added before Prepare()");
     }
-    if (label.empty() || !std::isfinite(likelihood_coefficient)) {
-        throw std::invalid_argument(
-            "background label and likelihood coefficient are invalid");
-    }
     BackgroundSample background;
     background.sample = LoadSample(file_name, label);
     background.likelihood_coefficient = likelihood_coefficient;
@@ -412,10 +388,6 @@ void FitLikelihood::UploadModel()
 
 void FitLikelihood::SynchronizeModel()
 {
-    if (device_resonances_ == nullptr || device_terms_ == nullptr
-        || device_couplings_ == nullptr) {
-        throw std::runtime_error("GVV device model has not been uploaded");
-    }
     check_cuda(
         cudaMemcpy(
             device_resonances_,
@@ -531,80 +503,9 @@ double FitLikelihood::LogLikelihood()
     return log_likelihood;
 }
 
-void FitLikelihood::SetCoupling(int term_index, double real, double imag)
+GVVCompiledModel& FitLikelihood::MutableModel()
 {
-    if (term_index < 0 || term_index >= NumberTerms()) {
-        throw std::out_of_range("invalid GVV term index");
-    }
-    if (!std::isfinite(real) || !std::isfinite(imag)) {
-        throw std::invalid_argument("GVV coupling must be finite");
-    }
-    const int parameterization =
-        model_.term_metadata[term_index].coupling_parameterization;
-    if (parameterization == COUPLING_FIXED_SCALE_AND_PHASE
-        && (real != 1.0 || imag != 0.0)) {
-        throw std::invalid_argument(
-            "scale-and-phase reference coupling must remain 1+0i");
-    }
-    if (parameterization == COUPLING_POSITIVE_REAL
-        && (!(real > 0.0) || imag != 0.0)) {
-        throw std::invalid_argument(
-            "phase-reference coupling must remain positive real");
-    }
-    model_.initial_couplings[term_index] = DeviceComplex(real, imag);
-}
-
-void FitLikelihood::SetLogCouplingMagnitude(
-    int term_index,
-    double log_magnitude)
-{
-    if (term_index < 0 || term_index >= NumberTerms()
-        || model_.term_metadata[term_index].coupling_parameterization
-               != COUPLING_POSITIVE_REAL) {
-        throw std::invalid_argument(
-            "log coupling magnitude is only valid for a phase reference");
-    }
-    const double magnitude = positive_from_log(
-        log_magnitude, "log coupling magnitude");
-    model_.initial_couplings[term_index] = DeviceComplex(magnitude, 0.0);
-}
-
-DeviceComplex FitLikelihood::Coupling(int term_index) const
-{
-    if (term_index < 0 || term_index >= NumberTerms()) {
-        throw std::out_of_range("invalid GVV term index");
-    }
-    return model_.initial_couplings[term_index];
-}
-
-void FitLikelihood::SetLogSDRatio(int resonance_index, double log_ratio)
-{
-    if (resonance_index < 0 || resonance_index >= NumberResonances()
-        || !model_.resonance_metadata[resonance_index].fit_sd_ratio) {
-        throw std::invalid_argument("S/D ratio is not fitted for this resonance");
-    }
-    model_.resonances[resonance_index].sd_ratio = positive_from_log(
-        log_ratio, "log S/D ratio");
-}
-
-void FitLikelihood::SetLogFlatteRatio(int resonance_index, double log_ratio)
-{
-    if (resonance_index < 0 || resonance_index >= NumberResonances()
-        || !model_.resonance_metadata[resonance_index].fit_flatte_ratio) {
-        throw std::invalid_argument(
-            "Flatte omega-omega ratio is not fitted for this resonance");
-    }
-    model_.resonances[resonance_index].flatte_ratio = positive_from_log(
-        log_ratio, "log Flatte omega-omega ratio");
-}
-
-const ctpwa::PropagatorParameters& FitLikelihood::Resonance(
-    int resonance_index) const
-{
-    if (resonance_index < 0 || resonance_index >= NumberResonances()) {
-        throw std::out_of_range("invalid GVV resonance index");
-    }
-    return model_.resonances[resonance_index];
+    return model_;
 }
 
 const GVVCompiledModel& FitLikelihood::Model() const
