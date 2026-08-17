@@ -80,10 +80,6 @@ __host__ __device__ inline int gvv_number_component_pairs(int number_terms)
     return number_terms * (number_terms + 1) / 2;
 }
 
-// Removed with the legacy fixed-layout PostFit migration.
-constexpr int GVV_NCOMPONENT_PAIRS =
-    GVV_NTERMS * (GVV_NTERMS + 1) / 2;
-
 // Compact upper-triangle ordering:
 //   diagonal: |A_i|^2
 //   i<j:      2 Re(A_i A_j*) including both ordered F contractions.
@@ -100,13 +96,6 @@ __host__ __device__ inline int gvv_component_pair_index(
     return first * number_terms
            - first * (first - 1) / 2
            + (second - first);
-}
-
-__host__ __device__ inline int gvv_component_pair_index(
-    int first,
-    int second)
-{
-    return gvv_component_pair_index(first, second, GVV_NTERMS);
 }
 
 void CalGVVComponentMatrix(

@@ -236,7 +236,7 @@ GVVCompiledModel gvv_compile_model(
             term.label,
             wave.id,
             wave.jpc,
-            wave.latex,
+            term.label,
             wave.coherence_class,
             wave.wave_type,
             coupling_parameterization(term.coupling.mode),

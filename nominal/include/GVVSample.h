@@ -20,10 +20,10 @@ struct GVVBranchConfig {
     GVVBranchConfig();
 };
 
-// A physics-neutral event sample shared by fitting and future post-fit tools.
-// It owns ROOT-loaded four-momenta and the corresponding GPU buffers, but it
-// does not know whether the sample is data, accepted PHSP, sideband, or truth
-// PHSP.  Likelihood coefficients remain the responsibility of NLL_estimator.
+// GVV process event sample shared by fitting and PostFit. It owns the fixed
+// seven-particle ROOT schema and corresponding GPU buffers, but it does not
+// know whether a sample is data, accepted PHSP, sideband, or truth PHSP.
+// A future decay topology replaces this class at the process boundary.
 class GVVSample {
 public:
     explicit GVVSample(const std::string& label = "sample");
@@ -38,9 +38,6 @@ public:
     void UploadAndBuildF(
         const std::vector<int>& active_wave_types,
         int number_terms);
-    // Transitional overload for legacy post-fit code. Production fitting
-    // always supplies the runtime model layout explicitly.
-    void UploadAndBuildF();
 
     const std::string& Label() const;
     int Entries() const;

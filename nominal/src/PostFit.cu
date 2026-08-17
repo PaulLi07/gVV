@@ -10,7 +10,6 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -21,13 +20,14 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
 
 struct IntegratedComponents {
-    std::array<double, GVV_NCOMPONENT_PAIRS> truth{};
-    std::array<double, GVV_NCOMPONENT_PAIRS> selected{};
+    std::vector<double> truth;
+    std::vector<double> selected;
 };
 
 struct Observable {
@@ -58,7 +58,7 @@ void check_cuda(cudaError_t status, const char* operation)
 }
 
 double sum_all(
-    const std::array<double, GVV_NCOMPONENT_PAIRS>& values)
+    const std::vector<double>& values)
 {
     double result = 0.0;
     for (double value : values) {
@@ -68,54 +68,57 @@ double sum_all(
 }
 
 double sum_group(
-    const std::array<double, GVV_NCOMPONENT_PAIRS>& values,
-    int first_term,
-    int last_term)
+    const std::vector<double>& values,
+    const GVVCompiledModel& model,
+    const std::string& jpc)
 {
     double result = 0.0;
-    for (int first = first_term; first <= last_term; ++first) {
-        for (int second = first; second <= last_term; ++second) {
-            result += values[gvv_component_pair_index(first, second)];
+    const int number_terms = static_cast<int>(model.terms.size());
+    for (int first = 0; first < number_terms; ++first) {
+        if (model.term_metadata[first].jpc != jpc) {
+            continue;
+        }
+        for (int second = first; second < number_terms; ++second) {
+            if (model.term_metadata[second].jpc == jpc) {
+                result += values[gvv_component_pair_index(
+                    first, second, number_terms)];
+            }
         }
     }
     return result;
 }
 
 double sum_cross_groups(
-    const std::array<double, GVV_NCOMPONENT_PAIRS>& values,
-    int first_begin,
-    int first_end,
-    int second_begin,
-    int second_end)
+    const std::vector<double>& values,
+    const GVVCompiledModel& model,
+    const std::string& first_jpc,
+    const std::string& second_jpc)
 {
     double result = 0.0;
-    for (int first = first_begin; first <= first_end; ++first) {
-        for (int second = second_begin; second <= second_end; ++second) {
-            result += values[gvv_component_pair_index(first, second)];
+    const int number_terms = static_cast<int>(model.terms.size());
+    for (int first = 0; first < number_terms; ++first) {
+        for (int second = first + 1; second < number_terms; ++second) {
+            const std::string& first_value = model.term_metadata[first].jpc;
+            const std::string& second_value = model.term_metadata[second].jpc;
+            if ((first_value == first_jpc && second_value == second_jpc)
+                || (first_value == second_jpc
+                    && second_value == first_jpc)) {
+                result += values[gvv_component_pair_index(
+                    first, second, number_terms)];
+            }
         }
     }
     return result;
 }
 
-const char* component_jpc(int term)
+const char* component_jpc(const GVVCompiledModel& model, int term)
 {
-    return gvv_default_term(term).registered_wave_type
-                   == GVV_PSEUDOSCALAR_11
-               ? "0-+"
-               : "0++";
+    return model.term_metadata.at(term).jpc.c_str();
 }
 
-const char* component_latex(int term)
+const char* component_latex(const GVVCompiledModel& model, int term)
 {
-    static const char* names[GVV_NTERMS] = {
-        "f_{0}(1500)",
-        "f_{0}(1710)",
-        "\\eta(1760)",
-        "\\eta_{c}(1S)",
-        "X(1835)",
-        "X(2370)",
-        "0^{-+}~\\mathrm{NR}"};
-    return names[term];
+    return model.term_metadata.at(term).latex.c_str();
 }
 
 class GVVPostFitEvaluator {
@@ -123,33 +126,43 @@ public:
     GVVPostFitEvaluator(
         const std::string& truth_file,
         const std::string& selected_file,
-        const GVVBranchConfig& branches)
-        : truth_("generated truth MC"),
+        const GVVBranchConfig& branches,
+        GVVCompiledModel model)
+        : model_(std::move(model)),
+          truth_("generated truth MC"),
           selected_("selected normalization MC"),
           device_resonances_(nullptr),
           device_terms_(nullptr),
           device_couplings_(nullptr),
           component_buffer_(nullptr)
     {
+        if (model_.terms.empty() || model_.active_wave_types.empty()) {
+            throw std::invalid_argument("PostFit received an empty model");
+        }
         truth_.Load(truth_file, branches);
         selected_.Load(selected_file, branches);
-        truth_.UploadAndBuildF();
-        selected_.UploadAndBuildF();
+        truth_.UploadAndBuildF(
+            model_.active_wave_types, NumberTerms());
+        selected_.UploadAndBuildF(
+            model_.active_wave_types, NumberTerms());
         omega_width_table_.Build();
         omega_width_table_.Upload();
 
         check_cuda(
             cudaMallocManaged(
                 &device_resonances_,
-                GVV_NRESONANCES * sizeof(GVVResonanceParameters)),
+                model_.resonances.size()
+                    * sizeof(GVVResonanceParameters)),
             "cudaMallocManaged PostFit resonances");
         check_cuda(
             cudaMallocManaged(
-                &device_terms_, GVV_NTERMS * sizeof(GVVTermSpec)),
+                &device_terms_,
+                model_.terms.size() * sizeof(GVVTermSpec)),
             "cudaMallocManaged PostFit terms");
         check_cuda(
             cudaMallocManaged(
-                &device_couplings_, GVV_NTERMS * sizeof(DeviceComplex)),
+                &device_couplings_,
+                model_.initial_couplings.size() * sizeof(DeviceComplex)),
             "cudaMallocManaged PostFit couplings");
         const int maximum_entries = std::max(
             truth_.Entries(), selected_.Entries());
@@ -157,7 +170,7 @@ public:
             cudaMallocManaged(
                 &component_buffer_,
                 static_cast<std::size_t>(maximum_entries)
-                    * GVV_NCOMPONENT_PAIRS * sizeof(double)),
+                    * NumberPairs() * sizeof(double)),
             "cudaMallocManaged PostFit component buffer");
     }
 
@@ -179,8 +192,8 @@ public:
 
     IntegratedComponents Evaluate(const std::vector<double>& parameters)
     {
-        GVVFitState state = gvv_default_fit_state();
-        gvv_apply_fit_parameters_to_state(state, parameters);
+        GVVCompiledModel state = model_;
+        gvv_apply_fit_parameters_to_model(state, parameters);
         Upload(state);
 
         IntegratedComponents result;
@@ -193,8 +206,8 @@ public:
         const std::vector<double>& parameters,
         const IntegratedComponents& components)
     {
-        GVVFitState state = gvv_default_fit_state();
-        gvv_apply_fit_parameters_to_state(state, parameters);
+        GVVCompiledModel state = model_;
+        gvv_apply_fit_parameters_to_model(state, parameters);
         Upload(state);
         ValidateSample(truth_, sum_all(components.truth));
         ValidateSample(selected_, sum_all(components.selected));
@@ -202,34 +215,39 @@ public:
 
     int TruthEntries() const { return truth_.Entries(); }
     int SelectedEntries() const { return selected_.Entries(); }
+    int NumberTerms() const { return static_cast<int>(model_.terms.size()); }
+    int NumberPairs() const {
+        return gvv_number_component_pairs(NumberTerms());
+    }
+    const GVVCompiledModel& Model() const { return model_; }
 
 private:
-    void Upload(const GVVFitState& state)
+    void Upload(const GVVCompiledModel& state)
     {
         check_cuda(
             cudaMemcpy(
                 device_resonances_,
                 state.resonances.data(),
-                GVV_NRESONANCES * sizeof(GVVResonanceParameters),
+                state.resonances.size() * sizeof(GVVResonanceParameters),
                 cudaMemcpyHostToDevice),
             "cudaMemcpy PostFit resonances");
         check_cuda(
             cudaMemcpy(
                 device_terms_,
                 state.terms.data(),
-                GVV_NTERMS * sizeof(GVVTermSpec),
+                state.terms.size() * sizeof(GVVTermSpec),
                 cudaMemcpyHostToDevice),
             "cudaMemcpy PostFit terms");
         check_cuda(
             cudaMemcpy(
                 device_couplings_,
-                state.couplings.data(),
-                GVV_NTERMS * sizeof(DeviceComplex),
+                state.initial_couplings.data(),
+                state.initial_couplings.size() * sizeof(DeviceComplex),
                 cudaMemcpyHostToDevice),
             "cudaMemcpy PostFit couplings");
     }
 
-    std::array<double, GVV_NCOMPONENT_PAIRS> EvaluateSample(
+    std::vector<double> EvaluateSample(
         GVVSample& sample)
     {
         CalGVVComponentMatrix(
@@ -241,15 +259,15 @@ private:
             sample.FMatrix(),
             sample.TermCoefficientBuffer(),
             component_buffer_,
-            GVV_NTERMS,
-            GVV_NBASIS,
+            NumberTerms(),
+            static_cast<int>(model_.active_wave_types.size()),
             sample.Entries());
 
-        std::array<double, GVV_NCOMPONENT_PAIRS> sums{};
+        std::vector<double> sums(NumberPairs(), 0.0);
         for (int event = 0; event < sample.Entries(); ++event) {
             const std::size_t offset =
-                static_cast<std::size_t>(event) * GVV_NCOMPONENT_PAIRS;
-            for (int pair = 0; pair < GVV_NCOMPONENT_PAIRS; ++pair) {
+                static_cast<std::size_t>(event) * NumberPairs();
+            for (int pair = 0; pair < NumberPairs(); ++pair) {
                 const double value = component_buffer_[offset + pair];
                 if (!std::isfinite(value)) {
                     throw std::runtime_error(
@@ -276,8 +294,8 @@ private:
             sample.FMatrix(),
             sample.TermCoefficientBuffer(),
             sample.IntensityBuffer(),
-            GVV_NTERMS,
-            GVV_NBASIS,
+            NumberTerms(),
+            static_cast<int>(model_.active_wave_types.size()),
             sample.Entries());
         double direct_sum = 0.0;
         for (int event = 0; event < sample.Entries(); ++event) {
@@ -293,6 +311,7 @@ private:
                   << ": relative residual=" << relative << '\n';
     }
 
+    GVVCompiledModel model_;
     GVVSample truth_;
     GVVSample selected_;
     OmegaWidthTable omega_width_table_;
@@ -302,7 +321,9 @@ private:
     double* component_buffer_;
 };
 
-ObservableSet build_observables(const IntegratedComponents& components)
+ObservableSet build_observables(
+    const IntegratedComponents& components,
+    const GVVCompiledModel& model)
 {
     ObservableSet result;
     result.truth_total = sum_all(components.truth);
@@ -312,11 +333,13 @@ ObservableSet build_observables(const IntegratedComponents& components)
     }
 
     double fraction_sum = 0.0;
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int pair = gvv_component_pair_index(term, term);
+    const int number_terms = static_cast<int>(model.terms.size());
+    for (int term = 0; term < number_terms; ++term) {
+        const int pair = gvv_component_pair_index(
+            term, term, number_terms);
         Observable value;
         value.category = "fit_fraction";
-        value.name = gvv_term_name(term);
+        value.name = model.term_metadata[term].id;
         value.first = term;
         value.second = term;
         value.truth_integral = components.truth[pair];
@@ -325,13 +348,14 @@ ObservableSet build_observables(const IntegratedComponents& components)
         fraction_sum += value.value;
         result.values.push_back(value);
     }
-    for (int first = 0; first < GVV_NTERMS; ++first) {
-        for (int second = first + 1; second < GVV_NTERMS; ++second) {
-            const int pair = gvv_component_pair_index(first, second);
+    for (int first = 0; first < number_terms; ++first) {
+        for (int second = first + 1; second < number_terms; ++second) {
+            const int pair = gvv_component_pair_index(
+                first, second, number_terms);
             Observable value;
             value.category = "interference";
-            value.name = std::string(gvv_term_name(first))
-                         + "__" + gvv_term_name(second);
+            value.name = model.term_metadata[first].id
+                         + "__" + model.term_metadata[second].id;
             value.first = first;
             value.second = second;
             value.truth_integral = components.truth[pair];
@@ -351,11 +375,12 @@ ObservableSet build_observables(const IntegratedComponents& components)
     total_efficiency.value = result.selected_total / result.truth_total;
     result.values.push_back(total_efficiency);
 
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int pair = gvv_component_pair_index(term, term);
+    for (int term = 0; term < number_terms; ++term) {
+        const int pair = gvv_component_pair_index(
+            term, term, number_terms);
         Observable efficiency;
         efficiency.category = "efficiency_component";
-        efficiency.name = gvv_term_name(term);
+        efficiency.name = model.term_metadata[term].id;
         efficiency.first = term;
         efficiency.second = term;
         efficiency.truth_integral = components.truth[pair];
@@ -369,22 +394,20 @@ ObservableSet build_observables(const IntegratedComponents& components)
         result.values.push_back(efficiency);
     }
 
-    const double truth_scalar = sum_group(components.truth, 0, 1);
-    const double selected_scalar = sum_group(components.selected, 0, 1);
-    const double truth_pseudoscalar = sum_group(components.truth, 2, 6);
-    const double selected_pseudoscalar = sum_group(components.selected, 2, 6);
-    const double truth_cross = sum_cross_groups(
-        components.truth, 0, 1, 2, 6);
-
-    for (int group = 0; group < 2; ++group) {
-        const bool scalar = group == 0;
-        const double truth = scalar ? truth_scalar : truth_pseudoscalar;
-        const double selected = scalar ? selected_scalar : selected_pseudoscalar;
-        const std::string name = scalar ? "0pp" : "0mp";
+    std::vector<std::string> groups;
+    for (const GVVTermMetadata& term : model.term_metadata) {
+        if (std::find(groups.begin(), groups.end(), term.jpc) == groups.end()) {
+            groups.push_back(term.jpc);
+        }
+    }
+    double group_reconstruction = 0.0;
+    for (const std::string& group : groups) {
+        const double truth = sum_group(components.truth, model, group);
+        const double selected = sum_group(components.selected, model, group);
 
         Observable fraction;
         fraction.category = "fit_fraction_group";
-        fraction.name = name;
+        fraction.name = group;
         fraction.truth_integral = truth;
         fraction.selected_integral = selected;
         fraction.value = truth / result.truth_total;
@@ -392,23 +415,31 @@ ObservableSet build_observables(const IntegratedComponents& components)
 
         Observable efficiency;
         efficiency.category = "efficiency_group";
-        efficiency.name = name;
+        efficiency.name = group;
         efficiency.truth_integral = truth;
         efficiency.selected_integral = selected;
         efficiency.value = selected / truth;
         result.values.push_back(efficiency);
+        group_reconstruction += truth;
     }
 
-    Observable cross;
-    cross.category = "interference_group";
-    cross.name = "0pp__0mp";
-    cross.truth_integral = truth_cross;
-    cross.value = truth_cross / result.truth_total;
-    result.values.push_back(cross);
+    for (std::size_t first = 0; first < groups.size(); ++first) {
+        for (std::size_t second = first + 1;
+             second < groups.size();
+             ++second) {
+            const double truth_cross = sum_cross_groups(
+                components.truth, model, groups[first], groups[second]);
+            Observable cross;
+            cross.category = "interference_group";
+            cross.name = groups[first] + "__" + groups[second];
+            cross.truth_integral = truth_cross;
+            cross.value = truth_cross / result.truth_total;
+            result.values.push_back(cross);
+            group_reconstruction += truth_cross;
+        }
+    }
     result.group_closure =
-        (truth_scalar + truth_pseudoscalar + truth_cross)
-            / result.truth_total
-        - 1.0;
+        group_reconstruction / result.truth_total - 1.0;
     return result;
 }
 
@@ -421,6 +452,12 @@ void propagate_errors(
 {
     const int number_parameters = static_cast<int>(fit.values.size());
     const int number_observables = static_cast<int>(central.values.size());
+    const std::vector<GVVFitParameterSpec> parameter_layout =
+        gvv_fit_parameter_layout(evaluator.Model());
+    if (static_cast<int>(parameter_layout.size()) != number_parameters) {
+        throw std::runtime_error(
+            "PostFit parameter layout does not match fit result");
+    }
     std::vector<double> gradients(
         static_cast<std::size_t>(number_observables) * number_parameters,
         0.0);
@@ -435,14 +472,14 @@ void propagate_errors(
             throw std::runtime_error("invalid finite-difference step");
         }
 
-        double lower = 0.0;
-        double upper = 0.0;
-        const bool bounded = gvv_fit_parameter_bounds(
-            fit.parameter_names[parameter], lower, upper);
-        const bool can_minus = !bounded
-                               || fit.values[parameter] - step > lower;
-        const bool can_plus = !bounded
-                              || fit.values[parameter] + step < upper;
+        const GVVFitParameterSpec& specification =
+            parameter_layout[parameter];
+        const bool can_minus = !specification.has_lower_bound
+                               || fit.values[parameter] - step
+                                      > specification.lower_bound;
+        const bool can_plus = !specification.has_upper_bound
+                              || fit.values[parameter] + step
+                                     < specification.upper_bound;
         if (!can_minus && !can_plus) {
             throw std::runtime_error(
                 "fit parameter cannot be varied inside its bounds");
@@ -454,11 +491,13 @@ void propagate_errors(
         ObservableSet minus;
         if (can_plus) {
             plus_values[parameter] += step;
-            plus = build_observables(evaluator.Evaluate(plus_values));
+            plus = build_observables(
+                evaluator.Evaluate(plus_values), evaluator.Model());
         }
         if (can_minus) {
             minus_values[parameter] -= step;
-            minus = build_observables(evaluator.Evaluate(minus_values));
+            minus = build_observables(
+                evaluator.Evaluate(minus_values), evaluator.Model());
         }
         for (int observable = 0;
              observable < number_observables;
@@ -542,68 +581,10 @@ void write_text(const std::string& file_name, const ObservableSet& result)
     }
 }
 
-#if 0
-void write_latex_legacy_format(
+void write_latex(
     const std::string& file_name,
-    const ObservableSet& result)
-{
-    std::ofstream output(file_name.c_str());
-    if (!output) {
-        throw std::runtime_error("cannot write PostFit LaTeX output");
-    }
-    output << "% Auto-generated by PostFit.exe\n"
-           << "\\begin{table}[htbp]\n\\centering\n"
-           << "\\begin{tabular}{lc}\n\\hline\n"
-           << "Component & Fit fraction (\\%) \\\\\n+\\hline\n";
-    for (const Observable& value : result.values) {
-        if (value.category == "fit_fraction") {
-            output << '$' << component_latex(value.first) << "$ & "
-                   << std::fixed << std::setprecision(2)
-                   << 100.0 * value.value << " $\\pm$ "
-                   << 100.0 * value.error << " \\\\\n+";
-        }
-    }
-    output << "\\hline\n\\end{tabular}\n"
-           << "\\caption{GVV truth-phase-space fit fractions.}\n"
-           << "\\end{table}\n\n"
-           << "\\begin{table}[htbp]\n\\centering\n"
-           << "\\begin{tabular}{lc}\n\\hline\n"
-           << "Pair & Interference fraction (\\%) \\\\\n+\\hline\n";
-    for (const Observable& value : result.values) {
-        if (value.category == "interference") {
-            output << '$' << component_latex(value.first) << "--"
-                   << component_latex(value.second) << "$ & "
-                   << std::fixed << std::setprecision(2)
-                   << 100.0 * value.value << " $\\pm$ "
-                   << 100.0 * value.error << " \\\\\n+";
-        }
-    }
-    output << "\\hline\n\\end{tabular}\n"
-           << "\\caption{GVV pairwise interference fractions.}\n"
-           << "\\end{table}\n\n"
-           << "\\begin{table}[htbp]\n\\centering\n"
-           << "\\begin{tabular}{lc}\n\\hline\n"
-           << "Component & Efficiency (\\%) \\\\\n+\\hline\n";
-    for (const Observable& value : result.values) {
-        if (value.category == "efficiency_total") {
-            output << "Total coherent model & ";
-        } else if (value.category == "efficiency_component") {
-            output << '$' << component_latex(value.first) << "$ & ";
-        } else {
-            continue;
-        }
-        output << std::fixed << std::setprecision(2)
-               << 100.0 * value.value << " $\\pm$ "
-               << 100.0 * value.error << " \\\\\n+";
-    }
-    output << "\\hline\n\\end{tabular}\n"
-           << "\\caption{GVV model-weighted selection efficiencies.}\n"
-           << "\\end{table}\n";
-}
-
-#endif
-
-void write_latex(const std::string& file_name, const ObservableSet& result)
+    const ObservableSet& result,
+    const GVVCompiledModel& model)
 {
     std::ofstream output(file_name.c_str());
     if (!output) {
@@ -617,7 +598,7 @@ void write_latex(const std::string& file_name, const ObservableSet& result)
            << "\\hline\n";
     for (const Observable& value : result.values) {
         if (value.category == "fit_fraction") {
-            output << '$' << component_latex(value.first) << "$ & "
+            output << '$' << component_latex(model, value.first) << "$ & "
                    << std::fixed << std::setprecision(2)
                    << 100.0 * value.value << " $\\pm$ "
                    << 100.0 * value.error << ' ' << row_end << '\n';
@@ -632,8 +613,8 @@ void write_latex(const std::string& file_name, const ObservableSet& result)
            << "\\hline\n";
     for (const Observable& value : result.values) {
         if (value.category == "interference") {
-            output << '$' << component_latex(value.first) << "--"
-                   << component_latex(value.second) << "$ & "
+            output << '$' << component_latex(model, value.first) << "--"
+                   << component_latex(model, value.second) << "$ & "
                    << std::fixed << std::setprecision(2)
                    << 100.0 * value.value << " $\\pm$ "
                    << 100.0 * value.error << ' ' << row_end << '\n';
@@ -650,7 +631,7 @@ void write_latex(const std::string& file_name, const ObservableSet& result)
         if (value.category == "efficiency_total") {
             output << "Total coherent model & ";
         } else if (value.category == "efficiency_component") {
-            output << '$' << component_latex(value.first) << "$ & ";
+            output << '$' << component_latex(model, value.first) << "$ & ";
         } else {
             continue;
         }
@@ -673,7 +654,8 @@ void write_root(
     const ObservableSet& result,
     const std::vector<double>& observable_covariance,
     int truth_entries,
-    int selected_entries)
+    int selected_entries,
+    const GVVCompiledModel& model)
 {
     TFile output(file_name.c_str(), "RECREATE");
     if (output.IsZombie()) {
@@ -712,7 +694,9 @@ void write_root(
         copy_text(
             jpc,
             sizeof(jpc),
-            source.first >= 0 ? component_jpc(source.first) : "combined");
+            source.first >= 0
+                ? component_jpc(model, source.first)
+                : "combined");
         value = source.value;
         error = source.error;
         truth_integral = source.truth_integral;
@@ -765,25 +749,36 @@ void usage(const char* executable)
     std::cerr
         << "Usage: " << executable
         << " fit_result.txt Cova_matrix.dat truth_mc.root"
-        << " normalization_mc.root [output_prefix]\n"
+        << " normalization_mc.root [output_prefix [model.json]]\n"
         << "       " << executable << " --self-test\n"
         << "truth_mc.root must contain every generated event from the same"
         << " PHSP production whose selected subset is normalization_mc.root.\n";
 }
 
-void run_postfit_math_self_test()
+void run_postfit_math_self_test(const GVVCompiledModel& model)
 {
+    const int number_terms = static_cast<int>(model.terms.size());
+    const int number_pairs = gvv_number_component_pairs(number_terms);
     IntegratedComponents components;
-    for (int term = 0; term < GVV_NTERMS; ++term) {
-        const int diagonal = gvv_component_pair_index(term, term);
+    components.truth.assign(number_pairs, 0.0);
+    components.selected.assign(number_pairs, 0.0);
+    for (int term = 0; term < number_terms; ++term) {
+        const int diagonal = gvv_component_pair_index(
+            term, term, number_terms);
         components.truth[diagonal] = 1.0 + term;
         components.selected[diagonal] = components.truth[diagonal];
     }
-    components.truth[gvv_component_pair_index(0, 1)] = -0.25;
-    components.selected[gvv_component_pair_index(0, 1)] = -0.25;
-    components.truth[gvv_component_pair_index(2, 3)] = 0.40;
-    components.selected[gvv_component_pair_index(2, 3)] = 0.40;
-    const ObservableSet result = build_observables(components);
+    if (number_terms >= 2) {
+        const int pair = gvv_component_pair_index(0, 1, number_terms);
+        components.truth[pair] = -0.25;
+        components.selected[pair] = -0.25;
+    }
+    if (number_terms >= 4) {
+        const int pair = gvv_component_pair_index(2, 3, number_terms);
+        components.truth[pair] = 0.40;
+        components.selected[pair] = 0.40;
+    }
+    const ObservableSet result = build_observables(components, model);
     if (std::fabs(result.fraction_closure) > 1.0e-12
         || std::fabs(result.group_closure) > 1.0e-12) {
         throw std::runtime_error("self-test fraction closure failed");
@@ -803,20 +798,21 @@ int main(int argc, char* argv[])
 {
     if (argc == 2 && std::string(argv[1]) == "--self-test") {
         try {
-            run_postfit_math_self_test();
+            run_postfit_math_self_test(
+                gvv_load_compiled_model("config/model.json"));
         } catch (const std::exception& error) {
             std::cerr << "GVV PostFit self-test failed: " << error.what() << '\n';
             return 1;
         }
         return 0;
     }
-    if (argc < 5 || argc > 6) {
+    if (argc < 5 || argc > 7) {
         usage(argv[0]);
         return 2;
     }
     try {
         const std::string output_prefix =
-            argc == 6 ? argv[5] : "results/postfit_result";
+            argc >= 6 ? argv[5] : "results/postfit_result";
         const std::filesystem::path output_path(output_prefix);
         const std::filesystem::path output_directory =
             output_path.has_parent_path()
@@ -824,7 +820,15 @@ int main(int argc, char* argv[])
                 : std::filesystem::path(".");
         std::filesystem::create_directories(output_directory);
 
-        const GVVParsedFitResult fit = gvv_read_fit_result(argv[1]);
+        const std::string snapshot_file = std::string(argv[1]) + ".model.json";
+        const std::string model_file =
+            argc >= 7
+                ? argv[6]
+                : (std::filesystem::exists(snapshot_file)
+                       ? snapshot_file
+                       : "config/model.json");
+        const GVVParsedFitResult fit = gvv_read_fit_result(
+            argv[1], gvv_load_compiled_model(model_file));
         const int number_parameters = static_cast<int>(fit.values.size());
         const std::vector<double> covariance =
             gvv_read_covariance_matrix(argv[2], number_parameters);
@@ -836,11 +840,13 @@ int main(int argc, char* argv[])
                   << '\n';
 
         GVVBranchConfig branches;
-        GVVPostFitEvaluator evaluator(argv[3], argv[4], branches);
+        GVVPostFitEvaluator evaluator(
+            argv[3], argv[4], branches, fit.compiled_model);
         const IntegratedComponents central_components =
             evaluator.Evaluate(fit.values);
         evaluator.ValidateAgainstTotalPDF(fit.values, central_components);
-        ObservableSet central = build_observables(central_components);
+        ObservableSet central = build_observables(
+            central_components, evaluator.Model());
         if (std::fabs(central.fraction_closure) > 1.0e-9
             || std::fabs(central.group_closure) > 1.0e-9) {
             throw std::runtime_error("PostFit fraction closure failed");
@@ -864,8 +870,9 @@ int main(int argc, char* argv[])
             central,
             observable_covariance,
             evaluator.TruthEntries(),
-            evaluator.SelectedEntries());
-        write_latex(latex_file, central);
+            evaluator.SelectedEntries(),
+            evaluator.Model());
+        write_latex(latex_file, central, evaluator.Model());
 
         std::cout << std::setprecision(12)
                   << "PostFit complete: total efficiency="

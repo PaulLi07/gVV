@@ -24,6 +24,8 @@ constexpr double kMaximumAcceptedEDM = 1.0e-3;
 constexpr double kRandomCouplingMagnitudeMin = 0.05;
 constexpr double kRandomCouplingMagnitudeMax = 5.0;
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kSB1LikelihoodCoefficient = -0.5;
+constexpr double kSB2LikelihoodCoefficient = +0.25;
 const char* const kProjectionFile = "results/projection0.root";
 const char* const kCovarianceFile = "results/Cova_matrix.dat";
 
@@ -504,9 +506,9 @@ int main(int argc, char* argv[])
         estimator.LoadData(data_file);
         estimator.LoadNormalizationMC(normalization_mc_file);
         estimator.AddBackground(
-            sb1_file, GVV_SB1_LIKELIHOOD_COEFFICIENT, "SB1");
+            sb1_file, kSB1LikelihoodCoefficient, "SB1");
         estimator.AddBackground(
-            sb2_file, GVV_SB2_LIKELIHOOD_COEFFICIENT, "SB2");
+            sb2_file, kSB2LikelihoodCoefficient, "SB2");
         estimator.Prepare();
 
         const std::vector<GVVFitParameterSpec> parameter_layout =

@@ -82,6 +82,7 @@
   "terms": [
     {
       "id": "f0_1500_00",
+      "label": "f_{0}(1500)",
       "wave": "gvv.scalar_00",
       "coupling": {
         "mode": "complex_cartesian",
@@ -94,6 +95,7 @@
     },
     {
       "id": "f0_1710_00",
+      "label": "f_{0}(1710)",
       "wave": "gvv.scalar_00",
       "coupling": {
         "mode": "positive_real",
@@ -107,6 +109,7 @@
     },
     {
       "id": "eta_1760_11",
+      "label": "\\eta(1760)",
       "wave": "gvv.pseudoscalar_11",
       "coupling": {
         "mode": "fixed_complex",
@@ -120,6 +123,7 @@
     },
     {
       "id": "eta_c_11",
+      "label": "\\eta_{c}(1S)",
       "wave": "gvv.pseudoscalar_11",
       "coupling": {
         "mode": "complex_cartesian",
@@ -132,6 +136,7 @@
     },
     {
       "id": "X_1835_11",
+      "label": "X(1835)",
       "wave": "gvv.pseudoscalar_11",
       "coupling": {
         "mode": "complex_cartesian",
@@ -144,6 +149,7 @@
     },
     {
       "id": "X_2370_11",
+      "label": "X(2370)",
       "wave": "gvv.pseudoscalar_11",
       "coupling": {
         "mode": "complex_cartesian",
@@ -156,6 +162,7 @@
     },
     {
       "id": "NR_0mp_11",
+      "label": "0^{-+}~\\mathrm{NR}",
       "wave": "gvv.pseudoscalar_11",
       "coupling": {
         "mode": "complex_cartesian",

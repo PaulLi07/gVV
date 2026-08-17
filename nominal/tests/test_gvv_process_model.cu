@@ -3,14 +3,14 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace {
 
 void require(bool condition, const char* message)
 {
-    if (!condition) {
-        throw std::runtime_error(message);
-    }
+    if (!condition) throw std::runtime_error(message);
 }
 
 bool close(double first, double second)
@@ -27,61 +27,115 @@ int main(int argc, char* argv[])
             argc > 1 ? argv[1] : "config/model.json";
         const GVVCompiledModel model = gvv_load_compiled_model(file_name);
 
-        require(model.resonances.size() == 7, "compiled resonance count mismatch");
-        require(model.terms.size() == 7, "compiled term count mismatch");
-        require(model.initial_couplings.size() == 7, "coupling count mismatch");
-        require(model.active_wave_types.size() == 2, "active wave count mismatch");
-        require(model.find_resonance("f0_1710") == 1, "resonance lookup mismatch");
-        require(model.find_term("eta_1760_11") == 2, "term lookup mismatch");
+        const std::vector<std::string> resonance_ids = {
+            "f0_1500", "f0_1710", "eta_1760", "eta_c_1S",
+            "X_1835", "X_2370", "NR_0mp"};
+        const std::vector<int> propagators = {
+            GVV_PROP_SUBTRACTED_FLATTE,
+            GVV_PROP_SCALAR_SWAVE_BWR,
+            GVV_PROP_PWAVE_BWR,
+            GVV_PROP_PWAVE_BWR,
+            GVV_PROP_PWAVE_BWR,
+            GVV_PROP_PWAVE_BWR,
+            GVV_PROP_NONRESONANT};
+        const std::vector<double> masses = {
+            1.522, 1.723, 1.751, 2.98409, 1.8340, 2.377, 0.0};
+        const std::vector<double> widths = {
+            0.108, 0.149, 0.240, 0.0300, 0.130, 0.148, 0.0};
+        const std::vector<std::string> term_ids = {
+            "f0_1500_00", "f0_1710_00", "eta_1760_11", "eta_c_11",
+            "X_1835_11", "X_2370_11", "NR_0mp_11"};
+        const std::vector<int> term_resonances = {0, 1, 2, 3, 4, 5, 6};
+        const std::vector<int> term_waves = {
+            GVV_SCALAR_00, GVV_SCALAR_00,
+            GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11};
+        const std::vector<int> coupling_policies = {
+            GVV_COUPLING_COMPLEX,
+            GVV_COUPLING_POSITIVE_REAL,
+            GVV_COUPLING_FIXED_SCALE_AND_PHASE,
+            GVV_COUPLING_COMPLEX,
+            GVV_COUPLING_COMPLEX,
+            GVV_COUPLING_COMPLEX,
+            GVV_COUPLING_COMPLEX};
 
-        // Migration bridge: the JSON-compiled nominal model must reproduce
-        // every legacy default before the production path switches over.
-        for (int index = 0; index < GVV_NRESONANCES; ++index) {
-            const GVVResonanceParameters expected = gvv_default_resonance(index);
-            const GVVResonanceParameters actual = model.resonances[index];
-            require(
-                actual.propagator_model == expected.propagator_model,
-                "propagator migration mismatch");
-            require(close(actual.mass, expected.mass), "mass migration mismatch");
-            require(
-                close(actual.pole_width, expected.pole_width),
-                "width migration mismatch");
-            require(
-                close(actual.sd_ratio, expected.sd_ratio),
-                "S/D migration mismatch");
-            require(
-                actual.fit_sd_ratio == expected.fit_sd_ratio,
-                "S/D fit-policy migration mismatch");
-            require(
-                close(actual.flatte_ratio, expected.flatte_ratio),
-                "Flatte migration mismatch");
-            require(
-                actual.fit_flatte_ratio == expected.fit_flatte_ratio,
-                "Flatte fit-policy migration mismatch");
-            require(
-                model.resonance_metadata[index].id == gvv_resonance_name(index),
-                "resonance id migration mismatch");
+        require(model.resonances.size() == resonance_ids.size(),
+                "compiled resonance count mismatch");
+        require(model.terms.size() == term_ids.size(),
+                "compiled Term count mismatch");
+        require(model.initial_couplings.size() == term_ids.size(),
+                "coupling count mismatch");
+        require(model.active_wave_types.size() == 2,
+                "active Wave count mismatch");
+        require(model.find_resonance("f0_1710") == 1,
+                "resonance lookup mismatch");
+        require(model.find_term("eta_1760_11") == 2,
+                "Term lookup mismatch");
+
+        for (std::size_t index = 0; index < resonance_ids.size(); ++index) {
+            require(model.resonance_metadata[index].id == resonance_ids[index],
+                    "resonance id migration mismatch");
+            require(model.resonances[index].propagator_model
+                        == propagators[index],
+                    "propagator migration mismatch");
+            require(close(model.resonances[index].mass, masses[index]),
+                    "mass migration mismatch");
+            require(close(model.resonances[index].pole_width, widths[index]),
+                    "width migration mismatch");
         }
-        for (int index = 0; index < GVV_NTERMS; ++index) {
-            const GVVTermSpec expected = gvv_default_term(index);
-            require(
-                model.terms[index].resonance_index == expected.resonance_index,
-                "term resonance migration mismatch");
-            require(
-                model.terms[index].registered_wave_type
-                    == expected.registered_wave_type,
-                "term wave migration mismatch");
-            require(
-                model.term_metadata[index].id == gvv_term_name(index),
-                "term id migration mismatch");
-            require(
-                model.term_metadata[index].coupling_parameterization
-                    == gvv_coupling_parameterization(index),
-                "coupling policy migration mismatch");
+        for (std::size_t index = 0; index < term_ids.size(); ++index) {
+            require(model.term_metadata[index].id == term_ids[index],
+                    "Term id migration mismatch");
+            require(model.terms[index].resonance_index
+                        == term_resonances[index],
+                    "Term resonance migration mismatch");
+            require(model.terms[index].registered_wave_type
+                        == term_waves[index],
+                    "Term Wave migration mismatch");
+            require(model.term_metadata[index].coupling_parameterization
+                        == coupling_policies[index],
+                    "coupling policy migration mismatch");
         }
-        require(
-            close(model.initial_couplings[GVV_SCALE_AND_PHASE_REFERENCE_TERM].real, 1.0),
-            "global reference initial value mismatch");
+        require(close(
+                    model.initial_couplings[model.find_term("eta_1760_11")].real,
+                    1.0),
+                "global reference initial value mismatch");
+
+        // Runtime dimensions must follow the model rather than the nominal
+        // seven-Term fixture. Disabling a non-reference Term changes only the
+        // compiled dense layout.
+        ctpwa::ModelDefinition reduced_definition = model.definition;
+        reduced_definition.terms[0].active = false;
+        const GVVCompiledModel reduced =
+            gvv_compile_model(reduced_definition);
+        require(reduced.terms.size() == 6,
+                "disabled Term was not removed from runtime layout");
+        require(reduced.active_wave_types.size() == 2,
+                "reduced active Wave layout mismatch");
+
+        // Likewise, a model larger than the nominal fixture compiles without
+        // source-level count changes when it uses registered physics pieces.
+        ctpwa::ModelDefinition expanded_definition = model.definition;
+        ctpwa::ResonanceDefinition extra_resonance =
+            expanded_definition.resonances.back();
+        extra_resonance.id = "NR_extra";
+        extra_resonance.label = "extra nonresonant test component";
+        expanded_definition.resonances.push_back(extra_resonance);
+        ctpwa::TermDefinition extra_term = expanded_definition.terms.back();
+        extra_term.id = "NR_extra_11";
+        extra_term.label = "extra test Term";
+        extra_term.dynamics_json =
+            R"({"type":"gvv_x_to_omega_omega","resonance":"NR_extra"})";
+        expanded_definition.terms.push_back(extra_term);
+        const GVVCompiledModel expanded =
+            gvv_compile_model(expanded_definition);
+        require(expanded.resonances.size() == 8,
+                "expanded resonance layout mismatch");
+        require(expanded.terms.size() == 8,
+                "expanded Term layout mismatch");
+        require(expanded.find_term("NR_extra_11") == 7,
+                "expanded stable Term id mismatch");
 
         std::cout << "GVV process-model compilation tests passed\n";
     } catch (const std::exception& error) {

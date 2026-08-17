@@ -202,13 +202,6 @@ void GVVSample::UploadAndBuildF(
     }
 }
 
-void GVVSample::UploadAndBuildF()
-{
-    UploadAndBuildF(
-        {GVV_SCALAR_00, GVV_SCALAR_22, GVV_PSEUDOSCALAR_11},
-        GVV_NTERMS);
-}
-
 const std::string& GVVSample::Label() const
 {
     return label_;
