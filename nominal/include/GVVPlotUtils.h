@@ -446,8 +446,14 @@ inline void DrawProjection(
         "GVV projections", columns == 4 ? 1320 : 1080, 720);
     canvas->Divide(columns, 2, 0.002, 0.002);
     const std::array<int, 7> colors = {
-        kMagenta + 2, kOrange + 7, kCyan + 2, kViolet + 1,
-        kRed + 2, kAzure + 7, kGreen + 3};
+        TColor::GetColor("#08306B"),  // dark blue
+        TColor::GetColor("#2171B5"),  // blue
+        TColor::GetColor("#6BAED6"),  // baby blue
+        TColor::GetColor("#9ECAE1"),  // light blue
+        TColor::GetColor("#41AB5D"),  // green
+        TColor::GetColor("#A1D76A"),  // yellow green
+        TColor::GetColor("#FDE725")   // yellow
+    };
     std::vector<PanelHistograms> panels;
     for (std::size_t variable = 0; variable < variables.size(); ++variable) {
         canvas->cd(static_cast<int>(variable) + 1);
@@ -463,10 +469,12 @@ inline void DrawProjection(
                  component < panel.components.size(); ++component) {
                 panel.components[component]->SetLineColor(
                     colors[component % colors.size()]);
-                panel.components[component]->SetLineStyle(
-                    2 + static_cast<int>(component % 4));
-                panel.components[component]->SetLineWidth(2);
-                panel.components[component]->Draw("HIST SAME");
+                panel.components[component]->SetLineStyle(1);
+                panel.components[component]->SetLineWidth(1);
+                panel.components[component]->SetMarkerStyle(0);
+                panel.components[component]->SetMarkerSize(0);
+                panel.components[component]->SetFillStyle(0);
+                panel.components[component]->Draw("HIST C SAME");
             }
         } else {
             panel.scalar->Draw("HIST SAME");
@@ -494,7 +502,7 @@ inline void DrawProjection(
     canvas->cd(legend_pad);
     TLegend* legend = show_components
                           ? new TLegend(0.10, 0.08, 0.94, 0.92)
-                          : new TLegend(0.54, 0.48, 0.93, 0.86);
+                          : new TLegend(0.54, 0.60, 0.93, 0.86);
     legend->SetBorderSize(0);
     legend->SetFillStyle(0);
     legend->SetTextFont(22);

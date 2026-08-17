@@ -140,6 +140,8 @@ srun --ntasks=1 "$PROJECT_DIR/bin/Fit.exe" \
     "$model_file"
 fit_status=$?
 
+
+
 if [[ $fit_status -ne 0 ]]; then
     echo "[GVV] Fit.exe failed with exit code $fit_status" >&2
     exit "$fit_status"
