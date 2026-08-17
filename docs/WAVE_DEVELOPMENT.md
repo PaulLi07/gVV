@@ -39,6 +39,10 @@ __device__ inline tensor gvv_example_tensor(
 
 在 `WaveRegistry.cu` 的 `gvv_wave_registry()` 增加字符串 id、JPC、LaTeX、相干类和枚举值。这是唯一的主机注册表；禁止在 Fit、TermEvaluator 或 model parser 再写第二份映射。
 
+注册完成后，`ProcessAmplitude.cuh` 会通过统一 dispatch 取得新 Wave，并沿用
+既有光子偏振投影、Wave 缩并和 `F_ij` 组装；通常不需要修改该文件。只有过程的
+偏振求和或完整振幅缩并规则本身发生变化时，才调整 `ProcessAmplitude`。
+
 ## 5. 测试后再配置模型
 
 至少增加：

@@ -37,7 +37,8 @@ PROCESS_OBJECTS = \
 	$(OBJ_DIR)/OmegaWidthTable.o \
 	$(OBJ_DIR)/SampleLoader.o \
 	$(OBJ_DIR)/ParameterMapping.o \
-	$(OBJ_DIR)/FitLikelihood.o
+	$(OBJ_DIR)/FitLikelihood.o \
+	$(OBJ_DIR)/ProjectionWriter.o
 FIT_OBJECTS = $(FRAMEWORK_OBJECTS) $(PROCESS_OBJECTS) $(OBJ_DIR)/Fit.o
 
 TESTS = \
@@ -80,7 +81,7 @@ $(OBJ_DIR)/FitOutput.o: framework/fit/FitOutput.cpp framework/fit/FitOutput.h fr
 $(OBJ_DIR)/WaveRegistry.o: process/WaveRegistry.cu process/WaveRegistry.cuh | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
-$(OBJ_DIR)/TermEvaluator.o: process/TermEvaluator.cu process/TermEvaluator.cuh | $(OBJ_DIR)
+$(OBJ_DIR)/TermEvaluator.o: process/TermEvaluator.cu process/TermEvaluator.cuh process/ProcessAmplitude.cuh | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(OBJ_DIR)/OmegaWidthTable.o: process/OmegaWidthTable.cu process/OmegaWidthTable.h | $(OBJ_DIR)
@@ -95,7 +96,10 @@ $(OBJ_DIR)/ParameterMapping.o: process/ParameterMapping.cu process/ParameterMapp
 $(OBJ_DIR)/FitLikelihood.o: process/FitLikelihood.cu process/FitLikelihood.h framework/likelihood/Likelihood.h | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
-$(OBJ_DIR)/Fit.o: app/Fit.cu framework/fit/FitConfig.h framework/fit/FitEngine.h framework/fit/FitOutput.h process/FitLikelihood.h process/ParameterMapping.h | $(OBJ_DIR)
+$(OBJ_DIR)/ProjectionWriter.o: process/ProjectionWriter.cu process/ProjectionWriter.h process/FitLikelihood.h | $(OBJ_DIR)
+	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(OBJ_DIR)/Fit.o: app/Fit.cu framework/fit/FitConfig.h framework/fit/FitEngine.h framework/fit/FitOutput.h process/FitLikelihood.h process/ParameterMapping.h process/ProjectionWriter.h | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(BIN_DIR)/Fit.exe: $(FIT_OBJECTS) | $(BIN_DIR)
@@ -105,7 +109,7 @@ $(BIN_DIR)/Fit.exe: $(FIT_OBJECTS) | $(BIN_DIR)
 $(TEST_BIN_DIR)/test_dynamics.exe: tests/test_dynamics.cu | $(TEST_BIN_DIR)
 	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
-$(TEST_BIN_DIR)/test_gvv_amplitude.exe: tests/test_gvv_amplitude.cu | $(TEST_BIN_DIR)
+$(TEST_BIN_DIR)/test_gvv_amplitude.exe: tests/test_gvv_amplitude.cu process/ProcessAmplitude.cuh | $(TEST_BIN_DIR)
 	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_propagator_registry.exe: tests/test_propagator_registry.cu $(OBJ_DIR)/OmegaWidthTable.o | $(TEST_BIN_DIR)

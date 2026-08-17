@@ -1,6 +1,7 @@
 // CUDA kernels implementing the gVV event -> Term -> coherent intensity path.
 // Runtime dimensions come from the compiled model, never nominal model counts.
 #include "process/TermEvaluator.cuh"
+#include "process/ProcessAmplitude.cuh"
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>

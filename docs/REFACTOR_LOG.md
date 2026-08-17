@@ -137,3 +137,20 @@
   `make clean && make -j2 tests fit && make check`，干净编译及 9/9 单元测试
   通过。未运行 `Fit.exe`。编译输出只有既有的 sm70 目标弃用提示与 ROOT
   `TStorage.h` 外部头文件告警，没有项目源码告警。
+
+## 架构收尾：振幅与投影职责拆分（2026-08-17）
+
+- 新建 `process/ProcessAmplitude.cuh`，从 `WaveRegistry.cuh` 整体迁移光子
+  偏振投影、Wave 两两缩并和 `F_ij` 组装。注册表现在只拥有 Wave 枚举、设备
+  dispatch、主机注册元数据和编译模型类型，`TermEvaluator` 单向依赖振幅接口。
+- 新建 `process/ProjectionWriter.h/.cu`，集中保存原 projection ROOT 的树结构、
+  派生运动学、权重分解、映射表和 metadata。`FitLikelihood` 只保留样本准备、
+  GPU 模型同步、强度计算、MC 归一化和有符号似然，并通过窄接口向 writer 提供
+  样本与指定耦合下的 normalization-MC 强度。
+- 保持现有 projection 文件名、树名、branch 名、权重定义和 metadata 语义不变；
+  `app/Fit.cu` 只把最终拟合状态交给独立 writer。下游脚本仍不在本轮修改范围。
+- 在固定节点执行 `make clean && make -j2 tests fit && make check`：新 writer
+  独立编译并链接进 `Fit.exe`，9/9 单元测试通过。Shell/JSON、补丁格式、框架
+  依赖方向、模块职责关键词、自动头文件依赖及 `postfit/`/配置零改动审计通过。
+  未运行 `Fit.exe`，未提交任何 Slurm、HTCondor 或 GPU 作业；projection 的
+  运行时文件核验留给用户执行。

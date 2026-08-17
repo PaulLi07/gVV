@@ -15,13 +15,15 @@
 ```text
 config/model.json ──> framework/model ──> process/WaveRegistry
                                              │
-ROOT samples ──> process/SampleLoader ──> process/TermEvaluator
+ROOT samples ──> process/SampleLoader ──> process/ProcessAmplitude
+                                             │
+                                    process/TermEvaluator
                                              │
                     framework/likelihood <── process/FitLikelihood
                                              │
 config/fit.json ──> framework/fit ───────> app/Fit.cu
-                                             │
-                                 txt + covariance + ROOT projection
+                                             ├──> framework/FitOutput ──> txt + covariance
+                                             └──> process/ProjectionWriter ──> ROOT
 ```
 
 硬约束是 `framework/` 不包含 `process/` 头文件。过程层可以依赖框架层，反方向不允许。
@@ -78,11 +80,11 @@ I(x)   = sum_ij c_i c_j* D_i D_j* F_ij(x)
 
 `WaveRegistry.cuh` 是设备 dispatch 的唯一位置；`WaveRegistry.cu` 是字符串 id、JPC、相干类与数值 wave type 的唯一主机注册位置。
 
-当前 `WaveRegistry.cuh` 还包含三段过程振幅公共计算：光子偏振投影
-`gvv_photon_projector`、两个 Wave 的偏振缩并 `gvv_wave_contraction`，以及组装
-`F_ij` 的 `gvv_cal_F`。它们不是注册元数据；若后续继续收窄注册表，应整体移到
-`process/ProcessAmplitude.cuh`，由 `TermEvaluator` 包含。枚举、设备 dispatch、
-Wave 元数据和编译模型类型仍留在 `WaveRegistry`。本轮只记录这个边界，不扩大改动范围。
+`ProcessAmplitude.cuh` 组合已注册 Wave，集中实现光子偏振投影
+`gvv_photon_projector`、Wave 两两缩并 `gvv_wave_contraction` 和 `F_ij` 组装
+`gvv_cal_F`。`TermEvaluator` 依赖这个振幅接口；注册表不再混入振幅求值。
+因此新增 Wave 时只需实现 Wave 并在 `WaveRegistry` 注册，已有的偏振求和与
+矩阵组装路径自动复用。
 
 ### Resonance、Wave、Term
 
@@ -96,11 +98,16 @@ Wave 元数据和编译模型类型仍留在 `WaveRegistry`。本轮只记录这
 
 `FitLikelihood` 管理 GVV 样本、缓存的 F 矩阵、omega 宽度表和 GPU 模型状态，并调用通用似然算术。它不决定 Minuit 起点、收敛选择或输出命名。
 
-它目前具体负责四组工作：加载并持有 data/normalization MC/带权背景；在
+它具体负责三组工作：加载并持有 data/normalization MC/带权背景；在
 `Prepare()` 中构建 omega 宽度表、上传紧凑模型并缓存每个样本的 F 矩阵；每次
-目标函数调用时同步可变传播子/耦合、计算 MC 归一化和有符号 log-likelihood；在
-拟合完成后写包含运动学、分量权重和元数据的 projection ROOT。最后一项占据文件
-的大部分辅助代码，是拟合到下游处理的输出桥梁，但不参与 Minuit 决策。
+目标函数调用时同步可变传播子/耦合、计算 MC 归一化和有符号 log-likelihood。
+它向 `ProjectionWriter` 暴露窄的只读样本接口和归一化 MC 强度计算接口，但
+ROOT 类型、树结构、派生运动学和投影权重均不进入似然模块。
+
+`ProjectionWriter` 是拟合到下游处理的过程专属输出桥梁，集中拥有 projection
+ROOT 的树/branch 契约、运动学派生量、总强度、JPC 分组、Term 两两干涉权重和
+provenance metadata。若后续只调整拟合侧投影内容，修改点集中在这里；若改变
+branch 名、类型或物理语义，下游读取这些字段的脚本也必须同步更新。
 
 `ParameterMapping` 是唯一的模型状态到拟合参数转换层。它根据耦合参考约定和未固定传播子参数生成通用 `FitParameterSpec`，同时保存如何把 Minuit vector 写回 GVV 状态的 binding。
 
@@ -116,13 +123,15 @@ Wave 元数据和编译模型类型仍留在 `WaveRegistry`。本轮只记录这
 | `framework/model/Model.*` | 严格解析通用 Resonance/Term/耦合描述 |
 | `process/WaveRegistry.*` | 注册完整 GVV Wave，并把通用模型编译为设备紧凑布局 |
 | `process/waves/*.cuh` | 每个文件实现一个完整过程 Wave |
+| `process/ProcessAmplitude.cuh` | GVV 光子偏振投影、Wave 缩并和 `F_ij` 组装 |
 | `process/SampleLoader.*` | ROOT 七末态分支到主机/GPU 数组的唯一入口 |
 | `process/ProcessEvent.cuh` | 单个 GVV 事件在设备上的组合运动学视图 |
 | `process/ProcessKinematics.cuh` | omega 三体衰变流和 GVV 过程常量 |
 | `framework/dynamics/*` | 可复用二体运动学与传播子函数库 |
 | `framework/tensors/*` | 可复用投影、轨道张量、障碍因子和低阶张量代数 |
 | `process/TermEvaluator.*` | CUDA 上构造 Term 系数、F 矩阵和相干强度 |
-| `process/FitLikelihood.*` | 样本编排、MC 归一化、有符号似然与 projection ROOT |
+| `process/FitLikelihood.*` | 样本编排、MC 归一化和有符号似然 |
+| `process/ProjectionWriter.*` | projection ROOT 的唯一树结构与序列化实现 |
 | `process/ParameterMapping.*` | `model.json` 状态与 Minuit vector 的唯一双向映射及物理参数 TXT 明细 |
 | `framework/fit/FitEngine.*` | 与过程无关的多起点 MIGRAD/HESSE 驱动 |
 | `framework/fit/FitOutput.*` | 统一 TXT 和 covariance 输出 |
@@ -135,11 +144,11 @@ Wave 元数据和编译模型类型仍留在 `WaveRegistry`。本轮只记录这
 1. `FitConfig` 读取 `fit.json`，得到 `model.json`、样本、边带系数、Minuit 选项和输出 tag。
 2. `Model` 严格解析 Resonance/Term；`WaveRegistry` 验证 Wave 并编译紧凑索引。
 3. `SampleLoader` 读取 data、normalization MC 和带权背景样本。
-4. 每个样本只构建一次与拟合参数无关的 Wave 收缩矩阵 `F_ij(x)`。
+4. `ProcessAmplitude` 缩并已注册 Wave；每个样本只构建一次与拟合参数无关的 `F_ij(x)`。
 5. `ParameterMapping` 从编译模型生成 Minuit 参数 vector；参考振幅不进入自由参数。
 6. 每次目标函数调用把 vector 写回复耦合或传播子参数，计算 normalization MC 的积分，再计算 data 与边带的有效 log-likelihood。
 7. `FitEngine` 对 nominal 起点和随机耦合起点依次执行 MIGRAD/HESSE，只从满足状态、协方差和 EDM 条件的结果中选择最小 NLL。
-8. 最优状态写入一个详细 TXT、一个协方差矩阵和一个 ROOT projection；Slurm 标准输出写入同 tag 日志。
+8. 最优状态写入详细 TXT 和协方差矩阵；`ProjectionWriter` 独立写 ROOT projection；Slurm 标准输出写入同 tag 日志。
 
 ## 未来末态重构边界
 
@@ -148,7 +157,7 @@ Wave 元数据和编译模型类型仍留在 `WaveRegistry`。本轮只记录这
 - `ProcessEvent`、`ProcessKinematics` 与 `SampleLoader`；
 - `process/waves/` 及其注册表；
 - Resonance/Wave 到具体 Term 的过程编译与求值；
-- 过程专属 projection 内容；
+- `ProcessAmplitude` 和过程专属 `ProjectionWriter`；
 - `app/Fit.cu` 中很薄的输入契约胶水。
 
 不应复制或改写传播子公式、通用张量、似然算术、多起点 Minuit 或统一输出协议。

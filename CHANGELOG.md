@@ -2,6 +2,11 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Isolated the projection ROOT schema and serialization in
+  `process/ProjectionWriter`, leaving `FitLikelihood` responsible only for
+  sample/GPU orchestration and likelihood evaluation.
+- Moved GVV photon projection, Wave contraction, and F-matrix assembly from
+  `WaveRegistry` to the process-specific `ProcessAmplitude.cuh` boundary.
 - Restored one-way `tensors -> dynamics -> process` dependencies, merged all
   Minuit/model state translation into `ParameterMapping.cu`, and removed
   repeated internal checks after model compilation or sample preparation.

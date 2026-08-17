@@ -1,5 +1,5 @@
-// Process orchestrator for the gVV likelihood and projection output. Generic
-// minimizer policy and output naming remain in framework/fit/.
+// Process orchestrator for gVV sample preparation and likelihood evaluation.
+// Generic minimizer policy and all output serialization live elsewhere.
 #ifndef CTPWA_PROCESS_FIT_LIKELIHOOD_H
 #define CTPWA_PROCESS_FIT_LIKELIHOOD_H
 
@@ -7,6 +7,7 @@
 #include "process/OmegaWidthTable.h"
 #include "process/WaveRegistry.cuh"
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
@@ -48,11 +49,17 @@ public:
     int DataEntries() const;
     int NormalizationMCEntries() const;
     void PrintModelSummary() const;
-    void WriteProjection(
-        const std::string& save_name,
-        int best_start,
-        long long best_seed,
-        double minimum);
+
+    // Narrow read/evaluate interface used by ProjectionWriter. The writer
+    // sees process samples and intensities, but never device allocations or
+    // likelihood-internal synchronization details.
+    std::vector<double> EvaluateNormalizationMCIntensity(
+        const std::vector<DeviceComplex>& couplings);
+    const GVVSample& NormalizationMCSample() const;
+    const GVVSample& DataSample() const;
+    std::size_t NumberBackgroundSamples() const;
+    const GVVSample& BackgroundSampleAt(std::size_t index) const;
+    double BackgroundLikelihoodCoefficient(std::size_t index) const;
 
 private:
     struct BackgroundSample {

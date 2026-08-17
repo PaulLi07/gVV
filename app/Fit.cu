@@ -7,6 +7,7 @@
 #include "framework/fit/FitOutput.h"
 #include "process/FitLikelihood.h"
 #include "process/ParameterMapping.h"
+#include "process/ProjectionWriter.h"
 #include "process/WaveRegistry.cuh"
 
 #include <filesystem>
@@ -147,7 +148,8 @@ int main(int argc, char* argv[])
             });
         ctpwa::write_covariance_matrix(
             config.output.covariance_file(), summary.best);
-        likelihood.WriteProjection(
+        write_gvv_projection(
+            likelihood,
             config.output.projection_file(),
             summary.best.start_index,
             summary.best.seed,
