@@ -123,3 +123,20 @@ states otherwise.
   overwritten, and the branch was not pushed. A GPU/data numerical smoke fit
   remains a separate release-validation action when the user chooses a model
   hypothesis and result destination.
+
+## 2026-08-17 — repository consolidation
+
+- After user review, accepted the pre-existing projection presentation changes
+  as intentional: the blue/green component palette, solid smoothed component
+  curves, thinner component lines, and adjusted legend position. Normalized
+  indentation only; the requested presentation is preserved.
+- Integrated those changes into `refactor/modular-architecture` as commit
+  `04a930d` while retaining the runtime-sized `weight_component` handling and
+  the new optional `model.json` Slurm interface.
+- Removed the temporary `gVV_v1_refactor_modular` worktree used for isolation.
+  The sole project worktree is again the canonical repository path
+  `/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV_v1`,
+  now checked out on `refactor/modular-architecture`.
+- Repeated `make clean`, the production/test builds, all seven test executables,
+  `PostFit.exe --self-test`, and shell syntax checks from the canonical path;
+  every check passed.
