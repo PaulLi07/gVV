@@ -82,3 +82,12 @@
 - 仓库内残留的 209 MB 旧 `nominal/` 仅含生成二进制和历史输出，已移至
   可恢复临时备份 `/tmp/gvv_v1_legacy_artifacts_20260817_2116`，使规范
   项目树不再同时展示旧布局。
+
+### 最终审计
+
+- 数值回归后再次执行 `make clean && make -j2 tests fit && make check`，
+  从零构建通过，9/9 测试通过。
+- `framework/` 对 `process/` 的 include 扫描为空；Git 跟踪文件中没有
+  ROOT、可执行文件、对象文件、批处理日志或生成图。
+- 最终工作树 clean；本轮主要提交依次为 `3fd30f5`、`c54c7e7`、
+  `e878776`、`e71ae38` 和 `941c3f3`。分支未推送远端。
