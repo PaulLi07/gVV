@@ -161,17 +161,17 @@ field contract.
 Build `bin/Fit.exe` and submit from the repository root:
 
 ```bash
-./submit.sh fit
+./submit_fit.sh
 ```
 
 The default configuration is `config/fit.json`. A different run
 configuration may be supplied explicitly:
 
 ```bash
-./submit.sh fit path/to/fit.json
+./submit_fit.sh path/to/fit.json
 ```
 
-`submit.sh` is both the submission entry point and the Slurm worker script. It
+`submit_fit.sh` handles only Fit submission and its Slurm worker invocation. It
 validates all immutable inputs before submission, exports the canonical project
 root to the worker, requests the project-approved A100 resources, and checks
 that the expected numerical outputs were produced.
@@ -220,7 +220,7 @@ normalization MC:
 
 ```bash
 make post
-./submit.sh post \
+./submit_post.sh \
   results/fit_state-initial.json \
   config/model.json \
   RootSet/truth_mc.root \
@@ -293,7 +293,8 @@ gVV/
 ├── results/      Generated numerical outputs
 ├── runlog/       Generated Slurm logs
 ├── Makefile
-└── submit.sh
+├── submit_fit.sh
+└── submit_post.sh
 ```
 
 The dependency direction is deliberately one way: reusable `framework/`

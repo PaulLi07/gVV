@@ -17,6 +17,20 @@ the fitted state, integrates every diagonal and interference component, and
 propagates the fit covariance by finite differences. Tagged text, ROOT, and
 LaTeX products are written under `post/calculation/results/`.
 
+Build and submit Post Calculation from the repository root:
+
+```bash
+make post
+./submit_post.sh \
+  results/fit_state-<tag>.json \
+  config/model.json \
+  RootSet/truth_mc.root \
+  RootSet/normalization_mc.root
+```
+
+Fit jobs use the separate `submit_fit.sh` entry point; the two submission
+scripts do not dispatch to each other.
+
 The human `fit_result-<tag>.txt` is deliberately not an input. It can change
 presentation without breaking Post Calculation.
 

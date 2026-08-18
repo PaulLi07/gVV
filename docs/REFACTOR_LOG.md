@@ -31,7 +31,8 @@ styles were retained during the downstream migration.
 - Restored one-way `math -> tensors -> dynamics -> process` dependencies.
 - Moved common GVV polarization/contraction logic to `ProcessAmplitude`.
 - Isolated the process-specific ROOT projection schema in `ProjectionWriter`.
-- Replaced multiple submission helpers with one root `submit.sh`.
+- Replaced obsolete submission helpers with a dedicated root
+  `submit_fit.sh`.
 - Added English architecture, configuration, Wave-development, and README
   documentation and explanatory source comments.
 
@@ -67,7 +68,9 @@ Working branch: `refactor/post-system`.
 - Removed hard-coded `0++`/`0-+` projection branches. Plotting reads dynamic
   group/component maps and model-provided Term labels.
 - Kept `make` limited to `Fit.exe`; added explicit `make post` for `Post.exe`.
-- Extended the single `submit.sh` with explicit fit and Post Calculation modes.
+- Added independent `submit_fit.sh` and `submit_post.sh` entry points. Each
+  script submits and runs only its own executable; neither performs mode
+  dispatch for the other system.
 
 Verification completed on the fixed `lxlogin005` node without submitting a
 cluster job:

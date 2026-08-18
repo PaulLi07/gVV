@@ -5,6 +5,8 @@
 - Split downstream work into independent `post/calculation` and
   `post/plotting` modules. `make` builds only Fit and `make post` builds the
   numerical Post executable.
+- Split batch submission into `submit_fit.sh` and `submit_post.sh`; each script
+  now owns only its corresponding executable and Slurm worker invocation.
 - Replaced the separate covariance file with `fit_state-<tag>.json`, the
   machine-readable Fit-to-Post contract. The user-facing fit report now
   includes multistart diagnostics, the complete active physical model,
@@ -41,7 +43,8 @@
 - Split the three existing complete GVV waves into independently registered
   files under `process/waves/`; no new `2++` wave was introduced.
 - Removed legacy fit-result reading compatibility and configuration snapshots.
-- Replaced the old submission script set with one root `submit.sh`.
+- Replaced the old submission script set with the dedicated root
+  `submit_fit.sh`.
 - Preserved downstream plotting sources and user presentation changes under
   `postfit/`; their migration is intentionally deferred.
 
