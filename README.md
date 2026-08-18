@@ -47,8 +47,10 @@ The currently registered Waves are:
 - accepted-MC normalization of an unbinned coherent intensity;
 - signed background samples for sideband-subtracted likelihoods;
 - multistart MIGRAD/HESSE fitting with convergence and covariance selection;
-- detailed text results, covariance matrices, ROOT projection trees, and Slurm
-  logs under one configurable output tag.
+- a complete human-readable fit report, a machine-readable fitted-state JSON,
+  ROOT projection trees, and Slurm logs under one configurable output tag;
+- independent Post Calculation and Post Plotting modules that consume only
+  the documented fit outputs plus the MC samples required by the calculation.
 
 ## Requirements
 
@@ -109,6 +111,7 @@ Useful Make targets are:
 | Target | Purpose |
 |---|---|
 | `make` or `make fit` | Build `bin/Fit.exe` |
+| `make post` | Build `bin/Post.exe` without changing the default build |
 | `make tests` | Build all test executables |
 | `make check` | Run the complete unit-test set |
 | `make clean` | Remove generated binaries, objects, and dependency files |
@@ -158,14 +161,14 @@ field contract.
 Build `bin/Fit.exe` and submit from the repository root:
 
 ```bash
-./submit.sh
+./submit.sh fit
 ```
 
 The default configuration is `config/fit.json`. A different run
 configuration may be supplied explicitly:
 
 ```bash
-./submit.sh path/to/fit.json
+./submit.sh fit path/to/fit.json
 ```
 
 `submit.sh` is both the submission entry point and the Slurm worker script. It
@@ -188,18 +191,56 @@ The `output.tag` value in `config/fit.json` controls all output names:
 
 | Product | Default pattern |
 |---|---|
-| Detailed fit result | `results/fit_result-<tag>.txt` |
-| Covariance matrix | `results/Cova_matrix-<tag>.dat` |
+| Human-readable fit report | `results/fit_result-<tag>.txt` |
+| Machine-readable fitted state | `results/fit_state-<tag>.json` |
 | Projection ROOT file | `results/projection-<tag>.root` |
 | Slurm log | `runlog/fit-<tag>.log` |
 
 Running again with the same tag overwrites the previous files. The fit does not
 create per-run directories or copies of the input configuration.
 
+The text report contains convergence diagnostics for every start, the selected
+minimum, active Resonances/Waves/Terms, free and fixed physical parameters,
+and the full covariance and correlation matrices. It is not parsed by other
+programs. `fit_state-<tag>.json` is the stable Fit-to-Post Calculation contract
+and contains the ordered free-parameter state and covariance.
+
 The projection file contains fitted normalization-MC weights, selected data,
-combined sideband samples, Term and JPC index maps, and fit provenance in the
+combined sideband samples, dynamic Term and JPC maps, and fit provenance in the
 `MC`, `data`, `bg`, `component_map`, `group_map`, and `metadata`
 trees.
+
+## Post processing
+
+Post processing is intentionally split into two independent modules.
+
+Post Calculation reconstructs the fitted model from `fit_state` and
+`model.json`, then integrates it over generated truth MC and selected
+normalization MC:
+
+```bash
+make post
+./submit.sh post \
+  results/fit_state-initial.json \
+  config/model.json \
+  RootSet/truth_mc.root \
+  RootSet/normalization_mc.root
+```
+
+It checks the model signature and exact free-parameter order before applying
+the state. Products are written to `post/calculation/results/` as tagged text,
+ROOT, and LaTeX files.
+
+Post Plotting needs only the fit projection ROOT file and does not read the fit
+report, fit-state JSON, `model.json`, truth MC, or normalization MC directly:
+
+```bash
+post/plotting/draw.sh results/projection-initial.root
+```
+
+Figures are written to `post/plotting/results/`. Group and component curves
+are discovered from the ROOT maps, so plotting does not encode a fixed list of
+resonances or the current `0++`/`0-+` group set.
 
 ## Modify the amplitude model
 
@@ -244,7 +285,9 @@ gVV/
 │                 likelihood, amplitude, and output components
 ├── process/      psi(2S) -> gamma omega omega event and amplitude code
 │   └── waves/    Complete registered GVV Wave implementations
-├── postfit/      Preserved downstream plotting and post-fit sources
+├── post/
+│   ├── calculation/  Fit fractions, efficiencies, and covariance propagation
+│   └── plotting/     Projection and angular-moment plotting
 ├── tests/        Unit and model-contract tests
 ├── docs/         Architecture, configuration, and Wave-development guides
 ├── results/      Generated numerical outputs
@@ -258,9 +301,9 @@ components do not include GVV-specific `process/` code. A different decay
 channel can reuse the framework while replacing its event representation,
 complete Waves, Term evaluation, sample loader, and projection writer.
 
-The sources under `postfit/` are not part of the default fit build. They are
-kept as the bridge to the existing downstream plotting workflow and will be
-maintained separately from the fit executable.
+The default `make` dependency graph ends at `Fit.exe`; the numerical downstream
+executable is built only by `make post`. ROOT plotting macros are interpreted
+by `post/plotting/draw.sh` and are not linked into either executable.
 
 ## Documentation
 
@@ -268,4 +311,4 @@ maintained separately from the fit executable.
 - [Model and fit configuration](docs/MODEL_CONFIGURATION.md)
 - [Adding a new Wave](docs/WAVE_DEVELOPMENT.md)
 - [Refactor and validation history](docs/REFACTOR_LOG.md)
-- [Post-fit source notes](postfit/README.md)
+- [Post system contract](post/README.md)

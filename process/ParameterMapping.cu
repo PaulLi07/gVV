@@ -2,6 +2,7 @@
 // Minuit vector: layout construction, state application, and TXT details.
 #include "process/ParameterMapping.h"
 
+#include <algorithm>
 #include <cmath>
 #include <ostream>
 #include <stdexcept>
@@ -180,61 +181,115 @@ void gvv_write_fit_details(
         || layout.size() != best.errors.size()) {
         throw std::invalid_argument("GVV fit detail layout mismatch");
     }
-    output << "# process-specific physical model state\n";
+    output << "model: " << model.definition.name << '\n'
+           << "active_resonances: " << model.resonances.size() << '\n'
+           << "active_terms: " << model.terms.size() << '\n'
+           << "active_waves: " << model.active_wave_types.size() << "\n\n"
+           << "# WAVE REGISTRY USED BY THE ACTIVE MODEL\n"
+           << "# wave_id JPC coherence_class latex\n";
+    for (const GVVWaveMetadata& wave : gvv_wave_registry()) {
+        if (std::find(
+                model.active_wave_types.begin(),
+                model.active_wave_types.end(),
+                wave.wave_type) != model.active_wave_types.end()) {
+            output << "wave " << wave.id << ' ' << wave.jpc << ' '
+                   << wave.coherence_class << ' ' << wave.latex << '\n';
+        }
+    }
+
+    output << "\n# ACTIVE TERMS AND COUPLINGS\n"
+           << "# term id label wave resonance JPC coherence coupling policy\n";
     std::size_t parameter = 0;
     for (std::size_t term = 0; term < model.terms.size(); ++term) {
         const GVVTermMetadata& metadata = model.term_metadata[term];
+        const GVVResonanceMetadata& resonance = model.resonance_metadata[
+            model.terms[term].resonance_index];
         const int parameterization = metadata.coupling_parameterization;
+        output << "term " << metadata.id << " label=\"" << metadata.label
+               << "\" wave=" << metadata.wave_id
+               << " resonance=" << resonance.id
+               << " JPC=" << metadata.jpc
+               << " coherence=" << metadata.coherence_class
+               << " coupling_mode=";
         if (parameterization == COUPLING_FIXED_SCALE_AND_PHASE) {
             const DeviceComplex value = model.initial_couplings[term];
-            output << "coupling " << metadata.id << ' '
-                   << value.real << ' ' << value.imag << " fixed\n";
+            output << "fixed_complex reference="
+                   << ctpwa::coupling_reference_name(metadata.reference)
+                   << " value=(" << value.real << ',' << value.imag
+                   << ") status=fixed_reference\n";
             continue;
         }
         if (parameterization == COUPLING_POSITIVE_REAL) {
             const double log_magnitude = best.values.at(parameter);
             const double magnitude = std::exp(log_magnitude);
-            output << "coupling " << metadata.id << ' '
-                   << magnitude << " 0 "
+            output << "positive_real reference="
+                   << ctpwa::coupling_reference_name(metadata.reference)
+                   << " value=(" << magnitude << ",0)"
+                   << " magnitude_error="
                    << magnitude * best.errors.at(parameter)
-                   << " 0 phase_fixed log_rho " << log_magnitude
-                   << " log_error " << best.errors.at(parameter) << '\n';
+                   << " fitted_as=" << layout.at(parameter).fit.name
+                   << " fitted_value=" << log_magnitude
+                   << " fitted_error=" << best.errors.at(parameter) << '\n';
             ++parameter;
             continue;
         }
-        output << "coupling " << metadata.id << ' '
-               << best.values.at(parameter) << ' '
-               << best.values.at(parameter + 1) << ' '
-               << best.errors.at(parameter) << ' '
-               << best.errors.at(parameter + 1) << '\n';
+        output << "complex_cartesian reference=none value=("
+               << best.values.at(parameter) << ','
+               << best.values.at(parameter + 1) << ')'
+               << " error=(" << best.errors.at(parameter) << ','
+               << best.errors.at(parameter + 1) << ')'
+               << " fitted_as=(" << layout.at(parameter).fit.name << ','
+               << layout.at(parameter + 1).fit.name << ")\n";
         parameter += 2;
     }
+
+    output << "\n# ACTIVE RESONANCES\n"
+           << "# Values are the final physical values. The source status is "
+              "taken from model.json.\n";
     for (std::size_t resonance = 0;
          resonance < model.resonances.size();
          ++resonance) {
         const ctpwa::PropagatorParameters& state = model.resonances[resonance];
         const GVVResonanceMetadata& metadata =
             model.resonance_metadata[resonance];
-        output << "resonance " << metadata.id
-               << " model " << ctpwa::propagator_name(state.propagator_model)
-               << " mass " << state.mass << " fixed";
-        if (state.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
-            output << " Gamma_rest " << state.pole_width << " fixed";
-        } else {
-            output << " width " << state.pole_width << " fixed";
+        output << "resonance " << metadata.id << " label=\""
+               << metadata.label << "\" propagator=" << metadata.propagator_id
+               << " compiled_model=\""
+               << ctpwa::propagator_name(state.propagator_model) << "\"\n";
+        const ctpwa::ResonanceDefinition& definition =
+            model.definition.resonance(metadata.id);
+        std::vector<std::string> names;
+        names.reserve(definition.parameters.size());
+        for (const auto& item : definition.parameters) names.push_back(item.first);
+        std::sort(names.begin(), names.end());
+        for (const std::string& name : names) {
+            const ctpwa::ParameterDefinition& source =
+                definition.parameters.at(name);
+            double value = source.value;
+            if (name == "mass") value = state.mass;
+            else if (name == "width") value = state.pole_width;
+            else if (name == "sd_ratio") value = state.sd_ratio;
+            else if (name == "omegaomega_ratio") value = state.flatte_ratio;
+            output << "  parameter " << name << " value=" << value
+                   << " status=" << (source.fixed ? "fixed" : "free")
+                   << " transform=" << source.transform;
+            if (source.has_lower_bound) {
+                output << " bounds=[" << source.lower_bound << ','
+                       << source.upper_bound << ']';
+            }
+            output << '\n';
         }
         if (metadata.fit_sd_ratio) {
-            output << " r_D_over_S " << state.sd_ratio
-                   << " log_error " << best.errors.at(parameter++);
+            output << "  fitted_parameter " << layout.at(parameter).fit.name
+                   << " value=" << best.values.at(parameter)
+                   << " error=" << best.errors.at(parameter) << '\n';
+            ++parameter;
         }
-        if (state.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
-            output << " R_omegaomega " << state.flatte_ratio;
-            if (metadata.fit_flatte_ratio) {
-                output << " log_error " << best.errors.at(parameter++);
-            } else {
-                output << " fixed";
-            }
+        if (metadata.fit_flatte_ratio) {
+            output << "  fitted_parameter " << layout.at(parameter).fit.name
+                   << " value=" << best.values.at(parameter)
+                   << " error=" << best.errors.at(parameter) << '\n';
+            ++parameter;
         }
-        output << '\n';
     }
 }

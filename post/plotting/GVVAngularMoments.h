@@ -1,3 +1,4 @@
+// Angular-moment diagnostics built exclusively from the projection ROOT trees.
 #ifndef GVV_ANGULAR_MOMENTS_H
 #define GVV_ANGULAR_MOMENTS_H
 

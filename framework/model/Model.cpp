@@ -5,7 +5,9 @@
 #include <nlohmann/json.hpp>
 
 #include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <iomanip>
 #include <initializer_list>
 #include <regex>
 #include <sstream>
@@ -489,6 +491,21 @@ ModelDefinition parse_model_definition(
 
     result.canonical_json = document.dump(2) + "\n";
     return result;
+}
+
+std::string model_definition_signature(const ModelDefinition& definition)
+{
+    // FNV-1a is sufficient here: this is a deterministic compatibility key,
+    // not a cryptographic authenticity check.
+    std::uint64_t value = 14695981039346656037ULL;
+    for (unsigned char byte : definition.canonical_json) {
+        value ^= static_cast<std::uint64_t>(byte);
+        value *= 1099511628211ULL;
+    }
+    std::ostringstream output;
+    output << "fnv1a64:" << std::hex << std::setfill('0')
+           << std::setw(16) << value;
+    return output.str();
 }
 
 const char* coupling_mode_name(CouplingMode mode)

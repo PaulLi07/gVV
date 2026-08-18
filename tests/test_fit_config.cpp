@@ -15,8 +15,8 @@ int main()
         || config.minimizer.number_starts != 10
         || config.output.result_file()
                != "results/fit_result-initial.txt"
-        || config.output.covariance_file()
-               != "results/Cova_matrix-initial.dat"
+        || config.output.state_file()
+               != "results/fit_state-initial.json"
         || config.output.projection_file()
                != "results/projection-initial.root"
         || config.output.log_file() != "runlog/fit-initial.log") {

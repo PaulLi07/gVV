@@ -14,9 +14,13 @@
 *.pcm
 *.rootmap
 
-# Fit, PostFit, projection, and generated plot outputs
+# Fit, Post Calculation, projection, and generated plot outputs
 /results/*
 !/results/.gitkeep
+/post/calculation/results/*
+!/post/calculation/results/.gitkeep
+/post/plotting/results/*
+!/post/plotting/results/.gitkeep
 
 # Batch and build logs
 /runlog/*

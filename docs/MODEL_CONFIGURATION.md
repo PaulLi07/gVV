@@ -1,16 +1,14 @@
-# 配置说明
+# Model and fit configuration
 
-项目只有两个用户配置入口：`model.json` 描述物理模型，`fit.json` 描述一次拟合运行。没有生成 JSON 的 Python 胶水层。
+The project has two user configuration files. `model.json` describes the
+amplitude model; `fit.json` describes one run. No Python layer generates either
+document.
 
-## model.json
+## `model.json`
 
-顶层字段：
-
-- `schema_version`：当前为 `1`；
-- `process`：必须为当前过程编译器接受的 `psi2s_to_gamma_omega_omega`；
-- `metadata`：模型名字和说明；
-- `resonances`：传播子实例；
-- `terms`：参与相干和的振幅项。
+Top-level fields are `schema_version`, `process`, optional `metadata`,
+`resonances`, and `terms`. Unknown fields and duplicate IDs are rejected before
+GPU allocation.
 
 ### Resonance
 
@@ -27,19 +25,19 @@
 }
 ```
 
-当前传播子配置契约如下；缺少参数或额外/拼错的参数都会在 GPU 分配之前报错：
+Supported GVV propagator contracts are:
 
-| `propagator` | 允许的 `parameters` |
+| Propagator | Parameters |
 |---|---|
-| `nonresonant` | 空对象 |
-| `fixed_width_bw` | 固定 identity `mass`、`width` |
-| `two_body_running_bw` | 固定 identity `mass`、`width`、整数 `orbital_l`（当前 0 或 1） |
-| `scalar_sd_running_bw` | 固定 identity `mass`、`width`；正且 log 变换的 `sd_ratio` |
-| `subtracted_effective_flatte` | 固定 identity `mass`、`width`；正且 log 变换的 `omegaomega_ratio` |
+| `nonresonant` | empty object |
+| `fixed_width_bw` | fixed identity `mass`, `width` |
+| `two_body_running_bw` | fixed identity `mass`, `width`, integer `orbital_l` |
+| `scalar_sd_running_bw` | fixed `mass`, `width`; positive log `sd_ratio` |
+| `subtracted_effective_flatte` | fixed `mass`, `width`; positive log `omegaomega_ratio` |
 
-通用公式位于 `framework/dynamics/`；上表的字符串、允许字段和 GVV 参数策略只在 `process/WaveRegistry.cu` 映射。
-
-参数对象支持 `value`、`fixed`、`transform`、`step` 和 `bounds`。当前过程允许拟合的正参数使用 `transform: "log"`，因此 Minuit 空间不会进入非物理负值。对于 log 变换参数，`value` 是物理空间初值，而 `step` 和 `bounds` 是 `log(value)` 的 Minuit 空间量。
+A parameter may contain `value`, `fixed`, `transform`, `step`, and `bounds`.
+For a log-transformed parameter, `value` is physical while `step` and `bounds`
+are expressed in the transformed Minuit coordinate.
 
 ### Term
 
@@ -48,6 +46,7 @@
   "id": "f0_1710_00",
   "label": "f_{0}(1710)",
   "wave": "gvv.scalar_00",
+  "active": true,
   "coupling": {
     "mode": "positive_real",
     "reference": "phase",
@@ -60,21 +59,28 @@
 }
 ```
 
-`active: false` 可临时关闭一个 Term。耦合模式：
+Coupling modes are:
 
-- `complex_cartesian`：自由 `Re/Im`；
-- `positive_real`：相位参考，拟合 `log(rho)`；
-- `fixed_complex`：尺度和相位参考，通常固定为 `1+0i`。
+- `complex_cartesian`: free real and imaginary parts;
+- `positive_real`: free log magnitude and fixed phase;
+- `fixed_complex`: fixed scale-and-phase reference, normally `1+0i`.
 
-每个 `coherence_class` 必须恰有一个相位参考。该类来自 Wave 注册表，不由用户在每个 Term 重复填写。
+Every active coherence class must have exactly one phase reference. The class
+is registered with the Wave and is not repeated in every Term.
 
-当前 GVV Term 的 `dynamics` 必须且只能包含字符串字段 `type` 与 `resonance`；`type` 必须为 `gvv_x_to_omega_omega`，`resonance` 必须引用已定义的 Resonance id。这样拼写错误不会变成静默无效配置。
+Setting `active: false` removes the Term before model compilation. Its coupling
+and a Resonance used only by inactive Terms do not enter Minuit, the report,
+the GPU arrays, or downstream maps. This behavior is independent of propagator
+type and whether that Resonance would otherwise have free parameters.
 
-### 增删共振态
+### Editing the model
 
-增加一个已有 Wave 上的共振项时，同时增加 Resonance 定义与引用它的 Term。删除时同时删除相应 Term；没有 Term 引用的 Resonance 不进入相干和，但建议一起清理。无需修改 C++ 总数、参数总数或 CUDA 数组长度。
+For an existing Wave, adding or removing a Resonance requires only coordinated
+edits to the `resonances` and `terms` arrays. No source-level counts or array
+sizes change. A new covariant basis must first be implemented and registered as
+described in `WAVE_DEVELOPMENT.md`.
 
-## fit.json
+## `fit.json`
 
 ```json
 {
@@ -105,6 +111,11 @@
 }
 ```
 
-带权样本按 `lnL_eff += coefficient * sum(log(P))` 进入似然。当前二维边带的 `-0.5/+0.25` 因而完全在配置层表达。
+Backgrounds enter as
+`ln L_eff += coefficient * sum(log(P(event)))`. Start zero uses model initial
+values; later starts randomize free coupling magnitude/phase. The output tag
+may contain letters, digits, dot, underscore, and hyphen. Reusing a tag
+overwrites its report, state, projection, and log products.
 
-`n_starts` 的第 0 个起点使用模型初值；后续起点只随机化自由复耦合的模和相位，传播子物理参数保持名义起点。`output.tag` 只允许字母、数字、点、下划线和连字符；相同 tag 的四个输出会覆盖。
+Truth MC is intentionally not a fit input. It is supplied separately to Post
+Calculation, together with the selected normalization MC.

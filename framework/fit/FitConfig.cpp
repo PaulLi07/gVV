@@ -114,9 +114,9 @@ std::string FitOutputConfig::result_file() const
     return joined(directory, "fit_result-" + tag + ".txt");
 }
 
-std::string FitOutputConfig::covariance_file() const
+std::string FitOutputConfig::state_file() const
 {
-    return joined(directory, "Cova_matrix-" + tag + ".dat");
+    return joined(directory, "fit_state-" + tag + ".json");
 }
 
 std::string FitOutputConfig::projection_file() const

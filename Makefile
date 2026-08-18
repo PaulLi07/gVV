@@ -30,7 +30,8 @@ FRAMEWORK_OBJECTS = \
 	$(OBJ_DIR)/Model.o \
 	$(OBJ_DIR)/FitConfig.o \
 	$(OBJ_DIR)/FitEngine.o \
-	$(OBJ_DIR)/FitOutput.o
+	$(OBJ_DIR)/FitOutput.o \
+	$(OBJ_DIR)/FitState.o
 PROCESS_OBJECTS = \
 	$(OBJ_DIR)/WaveRegistry.o \
 	$(OBJ_DIR)/TermEvaluator.o \
@@ -40,6 +41,17 @@ PROCESS_OBJECTS = \
 	$(OBJ_DIR)/FitLikelihood.o \
 	$(OBJ_DIR)/ProjectionWriter.o
 FIT_OBJECTS = $(FRAMEWORK_OBJECTS) $(PROCESS_OBJECTS) $(OBJ_DIR)/Fit.o
+POST_OBJECTS = \
+	$(OBJ_DIR)/Model.o \
+	$(OBJ_DIR)/FitState.o \
+	$(OBJ_DIR)/WaveRegistry.o \
+	$(OBJ_DIR)/TermEvaluator.o \
+	$(OBJ_DIR)/OmegaWidthTable.o \
+	$(OBJ_DIR)/SampleLoader.o \
+	$(OBJ_DIR)/ParameterMapping.o \
+	$(OBJ_DIR)/ComponentEvaluator.o \
+	$(OBJ_DIR)/PostCalculation.o
+ALL_OBJECTS = $(sort $(FIT_OBJECTS) $(POST_OBJECTS))
 
 TESTS = \
 	$(TEST_BIN_DIR)/test_dynamics.exe \
@@ -47,21 +59,25 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_propagator_registry.exe \
 	$(TEST_BIN_DIR)/test_fit_parameters.exe \
 	$(TEST_BIN_DIR)/test_fit_config.exe \
+	$(TEST_BIN_DIR)/test_fit_output.exe \
+	$(TEST_BIN_DIR)/test_fit_state.exe \
 	$(TEST_BIN_DIR)/test_fit_engine.exe \
 	$(TEST_BIN_DIR)/test_model.exe \
 	$(TEST_BIN_DIR)/test_wave_registry.exe \
 	$(TEST_BIN_DIR)/test_likelihood.exe
-DEPENDENCY_FILES = $(FIT_OBJECTS:.o=.d) $(TESTS:.exe=.d)
+DEPENDENCY_FILES = $(ALL_OBJECTS:.o=.d) $(TESTS:.exe=.d)
 
 # Dependency generation belongs only to compilation targets, not the final
 # executable link step.
-$(FIT_OBJECTS) $(TESTS): private COMPILE_FLAGS += $(DEPENDENCY_FLAGS)
+$(ALL_OBJECTS) $(TESTS): private COMPILE_FLAGS += $(DEPENDENCY_FLAGS)
 
-.PHONY: all fit tests check clean
+.PHONY: all fit post tests check clean
 
 all: fit
 
 fit: $(BIN_DIR)/Fit.exe
+
+post: $(BIN_DIR)/Post.exe
 
 $(OBJ_DIR) $(BIN_DIR) $(TEST_BIN_DIR):
 	mkdir -p $@
@@ -76,6 +92,9 @@ $(OBJ_DIR)/FitEngine.o: framework/fit/FitEngine.cpp framework/fit/FitEngine.h | 
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(OBJ_DIR)/FitOutput.o: framework/fit/FitOutput.cpp framework/fit/FitOutput.h framework/fit/FitEngine.h | $(OBJ_DIR)
+	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(OBJ_DIR)/FitState.o: framework/fit/FitState.cpp framework/fit/FitState.h framework/fit/FitEngine.h | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(OBJ_DIR)/WaveRegistry.o: process/WaveRegistry.cu process/WaveRegistry.cuh | $(OBJ_DIR)
@@ -99,11 +118,21 @@ $(OBJ_DIR)/FitLikelihood.o: process/FitLikelihood.cu process/FitLikelihood.h fra
 $(OBJ_DIR)/ProjectionWriter.o: process/ProjectionWriter.cu process/ProjectionWriter.h process/FitLikelihood.h | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
-$(OBJ_DIR)/Fit.o: app/Fit.cu framework/fit/FitConfig.h framework/fit/FitEngine.h framework/fit/FitOutput.h process/FitLikelihood.h process/ParameterMapping.h process/ProjectionWriter.h | $(OBJ_DIR)
+$(OBJ_DIR)/Fit.o: app/Fit.cu framework/fit/FitConfig.h framework/fit/FitEngine.h framework/fit/FitOutput.h framework/fit/FitState.h process/FitLikelihood.h process/ParameterMapping.h process/ProjectionWriter.h | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(BIN_DIR)/Fit.exe: $(FIT_OBJECTS) | $(BIN_DIR)
 	$(NVCC) $(FIT_OBJECTS) $(ROOT_LIBS) $(RPATH) $(ROOT_INCLUDES) \
+		$(COMPILE_FLAGS) -o $@
+
+$(OBJ_DIR)/ComponentEvaluator.o: post/calculation/ComponentEvaluator.cu post/calculation/ComponentEvaluator.h process/TermEvaluator.cuh process/ParameterMapping.h | $(OBJ_DIR)
+	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(OBJ_DIR)/PostCalculation.o: post/calculation/PostCalculation.cu post/calculation/ComponentEvaluator.h framework/fit/FitState.h | $(OBJ_DIR)
+	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(BIN_DIR)/Post.exe: $(POST_OBJECTS) | $(BIN_DIR)
+	$(NVCC) $(POST_OBJECTS) $(ROOT_LIBS) $(RPATH) $(ROOT_INCLUDES) \
 		$(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_dynamics.exe: tests/test_dynamics.cu | $(TEST_BIN_DIR)
@@ -121,6 +150,12 @@ $(TEST_BIN_DIR)/test_fit_parameters.exe: tests/test_fit_parameters.cu $(OBJ_DIR)
 
 $(TEST_BIN_DIR)/test_fit_config.exe: tests/test_fit_config.cpp $(OBJ_DIR)/FitConfig.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/FitConfig.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_fit_output.exe: tests/test_fit_output.cpp $(OBJ_DIR)/FitOutput.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/FitOutput.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_fit_state.exe: tests/test_fit_state.cpp $(OBJ_DIR)/FitState.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/FitState.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_fit_engine.exe: tests/test_fit_engine.cpp $(OBJ_DIR)/FitEngine.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/FitEngine.o $(ROOT_LIBS) $(RPATH) \
@@ -144,7 +179,8 @@ check: tests
 	@for test in $(TESTS); do $$test || exit $$?; done
 
 clean:
-	rm -f $(FIT_OBJECTS) $(BIN_DIR)/Fit.exe $(TESTS) $(DEPENDENCY_FILES)
+	rm -f $(ALL_OBJECTS) $(BIN_DIR)/Fit.exe \
+		$(BIN_DIR)/Post.exe $(TESTS) $(DEPENDENCY_FILES)
 
 # Include auto-generated header dependencies when they exist. This keeps an
 # incremental build correct after editing a nested Wave/tensor header.

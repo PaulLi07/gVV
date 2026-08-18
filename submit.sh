@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Single submission/worker entry point for the gVV fit. The resource tuple
-# below is the project-approved IHEP GPU allocation; ordinary users normally
-# call only `./submit.sh config/fit.json` from the repository root.
+# Unified Slurm entry point. It can submit either the amplitude fit or the
+# independent Post Calculation executable; plotting remains a login-node ROOT
+# task driven by post/plotting/draw.sh.
 #SBATCH --partition=gpupwa
 #SBATCH --qos=pwadedicate
 #SBATCH --account=gpupwa
-#SBATCH --job-name=gvv-fit
+#SBATCH --job-name=gvv
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=24288
@@ -16,14 +16,13 @@ set -euo pipefail
 
 SCRIPT_PATH=$(readlink -f -- "${BASH_SOURCE[0]}")
 SCRIPT_DIR=$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)
-# Slurm executes a spooled copy of this script. The submit side exports the
-# canonical repository path so the worker never mistakes the spool for the
-# project root.
 PROJECT_DIR=${GVV_PROJECT_ROOT:-$SCRIPT_DIR}
 
 usage()
 {
-    echo "Usage: $0 [config/fit.json]" >&2
+    echo "Usage:" >&2
+    echo "  $0 [fit] [config/fit.json]" >&2
+    echo "  $0 post fit_state.json model.json truth_mc.root normalization_mc.root" >&2
 }
 
 resolve_project_path()
@@ -37,9 +36,6 @@ resolve_project_path()
 
 read_fit_fields()
 {
-    # Shell needs the tag and paths before Slurm starts so it can validate
-    # inputs and choose the log file. FitConfig.cpp remains the authoritative
-    # full semantic parser inside Fit.exe.
     python3 - "$1" <<'PY'
 import json
 import re
@@ -63,124 +59,159 @@ for sample in inputs.get("backgrounds", []):
 PY
 }
 
-load_fields()
+load_fit_fields()
 {
-    # Convert every configured relative path to the canonical project root.
-    # This is essential because Slurm runs a spooled copy of this script.
     mapfile -t FIT_FIELDS < <(read_fit_fields "$1")
-    if [[ ${#FIT_FIELDS[@]} -lt 6 ]]; then
-        echo "[GVV] Cannot read the required fields from $1" >&2
-        exit 2
-    fi
-    OUTPUT_TAG=${FIT_FIELDS[0]}
-    RESULT_DIR=$(resolve_project_path "${FIT_FIELDS[1]}")
-    LOG_DIR=$(resolve_project_path "${FIT_FIELDS[2]}")
-    MODEL_FILE=$(resolve_project_path "${FIT_FIELDS[3]}")
-    DATA_FILE=$(resolve_project_path "${FIT_FIELDS[4]}")
-    NORMALIZATION_FILE=$(resolve_project_path "${FIT_FIELDS[5]}")
-    BACKGROUND_FILES=()
+    FIT_TAG=${FIT_FIELDS[0]}
+    FIT_RESULT_DIR=$(resolve_project_path "${FIT_FIELDS[1]}")
+    FIT_LOG_DIR=$(resolve_project_path "${FIT_FIELDS[2]}")
+    FIT_MODEL=$(resolve_project_path "${FIT_FIELDS[3]}")
+    FIT_INPUTS=(
+        "$(resolve_project_path "${FIT_FIELDS[4]}")"
+        "$(resolve_project_path "${FIT_FIELDS[5]}")")
     for ((index = 6; index < ${#FIT_FIELDS[@]}; ++index)); do
-        BACKGROUND_FILES+=("$(resolve_project_path "${FIT_FIELDS[index]}")")
+        FIT_INPUTS+=("$(resolve_project_path "${FIT_FIELDS[index]}")")
     done
-    RESULT_FILE="$RESULT_DIR/fit_result-$OUTPUT_TAG.txt"
-    COVARIANCE_FILE="$RESULT_DIR/Cova_matrix-$OUTPUT_TAG.dat"
-    PROJECTION_FILE="$RESULT_DIR/projection-$OUTPUT_TAG.root"
-    LOG_FILE="$LOG_DIR/fit-$OUTPUT_TAG.log"
+    FIT_REPORT="$FIT_RESULT_DIR/fit_result-$FIT_TAG.txt"
+    FIT_STATE="$FIT_RESULT_DIR/fit_state-$FIT_TAG.json"
+    FIT_PROJECTION="$FIT_RESULT_DIR/projection-$FIT_TAG.root"
+    FIT_LOG="$FIT_LOG_DIR/fit-$FIT_TAG.log"
 }
 
-validate_inputs()
+require_files()
 {
-    # Fail before scheduling/starting a fit if any immutable input is missing.
-    local input_file
-    for input_file in \
-        "$1" "$MODEL_FILE" "$DATA_FILE" "$NORMALIZATION_FILE" \
-        "${BACKGROUND_FILES[@]}"
-    do
-        if [[ ! -r $input_file ]]; then
-            echo "[GVV] Input is missing or unreadable: $input_file" >&2
+    local file
+    for file in "$@"; do
+        if [[ ! -r $file ]]; then
+            echo "[GVV] Input is missing or unreadable: $file" >&2
             exit 4
         fi
     done
 }
 
-run_worker()
+load_environment()
 {
-    # Worker mode is entered by sbatch below. It performs environment setup,
-    # runs exactly one Fit.exe process, and verifies all numerical products.
-    local fit_config=$1
-    load_fields "$fit_config"
-    validate_inputs "$fit_config"
-    mkdir -p -- "$RESULT_DIR" "$LOG_DIR"
-    if [[ ! -w $RESULT_DIR || ! -w $LOG_DIR ]]; then
-        echo "[GVV] Output directories are not writable" >&2
-        exit 6
-    fi
-    if [[ ! -x $PROJECT_DIR/bin/Fit.exe ]]; then
-        echo "[GVV] Build bin/Fit.exe before submission" >&2
-        exit 8
-    fi
     source "$PROJECT_DIR/config/gvv_env.sh"
     cd "$PROJECT_DIR"
-
     echo "[GVV] Start: $(date --iso-8601=seconds)"
     echo "[GVV] Job ID: ${SLURM_JOB_ID:-not-running-under-slurm}"
     echo "[GVV] Host: $(hostname -f)"
     echo "[GVV] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
-    echo "[GVV] CUDA root: $GVV_CUDA_ROOT"
-    echo "[GVV] ROOT: $GVV_ROOTSYS"
-    echo "[GVV] Fit configuration: $fit_config"
-    echo "[GVV] Output tag: $OUTPUT_TAG"
     /usr/bin/nvidia-smi
-
-    printf '[GVV] Command:'
-    printf ' %q' "$PROJECT_DIR/bin/Fit.exe" "$fit_config"
-    printf '\n'
-    srun --ntasks=1 "$PROJECT_DIR/bin/Fit.exe" "$fit_config"
-
-    local output_file
-    for output_file in \
-        "$RESULT_FILE" "$COVARIANCE_FILE" "$PROJECTION_FILE"
-    do
-        if [[ ! -s $output_file ]]; then
-            echo "[GVV] Fit returned success but output is missing: $output_file" >&2
-            exit 10
-        fi
-    done
-    echo "[GVV] End: $(date --iso-8601=seconds)"
-    echo "[GVV] Fit result: $RESULT_FILE"
-    echo "[GVV] Covariance matrix: $COVARIANCE_FILE"
-    echo "[GVV] Projection: $PROJECTION_FILE"
 }
 
-if [[ ${1:-} == "--worker" ]]; then
-    if [[ $# -ne 2 ]]; then
-        usage
-        exit 2
-    fi
-    run_worker "$(readlink -f -- "$2")"
+run_fit_worker()
+{
+    local config=$1
+    load_fit_fields "$config"
+    require_files "$config" "$FIT_MODEL" "${FIT_INPUTS[@]}"
+    mkdir -p -- "$FIT_RESULT_DIR" "$FIT_LOG_DIR"
+    [[ -x $PROJECT_DIR/bin/Fit.exe ]] || {
+        echo "[GVV] Build bin/Fit.exe with make before submission" >&2
+        exit 8
+    }
+    load_environment
+    srun --ntasks=1 "$PROJECT_DIR/bin/Fit.exe" "$config"
+    local product
+    for product in "$FIT_REPORT" "$FIT_STATE" "$FIT_PROJECTION"; do
+        [[ -s $product ]] || {
+            echo "[GVV] Fit output is missing: $product" >&2
+            exit 10
+        }
+    done
+    echo "[GVV] Fit report: $FIT_REPORT"
+    echo "[GVV] Fit state: $FIT_STATE"
+    echo "[GVV] Projection: $FIT_PROJECTION"
+}
+
+read_post_tag()
+{
+    python3 - "$1" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    print(json.load(stream)["output_tag"])
+PY
+}
+
+run_post_worker()
+{
+    local state=$1 model=$2 truth=$3 normalization=$4
+    require_files "$state" "$model" "$truth" "$normalization"
+    [[ -x $PROJECT_DIR/bin/Post.exe ]] || {
+        echo "[GVV] Build bin/Post.exe with 'make post' before submission" >&2
+        exit 8
+    }
+    load_environment
+    srun --ntasks=1 "$PROJECT_DIR/bin/Post.exe" \
+        "$state" "$model" "$truth" "$normalization"
+    local tag
+    tag=$(read_post_tag "$state")
+    local output="$PROJECT_DIR/post/calculation/results/post_result-$tag"
+    [[ -s $output.txt && -s $output.root ]] || {
+        echo "[GVV] Post Calculation output is incomplete: $output" >&2
+        exit 10
+    }
+    echo "[GVV] Post Calculation results: $output.{txt,root}"
+}
+
+if [[ ${1:-} == "--worker-fit" ]]; then
+    [[ $# -eq 2 ]] || { usage; exit 2; }
+    run_fit_worker "$(readlink -f -- "$2")"
+    exit 0
+fi
+if [[ ${1:-} == "--worker-post" ]]; then
+    [[ $# -eq 5 ]] || { usage; exit 2; }
+    run_post_worker \
+        "$(readlink -f -- "$2")" "$(readlink -f -- "$3")" \
+        "$(readlink -f -- "$4")" "$(readlink -f -- "$5")"
     exit 0
 fi
 
-# Submission mode: preflight the same paths on the login node, create output
-# directories, then export the real repository root to the Slurm worker.
-if [[ $# -gt 1 ]]; then
-    usage
-    exit 2
-fi
-FIT_CONFIG=$(readlink -f -- "$(resolve_project_path "${1:-config/fit.json}")")
-load_fields "$FIT_CONFIG"
-validate_inputs "$FIT_CONFIG"
-mkdir -p -- "$RESULT_DIR" "$LOG_DIR"
-if [[ ! -x $PROJECT_DIR/bin/Fit.exe ]]; then
-    echo "[GVV] Build bin/Fit.exe before submission" >&2
-    exit 8
+MODE=fit
+if [[ ${1:-} == "fit" || ${1:-} == "post" ]]; then
+    MODE=$1
+    shift
 fi
 
-JOB_ID=$(sbatch --parsable \
+if [[ $MODE == fit ]]; then
+    [[ $# -le 1 ]] || { usage; exit 2; }
+    CONFIG=$(readlink -f -- "$(resolve_project_path "${1:-config/fit.json}")")
+    load_fit_fields "$CONFIG"
+    require_files "$CONFIG" "$FIT_MODEL" "${FIT_INPUTS[@]}"
+    mkdir -p -- "$FIT_RESULT_DIR" "$FIT_LOG_DIR"
+    [[ -x $PROJECT_DIR/bin/Fit.exe ]] || {
+        echo "[GVV] Build bin/Fit.exe with make before submission" >&2
+        exit 8
+    }
+    JOB_ID=$(sbatch --parsable --job-name=gvv-fit \
+        --chdir="$PROJECT_DIR" \
+        --export="ALL,GVV_PROJECT_ROOT=$PROJECT_DIR" \
+        --output="$FIT_LOG" --open-mode=truncate \
+        "$SCRIPT_PATH" --worker-fit "$CONFIG")
+    echo "[GVV] Submitted fit job $JOB_ID"
+    echo "[GVV] Log: $FIT_LOG"
+    exit 0
+fi
+
+[[ $# -eq 4 ]] || { usage; exit 2; }
+STATE=$(readlink -f -- "$(resolve_project_path "$1")")
+MODEL=$(readlink -f -- "$(resolve_project_path "$2")")
+TRUTH=$(readlink -f -- "$(resolve_project_path "$3")")
+NORMALIZATION=$(readlink -f -- "$(resolve_project_path "$4")")
+require_files "$STATE" "$MODEL" "$TRUTH" "$NORMALIZATION"
+[[ -x $PROJECT_DIR/bin/Post.exe ]] || {
+    echo "[GVV] Build bin/Post.exe with 'make post' before submission" >&2
+    exit 8
+}
+POST_TAG=$(read_post_tag "$STATE")
+POST_LOG_DIR="$PROJECT_DIR/runlog"
+POST_LOG="$POST_LOG_DIR/post-$POST_TAG.log"
+mkdir -p -- "$POST_LOG_DIR" "$PROJECT_DIR/post/calculation/results"
+JOB_ID=$(sbatch --parsable --job-name=gvv-post \
     --chdir="$PROJECT_DIR" \
     --export="ALL,GVV_PROJECT_ROOT=$PROJECT_DIR" \
-    --output="$LOG_FILE" \
-    --open-mode=truncate \
-    "$SCRIPT_PATH" --worker "$FIT_CONFIG")
-echo "[GVV] Submitted Slurm job $JOB_ID"
-echo "[GVV] Log: $LOG_FILE"
+    --output="$POST_LOG" --open-mode=truncate \
+    "$SCRIPT_PATH" --worker-post "$STATE" "$MODEL" "$TRUTH" "$NORMALIZATION")
+echo "[GVV] Submitted Post Calculation job $JOB_ID"
+echo "[GVV] Log: $POST_LOG"

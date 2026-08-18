@@ -25,7 +25,7 @@ struct GVVBranchConfig {
     GVVBranchConfig();
 };
 
-// GVV process event sample shared by fitting and PostFit. It owns the fixed
+// GVV process event sample shared by Fit and Post Calculation. It owns the fixed
 // seven-particle ROOT schema and corresponding GPU buffers, but it does not
 // know whether a sample is data, accepted PHSP, sideband, or truth PHSP.
 // A future decay topology replaces this class at the process boundary.

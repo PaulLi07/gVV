@@ -5,6 +5,7 @@
 #include "framework/fit/FitConfig.h"
 #include "framework/fit/FitEngine.h"
 #include "framework/fit/FitOutput.h"
+#include "framework/fit/FitState.h"
 #include "process/FitLikelihood.h"
 #include "process/ParameterMapping.h"
 #include "process/ProjectionWriter.h"
@@ -130,15 +131,32 @@ int main(int argc, char* argv[])
                   << std::setprecision(12) << summary.best.minimum << '\n';
 
         ctpwa::FitResultContext context;
+        context.output_tag = config.output.tag;
         context.fit_config_file = fit_config_file;
         context.model_config_file = config.model_file;
         context.model_name = likelihood.Model().definition.name;
-        context.data_entries = likelihood.DataEntries();
-        context.normalization_mc_entries =
-            likelihood.NormalizationMCEntries();
+        context.model_signature = ctpwa::model_definition_signature(
+            likelihood.Model().definition);
+        context.samples.push_back({
+            "data", "data", config.inputs.data_file,
+            likelihood.DataEntries(), +1.0});
+        context.samples.push_back({
+            "normalization_mc", "normalization MC",
+            config.inputs.normalization_mc_file,
+            likelihood.NormalizationMCEntries(), 0.0});
+        for (std::size_t index = 0;
+             index < config.inputs.backgrounds.size();
+             ++index) {
+            const ctpwa::WeightedSampleConfig& background =
+                config.inputs.backgrounds[index];
+            context.samples.push_back({
+                "background", background.label, background.file,
+                likelihood.BackgroundSampleAt(index).Entries(),
+                background.likelihood_coefficient});
+        }
         ctpwa::write_fit_result(
             config.output.result_file(),
-            summary.best,
+            summary,
             config.minimizer,
             parameters,
             context,
@@ -146,19 +164,29 @@ int main(int argc, char* argv[])
                 gvv_write_fit_details(
                     output, likelihood.Model(), mapping, summary.best);
             });
-        ctpwa::write_covariance_matrix(
-            config.output.covariance_file(), summary.best);
+
+        ctpwa::FitState state;
+        state.output_tag = config.output.tag;
+        state.fit_config_file = fit_config_file;
+        state.model_config_file = config.model_file;
+        state.model_name = context.model_name;
+        state.model_signature = context.model_signature;
+        state.best = summary.best;
+        state.parameters = parameters;
+        ctpwa::write_fit_state(config.output.state_file(), state);
         write_gvv_projection(
             likelihood,
             config.output.projection_file(),
+            config.output.tag,
+            context.model_signature,
             summary.best.start_index,
             summary.best.seed,
             summary.best.minimum);
 
         std::cout << "Fit result written to "
                   << config.output.result_file() << '\n'
-                  << "Covariance matrix written to "
-                  << config.output.covariance_file() << '\n'
+                  << "Machine-readable fit state written to "
+                  << config.output.state_file() << '\n'
                   << "Projection written to "
                   << config.output.projection_file() << '\n';
     } catch (const std::exception& error) {

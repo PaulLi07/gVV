@@ -2,6 +2,15 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Split downstream work into independent `post/calculation` and
+  `post/plotting` modules. `make` builds only Fit and `make post` builds the
+  numerical Post executable.
+- Replaced the separate covariance file with `fit_state-<tag>.json`, the
+  machine-readable Fit-to-Post contract. The user-facing fit report now
+  includes multistart diagnostics, the complete active physical model,
+  covariance, and correlation matrices.
+- Made projection group/component metadata fully dynamic and removed the
+  hard-coded `0++` and `0-+` weight branches from the new schema.
 - Omit Resonances referenced only by inactive Terms from the compiled GPU model
   and Minuit parameter layout, so `active: false` is independent of propagator
   type and free propagator parameters.

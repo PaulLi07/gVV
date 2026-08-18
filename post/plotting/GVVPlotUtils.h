@@ -1,7 +1,10 @@
+// Projection plotting utilities. All component/group identities are read from
+// the projection ROOT contract; this file contains no nominal resonance list.
 #ifndef GVV_PLOT_UTILS_H
 #define GVV_PLOT_UTILS_H
 
 #include "TCanvas.h"
+#include "TColor.h"
 #include "TFile.h"
 #include "TH1D.h"
 #include "TLatex.h"
@@ -128,9 +131,8 @@ struct Branches {
     double omega2_decay_plane_angle = 0.0;
     double delta_phi_decay_planes = 0.0;
     double weight = 1.0;
-    double weight_0pp = 0.0;
-    double weight_0mp = 0.0;
     double weight_bg = 1.0;
+    std::vector<double>* weight_group = nullptr;
     std::vector<double>* weight_component = nullptr;
 
     void Bind(TTree* tree, bool is_mc, bool is_background)
@@ -157,11 +159,10 @@ struct Branches {
             "delta_phi_decay_planes", &delta_phi_decay_planes);
         if (is_mc) {
             const char* weights[] = {
-                "weight", "weight_0pp", "weight_0mp", "weight_component"};
+                "weight", "weight_group", "weight_component"};
             for (const char* name : weights) RequireBranch(tree, name);
             tree->SetBranchAddress("weight", &weight);
-            tree->SetBranchAddress("weight_0pp", &weight_0pp);
-            tree->SetBranchAddress("weight_0mp", &weight_0mp);
+            tree->SetBranchAddress("weight_group", &weight_group);
             tree->SetBranchAddress("weight_component", &weight_component);
         }
         if (is_background) {
@@ -202,8 +203,22 @@ inline void FillObservable(
 struct ComponentInfo {
     int index = -1;
     std::string name;
+    std::string label;
     std::string jpc;
 };
+
+struct GroupInfo {
+    int index = -1;
+    std::string jpc;
+    std::string label;
+};
+
+inline std::string RootLabel(std::string label)
+{
+    std::replace(label.begin(), label.end(), '\\', '#');
+    std::replace(label.begin(), label.end(), '~', ' ');
+    return label;
+}
 
 inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
 {
@@ -214,12 +229,15 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
     }
     RequireBranch(tree, "component_index");
     RequireBranch(tree, "name");
+    RequireBranch(tree, "label");
     RequireBranch(tree, "jpc");
     int component_index = -1;
     char name[64] = {0};
+    char label[128] = {0};
     char jpc[16] = {0};
     tree->SetBranchAddress("component_index", &component_index);
     tree->SetBranchAddress("name", name);
+    tree->SetBranchAddress("label", label);
     tree->SetBranchAddress("jpc", jpc);
     std::vector<ComponentInfo> result;
     for (Long64_t row = 0; row < tree->GetEntries(); ++row) {
@@ -227,7 +245,7 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
         if (component_index < 0) {
             throw std::runtime_error("invalid component index in component_map");
         }
-        result.push_back({component_index, name, jpc});
+        result.push_back({component_index, name, label, jpc});
     }
     std::sort(
         result.begin(), result.end(),
@@ -237,16 +255,33 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
     return result;
 }
 
-inline std::string PrettyComponentName(const std::string& name)
+inline std::vector<GroupInfo> ReadGroupMap(TFile& input)
 {
-    if (name == "f0_1500_00") return "f_{0}(1500)";
-    if (name == "f0_1710_00") return "f_{0}(1710)";
-    if (name == "eta_1760_11") return "#eta(1760)";
-    if (name == "eta_c_11") return "#eta_{c}(1S)";
-    if (name == "X_1835_11") return "X(1835)";
-    if (name == "X_2370_11") return "X(2370)";
-    if (name == "NR_0mp_11") return "0^{-+} nonresonant";
-    return name;
+    TTree* tree = nullptr;
+    input.GetObject("group_map", tree);
+    if (tree == nullptr) {
+        throw std::runtime_error("projection file has no group_map tree");
+    }
+    RequireBranch(tree, "group_index");
+    RequireBranch(tree, "jpc");
+    RequireBranch(tree, "label");
+    int group_index = -1;
+    char jpc[16] = {0};
+    char label[32] = {0};
+    tree->SetBranchAddress("group_index", &group_index);
+    tree->SetBranchAddress("jpc", jpc);
+    tree->SetBranchAddress("label", label);
+    std::vector<GroupInfo> result;
+    for (Long64_t row = 0; row < tree->GetEntries(); ++row) {
+        tree->GetEntry(row);
+        result.push_back({group_index, jpc, label});
+    }
+    std::sort(
+        result.begin(), result.end(),
+        [](const GroupInfo& first, const GroupInfo& second) {
+            return first.index < second.index;
+        });
+    return result;
 }
 
 inline TH1D* NewHistogram(
@@ -270,8 +305,7 @@ struct PanelHistograms {
     TH1D* background = nullptr;
     TH1D* signal = nullptr;
     TH1D* total = nullptr;
-    TH1D* scalar = nullptr;
-    TH1D* pseudoscalar = nullptr;
+    std::vector<TH1D*> groups;
     std::vector<TH1D*> components;
 };
 
@@ -281,6 +315,7 @@ inline PanelHistograms BuildPanel(
     TTree* background_tree,
     const VariableSpec& specification,
     int serial,
+    const std::vector<GroupInfo>& groups,
     const std::vector<ComponentInfo>& components,
     bool fill_components)
 {
@@ -288,8 +323,10 @@ inline PanelHistograms BuildPanel(
     result.data = NewHistogram("gvv_data", specification, serial);
     result.background = NewHistogram("gvv_bg", specification, serial);
     result.signal = NewHistogram("gvv_signal", specification, serial);
-    result.scalar = NewHistogram("gvv_0pp", specification, serial);
-    result.pseudoscalar = NewHistogram("gvv_0mp", specification, serial);
+    for (std::size_t index = 0; index < groups.size(); ++index) {
+        result.groups.push_back(NewHistogram(
+            "gvv_group_" + std::to_string(index), specification, serial));
+    }
     if (fill_components) {
         for (std::size_t index = 0; index < components.size(); ++index) {
             result.components.push_back(NewHistogram(
@@ -320,12 +357,16 @@ inline PanelHistograms BuildPanel(
         mc_tree->GetEntry(event);
         FillObservable(
             result.signal, mc_values, specification.variable, mc_values.weight);
-        FillObservable(
-            result.scalar, mc_values, specification.variable,
-            mc_values.weight_0pp);
-        FillObservable(
-            result.pseudoscalar, mc_values, specification.variable,
-            mc_values.weight_0mp);
+        if (mc_values.weight_group == nullptr
+            || mc_values.weight_group->size() != groups.size()) {
+            throw std::runtime_error(
+                "projection group-weight layout is inconsistent");
+        }
+        for (std::size_t group = 0; group < groups.size(); ++group) {
+            FillObservable(
+                result.groups[group], mc_values, specification.variable,
+                mc_values.weight_group->at(group));
+        }
         if (fill_components) {
             for (std::size_t component = 0;
                  component < components.size();
@@ -408,12 +449,14 @@ inline void StylePanel(PanelHistograms& panel)
     panel.background->SetLineColor(kBlue);
     panel.total->SetLineColor(kBlue + 1);
     panel.total->SetLineWidth(2);
-    panel.scalar->SetLineColor(kRed + 1);
-    panel.scalar->SetLineStyle(2);
-    panel.scalar->SetLineWidth(2);
-    panel.pseudoscalar->SetLineColor(kGreen + 2);
-    panel.pseudoscalar->SetLineStyle(7);
-    panel.pseudoscalar->SetLineWidth(2);
+    const int styles[] = {2, 7, 9, 3, 5};
+    const int colors[] = {kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7,
+                          kCyan + 2};
+    for (std::size_t group = 0; group < panel.groups.size(); ++group) {
+        panel.groups[group]->SetLineColor(colors[group % 5]);
+        panel.groups[group]->SetLineStyle(styles[group % 5]);
+        panel.groups[group]->SetLineWidth(2);
+    }
 }
 
 inline void DrawProjection(
@@ -438,6 +481,7 @@ inline void DrawProjection(
         throw std::runtime_error("projection file is missing data/MC/bg tree");
     }
     const std::vector<ComponentInfo> components = ReadComponentMap(*input);
+    const std::vector<GroupInfo> groups = ReadGroupMap(*input);
     std::vector<VariableSpec> variables = MainVariables();
     if (detailed) variables.push_back(OmegaMassVariable());
     const int columns = detailed || show_components ? 4 : 3;
@@ -459,7 +503,7 @@ inline void DrawProjection(
         canvas->cd(static_cast<int>(variable) + 1);
         PanelHistograms panel = BuildPanel(
             data, mc, background, variables[variable],
-            static_cast<int>(variable), components, show_components);
+            static_cast<int>(variable), groups, components, show_components);
         StylePanel(panel);
         FormatAxes(panel.data, variables[variable], panel.total);
         panel.data->Draw("E1");
@@ -477,8 +521,7 @@ inline void DrawProjection(
                 panel.components[component]->Draw("HIST C SAME");
             }
         } else {
-            panel.scalar->Draw("HIST SAME");
-            panel.pseudoscalar->Draw("HIST SAME");
+            for (TH1D* group : panel.groups) group->Draw("HIST SAME");
         }
         panel.total->Draw("HIST SAME");
         panel.data->Draw("E1 SAME");
@@ -515,11 +558,13 @@ inline void DrawProjection(
              component < components.size(); ++component) {
             legend->AddEntry(
                 panels[0].components[component],
-                PrettyComponentName(components[component].name).c_str(), "l");
+                RootLabel(components[component].label).c_str(), "l");
         }
     } else {
-        legend->AddEntry(panels[0].scalar, "coherent 0^{++}", "l");
-        legend->AddEntry(panels[0].pseudoscalar, "coherent 0^{-+}", "l");
+        for (std::size_t group = 0; group < groups.size(); ++group) {
+            const std::string label = "coherent " + groups[group].label;
+            legend->AddEntry(panels[0].groups[group], label.c_str(), "l");
+        }
     }
     legend->Draw();
     canvas->Print((std::string(output_prefix) + ".pdf").c_str());

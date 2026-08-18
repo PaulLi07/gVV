@@ -28,7 +28,7 @@ struct FitOutputConfig {
     std::string tag = "initial";
 
     std::string result_file() const;
-    std::string covariance_file() const;
+    std::string state_file() const;
     std::string projection_file() const;
     std::string log_file() const;
 };

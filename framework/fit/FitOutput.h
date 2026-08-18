@@ -1,5 +1,4 @@
-// Stable text and covariance output interface for a completed generic fit.
-// Process-specific physical state can be appended through FitDetailWriter.
+// Human-readable fit diagnostics. Machine consumers use FitState instead.
 #ifndef CTPWA_FRAMEWORK_FIT_OUTPUT_H
 #define CTPWA_FRAMEWORK_FIT_OUTPUT_H
 
@@ -12,27 +11,32 @@
 
 namespace ctpwa {
 
+struct FitSampleSummary {
+    std::string role;
+    std::string label;
+    std::string file;
+    int entries = 0;
+    double likelihood_coefficient = 0.0;
+};
+
 struct FitResultContext {
+    std::string output_tag;
     std::string fit_config_file;
     std::string model_config_file;
     std::string model_name;
-    int data_entries = 0;
-    int normalization_mc_entries = 0;
+    std::string model_signature;
+    std::vector<FitSampleSummary> samples;
 };
 
 using FitDetailWriter = std::function<void(std::ostream&)>;
 
 void write_fit_result(
     const std::string& file_name,
-    const FitAttempt& best,
+    const FitSummary& summary,
     const FitOptions& options,
     const std::vector<FitParameterSpec>& parameters,
     const FitResultContext& context,
     const FitDetailWriter& write_details);
-
-void write_covariance_matrix(
-    const std::string& file_name,
-    const FitAttempt& best);
 
 } // namespace ctpwa
 

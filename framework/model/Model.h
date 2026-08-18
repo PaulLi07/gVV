@@ -80,6 +80,10 @@ ModelDefinition parse_model_definition(
     const std::string& json_text,
     const std::string& source_name = "<memory>");
 
+// Stable identifier used to ensure that a serialized fit state is applied to
+// exactly the model document from which its parameter layout was generated.
+std::string model_definition_signature(const ModelDefinition& definition);
+
 const char* coupling_mode_name(CouplingMode mode);
 const char* coupling_reference_name(CouplingReference reference);
 

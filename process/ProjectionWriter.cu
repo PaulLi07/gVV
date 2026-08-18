@@ -290,6 +290,8 @@ struct ProjectionEvent {
 void write_gvv_projection(
     FitLikelihood& likelihood,
     const std::string& save_name,
+    const std::string& output_tag,
+    const std::string& model_signature,
     int best_start,
     long long best_seed,
     double minimum)
@@ -375,19 +377,10 @@ void write_gvv_projection(
     TTree tree_mc("MC", "accepted normalization MC with fitted weights");
     event_values.Book(tree_mc);
     double weight = 0.0;
-    double weight_0pp = 0.0;
-    double weight_0mp = 0.0;
-    double weight_int_0pp_0mp = 0.0;
     std::vector<double> weight_group(group_ids.size(), 0.0);
     std::vector<double> weight_component(
         static_cast<std::size_t>(number_terms) * number_terms, 0.0);
     tree_mc.Branch("weight", &weight, "weight/D");
-    tree_mc.Branch("weight_0pp", &weight_0pp, "weight_0pp/D");
-    tree_mc.Branch("weight_0mp", &weight_0mp, "weight_0mp/D");
-    tree_mc.Branch(
-        "weight_int_0pp_0mp",
-        &weight_int_0pp_0mp,
-        "weight_int_0pp_0mp/D");
     tree_mc.Branch("weight_group", &weight_group);
     tree_mc.Branch(
         "weight_component",
@@ -397,19 +390,10 @@ void write_gvv_projection(
     double sum_projection_weight = 0.0;
     for (int event = 0; event < number_mc; ++event) {
         weight = total_intensity[event] / sum_pdf * effective_yield;
-        double sum_group_weight = 0.0;
-        weight_0pp = 0.0;
-        weight_0mp = 0.0;
         for (std::size_t group = 0; group < group_ids.size(); ++group) {
             weight_group[group] = group_intensity[group][event]
                                   / sum_pdf * effective_yield;
-            sum_group_weight += weight_group[group];
-            if (group_ids[group] == "0++") weight_0pp = weight_group[group];
-            if (group_ids[group] == "0-+") weight_0mp = weight_group[group];
         }
-        // Historical branch name retained for nominal plotting. With future
-        // groups this stores the total interference between all JPC groups.
-        weight_int_0pp_0mp = weight - sum_group_weight;
         sum_projection_weight += weight;
 
         std::fill(
@@ -489,6 +473,10 @@ void write_gvv_projection(
     int resonance_index = 0;
     int wave_type = 0;
     char component_name[64] = {0};
+    char component_label[128] = {0};
+    char component_resonance_id[64] = {0};
+    char component_wave_id[64] = {0};
+    char component_wave_label[128] = {0};
     char component_jpc[16] = {0};
     component_map.Branch(
         "component_index", &component_index, "component_index/I");
@@ -496,12 +484,24 @@ void write_gvv_projection(
         "resonance_index", &resonance_index, "resonance_index/I");
     component_map.Branch("wave_type", &wave_type, "wave_type/I");
     component_map.Branch("name", component_name, "name/C");
+    component_map.Branch("label", component_label, "label/C");
+    component_map.Branch(
+        "resonance_id", component_resonance_id, "resonance_id/C");
+    component_map.Branch("wave_id", component_wave_id, "wave_id/C");
+    component_map.Branch(
+        "wave_label", component_wave_label, "wave_label/C");
     component_map.Branch("jpc", component_jpc, "jpc/C");
     for (int term = 0; term < number_terms; ++term) {
         component_index = term;
         resonance_index = model.terms[term].resonance_index;
         wave_type = model.term_metadata[term].registered_wave_type;
         copy_checked(component_name, model.term_metadata[term].id);
+        copy_checked(component_label, model.term_metadata[term].label);
+        copy_checked(
+            component_resonance_id,
+            model.resonance_metadata[resonance_index].id);
+        copy_checked(component_wave_id, model.term_metadata[term].wave_id);
+        copy_checked(component_wave_label, model.term_metadata[term].latex);
         copy_checked(component_jpc, model.term_metadata[term].jpc);
         fill_tree(component_map);
     }
@@ -509,15 +509,24 @@ void write_gvv_projection(
     TTree group_map("group_map", "GVV JPC group index map");
     int group_index = 0;
     char group_jpc[16] = {0};
+    char group_label[32] = {0};
     group_map.Branch("group_index", &group_index, "group_index/I");
     group_map.Branch("jpc", group_jpc, "jpc/C");
+    group_map.Branch("label", group_label, "label/C");
     for (std::size_t group = 0; group < group_ids.size(); ++group) {
         group_index = static_cast<int>(group);
         copy_checked(group_jpc, group_ids[group]);
+        const std::string label = group_ids[group].size() >= 3
+            ? group_ids[group].substr(0, group_ids[group].size() - 2)
+                  + "^{" + group_ids[group].substr(group_ids[group].size() - 2)
+                  + "}"
+            : group_ids[group];
+        copy_checked(group_label, label);
         fill_tree(group_map);
     }
 
     TTree metadata("metadata", "GVV projection provenance");
+    int projection_schema_version = 1;
     int n_terms = number_terms;
     int n_groups = static_cast<int>(group_ids.size());
     int n_data = data.Entries();
@@ -539,6 +548,17 @@ void write_gvv_projection(
             ? likelihood.BackgroundLikelihoodCoefficient(1)
             : 0.0;
     long long stored_best_seed = best_seed;
+    char stored_output_tag[64] = {0};
+    char stored_model_signature[64] = {0};
+    copy_checked(stored_output_tag, output_tag);
+    copy_checked(stored_model_signature, model_signature);
+    metadata.Branch(
+        "schema_version",
+        &projection_schema_version,
+        "schema_version/I");
+    metadata.Branch("output_tag", stored_output_tag, "output_tag/C");
+    metadata.Branch(
+        "model_signature", stored_model_signature, "model_signature/C");
     metadata.Branch("n_terms", &n_terms, "n_terms/I");
     metadata.Branch("n_groups", &n_groups, "n_groups/I");
     metadata.Branch("n_data", &n_data, "n_data/I");

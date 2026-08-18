@@ -11,6 +11,8 @@ class FitLikelihood;
 void write_gvv_projection(
     FitLikelihood& likelihood,
     const std::string& save_name,
+    const std::string& output_tag,
+    const std::string& model_signature,
     int best_start,
     long long best_seed,
     double minimum);
