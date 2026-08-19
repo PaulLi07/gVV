@@ -123,16 +123,21 @@ the post-refactor architecture audit:
   Term/Wave/component equivalence. These tests are separate from ordinary
   login-node-safe checks and require an allocated GPU for execution.
 
-Verification on the fixed `lxlogin005` node completed without running an
-analysis executable or submitting a cluster job:
+Build and login-node-safe verification on the fixed `lxlogin005` node
+completed without running Fit or Post Calculation:
 
 - `make clean`, `make -j2`, and `make -j2 post` built `Fit.exe` and `Post.exe`;
 - `make -j2 tests` built the ordinary test suite and `make check` passed all
   11 login-node-safe tests;
-- `make -j2 gpu-tests` compiled both new CUDA runtime regressions, but
-  `make check-gpu` was intentionally not run because no GPU job was allocated;
+- `make -j2 gpu-tests` compiled both new CUDA runtime regressions;
 - all five plotting macros passed a ROOT-aware C++ syntax check;
 - shell syntax, JSON syntax, and patch whitespace checks passed.
+
+At the user's request, the two CUDA runtime regressions were subsequently
+submitted as background Slurm job `23444` (`gvv-gpu-tests`), with output
+routed to `runlog/gpu-tests-23444.log`. This log records the submission only;
+the runtime outcome is intentionally not claimed here until the user reports
+the completed job result.
 
 ### Deferred improvements
 
@@ -158,5 +163,36 @@ in this closeout:
 - perform a broader historical changelog/documentation cleanup without mixing
   it into the amplitude and fit implementation changes.
 
-No Fit, Post Calculation, GPU, Slurm, or other cluster job is submitted by
-Codex. Production runtime validation remains user-controlled.
+No Fit or Post Calculation job was submitted. Apart from the explicitly
+user-authorized GPU-regression job recorded above, production runtime
+validation remains user-controlled.
+
+## Documentation overhaul (2026-08-19)
+
+The user and developer documentation was rewritten as one consistent English
+manual set without changing source code, configuration semantics, physics
+formulae, or output schemas:
+
+- `README.md` now provides the normal project landing page: physics scope,
+  architecture, installation, input contract, build, Fit/Post usage, outputs,
+  and concise extension entry points;
+- `docs/ARCHITECTURE.md` traces the complete model, event, amplitude,
+  likelihood, fit-output, Projection, and Post data flow and states the
+  framework/process replacement boundary for another final state;
+- `docs/WORKFLOW.md` separates Amplitude Fit from Post Calculation and Post
+  Plotting and documents the login-node/background-Slurm operating model;
+- `docs/CODE_REFERENCE.md` explains every production/configuration/submission
+  file, important internal code blocks, all plotting entry points, and the
+  ordinary versus GPU verification inventory;
+- `docs/MODEL_CONFIGURATION.md` provides the authoritative user guide for
+  adding, disabling, re-enabling, and permanently deleting Resonance Terms;
+- `docs/WAVE_DEVELOPMENT.md` provides the physics, implementation,
+  registration, coherence, and numerical-validation procedure for a new
+  complete GVV Wave;
+- `post/README.md` documents the independent numerical and plotting modules,
+  their exact inputs, outputs, algorithms, and acceptance checks.
+
+The documentation was checked for valid local links, balanced Markdown code
+fences, parseability of every complete embedded JSON example, trailing
+whitespace, and English-only prose. No Fit, Post, CUDA executable, or new
+Slurm job was run for this documentation-only phase.

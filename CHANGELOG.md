@@ -2,6 +2,9 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Reworked the documentation into a user-facing installation/physics README,
+  a complete architecture guide, separate Fit/Post workflow manual, per-file
+  code reference, and detailed Resonance/Term and Wave extension guides.
 - Aggregated fully evaluated Term coefficients by exact Wave slot in the Fit
   hot path, reducing its contraction from `O(T^2)` to `O(T + W^2)` without
   dropping any coherent cross-Wave term.
@@ -38,14 +41,14 @@
   repeated internal checks after model compilation or sample preparation.
 - Renamed the canonical project directory from `gVV_v1` to `gVV` without
   creating a second repository or changing Git history.
-- Completed a production-source audit and added file-level/critical-path
-  comments throughout the fit system; downstream `postfit/` remains deferred.
+- Completed production-source and Post-system audits and added
+  file-level/critical-path comments throughout the Fit and Post code.
 - Moved GVV fit-policy flags out of the reusable propagator descriptor, made
   process parameter/dynamics contracts strict, and kept validation at the
   configuration, I/O, and numerical boundaries without changing the nominal
   physics model.
-- Enabled generated header dependencies and compiler warnings in the Makefile;
-  corrected project-local ROOT data and CUDA `lib64` environment paths.
+- Enabled generated header dependencies in the Makefile and corrected
+  project-local ROOT data and CUDA `lib64` environment paths.
 - Reorganized the canonical repository into reusable `framework/` and
   GVV-specific `process/` layers while preserving the current physics model.
 - Made `model.json` the only resonance/Term model description and `fit.json`
@@ -55,10 +58,8 @@
 - Split the three existing complete GVV waves into independently registered
   files under `process/waves/`; no new `2++` wave was introduced.
 - Removed legacy fit-result reading compatibility and configuration snapshots.
-- Replaced the old submission script set with the dedicated root
-  `submit_fit.sh`.
-- Preserved downstream plotting sources and user presentation changes under
-  `postfit/`; their migration is intentionally deferred.
+- Replaced the old submission script set with dedicated root-level Fit and
+  Post Calculation submission entry points.
 
 ## gVV v1.0.0-rc1 — 2026-08-16
 

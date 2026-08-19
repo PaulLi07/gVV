@@ -1,208 +1,838 @@
-# Architecture and data flow
+# gVV architecture and end-to-end data flow
 
-## Design boundary
+## 1. Purpose and scope
 
-The repository separates three rates of change:
+This document explains how the repository turns a JSON amplitude model and
+ROOT event samples into a fitted covariant-tensor amplitude, and how the two
+independent downstream modules consume the fit products. It is an architecture
+reference: field-by-field configuration details are in
+[`MODEL_CONFIGURATION.md`](MODEL_CONFIGURATION.md), and the practical recipe
+for implementing a new basis is in [`WAVE_DEVELOPMENT.md`](WAVE_DEVELOPMENT.md).
 
-- Resonances and Terms change frequently and are edited only in `model.json`.
-- A new covariant basis is implemented as one complete process Wave and
-  registered under `process/waves/` and `WaveRegistry`.
-- A future project for a different final state reuses `framework/` and replaces
-  the explicit process layer.
-
-The goal is not a runtime framework that knows every decay channel. Generic
-algorithms remain reusable, while final-state physics remains visible and
-testable in `process/`.
-
-## Dependency direction
+The current process is
 
 ```text
-config/model.json -> framework/model -> process/WaveRegistry
-                                           |
-ROOT samples -> process/SampleLoader -> ProcessAmplitude/TermEvaluator
-                                           |
-                         framework/likelihood <- FitLikelihood
-                                           |
-config/fit.json -> framework/fit --------> app/Fit.cu
-                                           |
-                     +---------------------+---------------------+
-                     |                     |                     |
-              fit report TXT       fit_state JSON       projection ROOT
-                                            |                    |
-                                  Post Calculation       Post Plotting
-                                  + truth/selected MC
+psi(2S) -> gamma X
+             X -> omega omega
+       omega -> pi+ pi- pi0
 ```
 
-`framework/` must never include `process/`. The internal physics-tool
-direction is `math -> tensors -> dynamics -> process`.
+The implementation deliberately separates code by how often it should change:
 
-## Framework layer
+1. **Model configuration changes frequently.** Resonances and Terms are
+   added, removed, or disabled in `config/model.json`.
+2. **The Wave catalogue changes occasionally.** A new complete GVV covariant
+   basis is implemented under `process/waves/` and registered once.
+3. **The decay process changes rarely and as a unit.** A future project for a
+   different final state reuses the generic `framework/` and replaces the
+   process boundary rather than teaching the GVV process code about every
+   possible topology.
 
-### Math and tensors
+This is therefore not a universal runtime decay-language interpreter. It is a
+small reusable numerical framework with an explicit, inspectable process
+implementation.
 
-`framework/math/` provides device complex numbers, four-vectors, metric and
-Levi-Civita conventions. `framework/tensors/` provides tensor algebra, spin
-projectors, orbital tensors, contractions, and barrier factors. These modules
-contain no omega constants, ROOT branch names, or GVV Wave identifiers.
+## 2. Architectural invariants
 
-### Dynamics
+The following rules define the intended structure.
 
-`framework/dynamics/` contains reusable two-body kinematics and propagator
-formulae. `PropagatorRegistry.cuh` is the compact device dispatch. The mapping
-from JSON strings to propagator types remains in the process compiler because
-it also defines which parameters a GVV Term may fit.
+- `framework/` contains no GVV particle names, ROOT branch names, registered
+  GVV Wave IDs, or includes from `process/`.
+- `process/` may use `framework/` building blocks and owns all
+  `psi(2S) -> gamma omega omega` assumptions.
+- `app/Fit.cu` is glue. It selects the process implementation and connects it
+  to generic fit/output services; it does not contain tensor formulae or
+  minimizer algorithms.
+- A Resonance is a propagator instance, a Wave is a complete process numerator
+  basis, and a Term joins one Resonance, one Wave, and one coupling. None of
+  these concepts is represented by a model-wide compile-time count.
+- `model.json` is the single user-edited amplitude-model description. There is
+  no generated C++ model table and no Python model layer.
+- The total fit intensity is always coherent. JPC labels and coherence classes
+  describe metadata and phase conventions; they are not switches that remove
+  cross-Wave terms from the numerical contraction.
+- Fit, Post Calculation, and Post Plotting are separate programs or workflows.
+  Their only coupling is through documented output contracts.
+- Validation is performed at the boundary that owns the input: JSON loaders,
+  the GVV model compiler, ROOT sample loading, fitted-state loading, and output
+  contract readers. Inner numerical kernels rely on those invariants.
 
-### Model
-
-`framework/model/Model.*` strictly parses Resonances, Terms, coupling policy,
-and opaque process dynamics. It also computes the deterministic model
-signature used by the Fit-to-Post contract. It does not register GVV Waves.
-
-### Amplitude and likelihood
-
-`IntensityEngine.cuh` implements the generic coherent contraction, while
-`Likelihood.h` implements accepted-MC normalization and signed unbinned
-log-likelihood arithmetic. Neither module knows the event topology.
-
-The Fit hot path first evaluates every complete Term coefficient, including
-its Resonance propagator, and then aggregates only Terms with the same dense
-Wave slot. If
+## 3. Repository map
 
 ```text
-B_w(event) = sum C_t(event) for all Terms t using Wave slot w,
+gVV/
+├── app/
+│   └── Fit.cu                  Fit application assembly
+├── config/
+│   ├── model.json              Resonances, Terms, Waves, couplings
+│   ├── model.schema.json       Declarative model format reference
+│   ├── fit.json                Samples, minimizer, output tag
+│   └── gvv_env.sh              Project-local CUDA/ROOT environment
+├── framework/                  Process-independent reusable layer
+│   ├── amplitude/              Coherent intensity algebra
+│   ├── dynamics/               Kinematics and propagator formulae
+│   ├── fit/                    Run config, Minuit, report, fitted state
+│   ├── likelihood/             Normalization and log-likelihood arithmetic
+│   ├── math/                   Complex, four-vector, Lorentz conventions
+│   ├── model/                  Generic JSON model description
+│   └── tensors/                Tensor/projector/orbital/barrier blocks
+├── process/                    GVV replacement boundary
+│   ├── waves/                  Complete registered GVV numerator bases
+│   ├── ProcessEvent.cuh        Device event view
+│   ├── ProcessKinematics.cuh   omega currents and GVV constants
+│   ├── ProcessAmplitude.cuh    common GVV polarization contraction
+│   ├── WaveRegistry.*          Wave catalogue and GVV model compiler
+│   ├── TermEvaluator.*         CUDA F, coefficient, intensity, component path
+│   ├── SampleLoader.*          ROOT-to-device sample boundary
+│   ├── OmegaWidthTable.*       omega three-body running-width table
+│   ├── ParameterMapping.*      flat fit vector <-> GVV physical state
+│   ├── FitLikelihood.*         fit-time process orchestration
+│   └── ProjectionWriter.*      process-specific projection ROOT contract
+├── post/
+│   ├── calculation/            numerical efficiencies/fractions/errors
+│   └── plotting/               projection-only ROOT figures and moments
+├── tests/                      host/compile checks and explicit GPU regressions
+├── Makefile                    Fit-default build graph
+├── submit_fit.sh               Fit-only Slurm submission/worker
+└── submit_post.sh              Post-Calculation-only Slurm submission/worker
 ```
 
-the total intensity is the exact contraction `sum B_w B_v* F_wv`. No JPC or
-coherence-class cross term is dropped. Term-level coefficients remain
-available only where Projection or Post Calculation needs a physical
-component decomposition.
+Generated inputs, binaries, logs, numerical outputs, and figures are not part
+of the source tree contract even though their directories may exist locally.
 
-### Fit
+## 4. Dependency direction and ownership
 
-- `FitConfig` reads the run inputs, minimizer policy, and output tag.
-- `FitEngine` is a process-neutral multistart TMinuit driver.
-- `FitOutput` writes the complete human-readable diagnostic report.
-- `FitState` writes and reads the machine-readable fitted parameter vector and
-  covariance used by downstream numerical tools.
+### 4.1 Source dependency direction
 
-The fit engine receives runtime vectors and contains no fixed Resonance, Term,
-Wave, or parameter count.
+```text
+framework/math
+      |
+      v
+framework/tensors
+      |
+      +-----------> framework/dynamics
+      |                       |
+      +-----------------------+
+                              v
+                    process event/Waves/dynamics
+                              |
+                              v
+                    process CUDA evaluation
+                         /             \
+                        v               v
+                 FitLikelihood    Post ComponentEvaluator
+                        |               |
+                        v               v
+                 app/Fit.cu       PostCalculation.cu
+```
 
-## Process layer
+The generic model, likelihood, amplitude, and fit services sit alongside the
+low-level math/dynamics stack and are called by process/application code. The
+critical prohibition is the reverse edge: `framework/` must never include or
+name `process/`.
 
-### Event and sample boundary
+### 4.2 Configuration and runtime data flow
 
-`ProcessEvent.cuh` represents the seven final particles on the device.
-`ProcessKinematics.cuh` defines omega currents and GVV-specific constants.
-`SampleLoader` is the only mapping from the ROOT `Pwa` tree to host/device event
-arrays. A different final state replaces these modules.
+```text
+config/model.json
+        |
+        v
+ModelDefinition --canonical signature--> FitState compatibility key
+        |
+        v
+GVVCompiledModel <---- ParameterMapping <---- flat Minuit vector
+        |
+        +---------------> device Resonances/Terms/couplings
+                                |
+ROOT Pwa trees -> GVVSample -> cached Wave Gram matrices -> intensities
+                                                        |
+config/fit.json -> FitEngine objective <----------------+
+        |
+        +--> fit_result-<tag>.txt      human diagnostics
+        +--> fit_state-<tag>.json      Post Calculation bridge
+        +--> projection-<tag>.root     Post Plotting bridge
+        +--> fit-<tag>.log             execution record
+```
 
-### Complete Waves
+### 4.3 Fit and downstream ownership
 
-Each file under `process/waves/` is one complete process Wave:
+| Concern | Owner | Must not own |
+|---|---|---|
+| JSON model syntax | `framework/model` | GVV Wave dispatch or propagator string policy |
+| GVV model semantics | `process/WaveRegistry` | Minuit implementation |
+| Flat parameter order | `process/ParameterMapping` | sample loading or output schemas |
+| Event/Wave numerical evaluation | `process/TermEvaluator` | model-string parsing |
+| Probability arithmetic | `framework/likelihood` | ROOT I/O or GVV kinematics |
+| Fit sample orchestration | `process/FitLikelihood` | MIGRAD policy or ROOT serialization |
+| Multistart minimization | `framework/fit/FitEngine` | Resonance/Wave/Term types |
+| User fit report | `framework/fit/FitOutput` plus a process detail callback | machine consumption |
+| Machine fit handoff | `framework/fit/FitState` | the full process model |
+| Projection ROOT schema | `process/ProjectionWriter` | minimization |
+| Post numerical observables | `post/calculation` | plot styling |
+| Projection figures | `post/plotting` | model reconstruction or truth-MC integration |
 
-- `Scalar00.cuh`: existing `0++(00)` basis;
-- `Scalar22.cuh`: existing `0++(22)` basis;
-- `Pseudoscalar11.cuh`: existing `0-+(11)` basis.
+## 5. Model objects and runtime objects
 
-`WaveRegistry.cuh` owns the single device dispatch. `WaveRegistry.cu` owns the
-single host registration of stable ID, JPC, label, coherence class, and device
-type. `ProcessAmplitude.cuh` applies the common photon projector and Wave-pair
-contraction. Adding a Wave normally does not modify this common contraction.
+Understanding the distinction between persistent configuration and dense
+runtime objects is essential when extending the project.
 
-### Resonance, Wave, and Term
+### 5.1 Persistent model: `ModelDefinition`
 
-- A Resonance is a propagator instance and its physical parameters.
-- A Wave is a complete covariant-tensor basis for the process.
-- A Term joins one Resonance, one Wave, and one complex coupling.
+`framework/model/Model.*` parses the complete JSON document into generic
+objects:
 
-`gvv_compile_model` converts stable IDs into dense active runtime arrays.
-Inactive Terms are omitted before Resonance compilation, parameter layout, GPU
-allocation, fit reporting, and projection maps. A Resonance referenced only by
-inactive Terms therefore contributes no free propagator parameter.
+- `ResonanceDefinition`: stable ID, label, propagator string, and named
+  parameter definitions;
+- `TermDefinition`: stable ID, label, Wave ID, active flag, coupling policy,
+  and an opaque canonical JSON `dynamics` object;
+- `ModelDefinition`: process ID, metadata, all Resonances, all Terms, and the
+  canonicalized document.
 
-### Fit objective and parameter mapping
+At this level, process dynamics are intentionally opaque. The generic parser
+can validate IDs, coupling syntax, parameter transforms, and the global
+scale-and-phase convention without knowing what `gvv_x_to_omega_omega`
+means.
 
-`ParameterMapping` is the only conversion between a generic Minuit vector and
-the mutable GVV model. It builds the ordered free-parameter layout, applies a
-vector to couplings/propagators, and writes the active physical model section
-of the human report.
+The canonical JSON is hashed with deterministic FNV-1a. This signature is a
+compatibility key, not a security hash: Post Calculation uses it to reject a
+fit state paired with a different model document.
 
-`FitLikelihood` owns sample preparation, cached Wave matrices, the omega width
-table, device model synchronization, normalization, and signed likelihood
-evaluation. It contains no minimizer policy and no ROOT output schema.
+### 5.2 Active process model: `GVVCompiledModel`
 
-`ProjectionWriter` is the process-specific Fit-to-Plotting bridge. It owns the
-projection ROOT trees, derived GVV observables, fitted weights, dynamic
-component/group maps, and provenance. A future final state replaces this
-writer along with the process layer; generic fit output remains reusable.
+`gvv_compile_model` converts the persistent model into arrays suitable for the
+current process and GPU kernels:
 
-Projection computes every packed upper-triangle Term pair directly in bounded
-batches. Diagonal entries are individual intensities, off-diagonal entries are
-the complete signed interference, and their sum closes to the total intensity.
-All components use the same full-model normalization. The ROOT contract keeps
-the complete symmetric per-event component matrix while avoiding an
-event-count-sized pair workspace in memory.
+- active propagator descriptors in dense Resonance order;
+- active `TermSpec` entries containing a Resonance index and a dense Wave
+  slot;
+- active complex couplings in Term order;
+- a unique list of registered Wave types used by the active Terms;
+- host metadata that preserves stable IDs, labels, JPC, coherence class,
+  propagator names, and coupling policies.
 
-## Output contracts
+Inactive Terms are skipped before dependencies are compiled. Consequently, a
+Resonance referenced only by inactive Terms is absent from GPU arrays, Minuit
+parameters, reports, component maps, and Post Calculation. This makes
+`"active": false` independent of propagator type and independent of whether
+that unused propagator would have a free parameter.
 
-One fit tag creates four products:
+### 5.3 Dense Wave slots versus registered Wave types
 
-- `fit_result-<tag>.txt`: human diagnostics only;
-- `fit_state-<tag>.json`: ordered free state, covariance, and model signature;
-- `projection-<tag>.root`: selected data/background plus weighted accepted MC;
-- `fit-<tag>.log`: complete executable/Slurm output.
+A registered Wave has a stable user ID and a device enum value. A particular
+model may use only a subset. The compiler assigns that subset dense slots
+`0..W-1`, which define the dimensions of every cached event Gram matrix.
 
-The separate covariance text file was removed. Its information appears in both
-the human report and the machine state, each for its intended consumer.
+Several Terms may share the same dense Wave slot. Their propagators and
+couplings remain distinct, but their fully evaluated coefficients can be
+summed before the final coherent contraction. This distinction is the basis of
+the optimized fit path.
 
-Post Calculation loads `fit_state`, the exact `model.json`, generated truth MC,
-and selected normalization MC. It rejects a model-signature or parameter-order
-mismatch. Pair components are reduced on the GPU in event batches, so only one
-integral per packed Term pair is transferred to the host. Post Plotting loads
-only projection schema version 2 and discovers the current Terms, coherent
-groups, and signed background samples from its maps.
+### 5.4 Flat fit state and physical state
 
-## End-to-end fit flow
+The generic `FitEngine` accepts only ordered `FitParameterSpec` entries and a
+callback. `ParameterMapping` creates those entries from the compiled process
+model and records a binding back to one of:
 
-1. `FitConfig` reads `fit.json`; `Model` reads `model.json`.
-2. `WaveRegistry` validates and compiles only active Terms and Resonances.
-3. `SampleLoader` loads data, accepted normalization MC, and signed backgrounds.
-4. `TermEvaluator` caches parameter-independent Wave contractions.
-5. `ParameterMapping` generates the exact free Minuit vector.
-6. Each objective call applies that vector, aggregates complete Term
-   coefficients by exact Wave slot, integrates accepted MC, and evaluates data
-   plus configured signed background samples.
-7. `FitEngine` runs nominal and randomized starts, applies MIGRAD/HESSE, and
-   chooses the lowest accepted NLL.
-8. The final state is written independently to the report, state JSON, and
-   projection ROOT contracts.
+- a coupling real part;
+- a coupling imaginary part;
+- the log magnitude of a positive-real phase reference;
+- a log S/D width ratio;
+- a log effective omega-omega Flatte ratio.
 
-## Reading guide
+Fixed parameters remain in `model.json` and in the human report but do not
+appear in the flat Minuit vector. The fit-state JSON therefore cannot recreate
+the amplitude by itself; Post Calculation must also read the exact model JSON.
 
-| File | Primary responsibility |
+### 5.5 Event sample: `GVVSample`
+
+Each sample owns:
+
+- host momentum arrays for seven final particles;
+- corresponding managed device arrays, stored internally as
+  `[event][px,py,pz,E]`;
+- the parameter-independent Wave Gram matrix
+  `[event][active_wave][active_wave]`;
+- an `[event][active_wave]` coefficient workspace for the fit hot path;
+- an `[event]` intensity buffer.
+
+The sample object does not know whether it represents data, normalization MC,
+a signed background sample, generated truth MC, or selected MC. Fit and Post
+assign those roles.
+
+## 6. Amplitude Fit system
+
+### 6.1 What enters a fit
+
+`config/fit.json` selects one `model.json`, selected data, accepted
+normalization MC, zero or more signed background samples, multistart settings,
+and a common output tag. `app/Fit.cu` loads these inputs and supplies the fixed
+GVV ROOT branch contract:
+
+```text
+tree: Pwa
+p4_pip1 p4_pim1 p4_pi01 p4_pip2 p4_pim2 p4_pi02 p4_gam
+storage order: (px, py, pz, E)
+```
+
+No truth MC enters the likelihood fit.
+
+### 6.2 From seven particles to a process event
+
+For each event, `TermEvaluator` converts the stored ROOT ordering into device
+four-vectors with component order `(E, px, py, pz)`. `GVVEventKinematics`
+then constructs
+
+```text
+omega1 = pi01 + pip1 + pim1
+omega2 = pi02 + pip2 + pim2
+X      = omega1 + omega2
+psi    = X + gamma
+q_omega(relative) = omega1 - omega2
+```
+
+Each omega decay current is factorized into a real geometric pseudovector and
+a complex coherent rho-isobar factor:
+
+```text
+E_omega^mu = epsilon^mu_{nu lambda sigma}
+             p(pi+)^nu p(pi-)^lambda p(pi0)^sigma
+
+rho_factor = f_rho(pi+ pi-) + f_rho(pi+ pi0) + f_rho(pi- pi0)
+```
+
+Each `f_rho` contains the rho running-width propagator and the two P-wave
+barrier factors. The same omega decay model is common to every production
+Wave, which allows the real geometric tensors to form the cached Gram matrix
+while the common complex factor stays in each Term coefficient.
+
+### 6.3 Complete Waves
+
+A complete Wave function returns the GVV covariant numerator tensor for one
+registered basis. The current catalogue is:
+
+| Stable Wave ID | Basis | Source |
+|---|---|---|
+| `gvv.scalar_00` | `0++(00)` | `process/waves/Scalar00.cuh` |
+| `gvv.scalar_22` | `0++(22)` | `process/waves/Scalar22.cuh` |
+| `gvv.pseudoscalar_11` | `0-+(11)` | `process/waves/Pseudoscalar11.cuh` |
+
+`Scalar22` is the scalar basis with orbital/spin labels `(22)`; it is not a
+spin-two `2++` Wave.
+
+The Wave contains production and decay angular tensors and the required
+barrier factors. It does **not** contain the Resonance propagator or coupling.
+That separation lets many Resonances reuse the same Wave.
+
+### 6.4 Cached Wave Gram matrix
+
+`ProcessAmplitude.cuh` supplies the process-wide photon projector and the
+contraction convention. For every event and active Wave pair, preparation
+computes
+
+```text
+F_wv(event) = polarization contraction of U_w(event) and U_v(event).
+```
+
+`F` depends on event kinematics and the registered Wave tensors, but not on
+fit couplings or Resonance parameters. It is therefore built once per sample
+before Minuit starts and reused in every objective call.
+
+The code evaluates all `w,v` entries. It does not suppress entries because of
+JPC or coherence-class labels.
+
+### 6.5 Term coefficient and total intensity
+
+For active Term `t`, let `r(t)` be its Resonance and `w(t)` its dense Wave
+slot. The event-dependent complex coefficient is
+
+```text
+C_t(event; theta) = c_t(theta)
+                    R_r(t)(s_X; theta)
+                    rho_factor(omega1)
+                    rho_factor(omega2)
+                    BW_omega(s_omega1)
+                    BW_omega(s_omega2).
+```
+
+`R` is selected by the compiled propagator descriptor. The generic
+two-body-running-width propagator receives its physical `orbital_l` explicitly;
+it does not infer the width power from the Wave ID. The omega propagators use a
+prebuilt, interpolated three-pion running-width table normalized at the omega
+pole.
+
+After every Term coefficient has been fully evaluated, Terms that share the
+same complete Wave are aggregated:
+
+```text
+B_w(event; theta) = sum over t with w(t)=w of C_t(event; theta).
+```
+
+The total intensity is then
+
+```text
+I(event; theta) = sum over w,v
+                  Re[B_w(event; theta) B_v*(event; theta) F_wv(event)].
+```
+
+This is algebraically identical to the direct Term-by-Term contraction
+
+```text
+sum over t,u Re[C_t C_u* F_w(t),w(u)],
+```
+
+but costs `O(T + W^2)` per event instead of `O(T^2)` when many Resonances
+reuse a small Wave basis. Term-level coefficients are still evaluated in the
+Projection and Post component paths, where individual diagonal and
+interference contributions are physically required.
+
+Small negative intensities within the numerical tolerance of zero are set to
+zero by the generic contraction. Strictly negative or non-finite intensities
+are rejected by the likelihood boundary.
+
+### 6.6 Accepted-MC normalization and signed likelihood
+
+For `N_MC` accepted normalization-MC events, the Monte Carlo normalization is
+
+```text
+N(theta) = (1/N_MC) sum_j I(MC_j; theta).
+```
+
+For a sample `s` with configured coefficient `alpha_s`, its contribution is
+
+```text
+ln L_s(theta) = alpha_s sum_i [ln I(event_i; theta) - ln N(theta)].
+```
+
+Data always uses `alpha_data = +1`. Each configured background sample uses its
+own signed coefficient. The nominal sideband prescription, for example, is
+represented entirely by `-0.5` and `+0.25` in `fit.json`; there is no
+hard-coded SB1/SB2 branch in the likelihood.
+
+The effective log likelihood is
+
+```text
+ln L_eff = ln L_data + sum_backgrounds ln L_background,
+NLL      = -ln L_eff.
+```
+
+`FitLikelihood` synchronizes the current host couplings and propagator
+parameters to the device, evaluates normalization MC once per objective call,
+then evaluates data and every signed background with that same normalization.
+
+### 6.7 Reference conventions
+
+The amplitude has redundant overall phase and scale directions. The current
+contract resolves them in two related layers:
+
+- the generic model requires exactly one active fixed
+  `scale_and_phase` reference in the complete model;
+- the GVV compiler requires exactly one reference coupling in every registered
+  `coherence_class` represented by active Terms.
+
+A fixed scale-and-phase reference must be nonzero. Other coherence classes use
+a positive-real coupling with free log magnitude to fix only their phase.
+
+`coherence_class` is a physical phase-convention declaration, not a plotting
+group and not a numerical mask. A new Wave belongs to an existing class if it
+can physically interfere with members of that class. A distinct class is
+appropriate only when the cross terms are structurally zero under the adopted
+polarization/tensor construction. The evaluator still calculates the cross
+entries, which makes an incorrect assumption visible to numerical tests.
+
+JPC is separate metadata. Projection and Post group Terms by the `jpc` string,
+while phase-reference validation uses `coherence_class`.
+
+### 6.8 Parameter layout and multistart Minuit
+
+`ParameterMapping` creates a deterministic ordered free-parameter vector:
+
+1. active Term coupling coordinates in active Term order;
+2. supported free propagator-ratio coordinates in active Resonance order.
+
+Ordinary complex couplings use adjacent real and imaginary coordinates. A
+positive-real phase reference uses a log-magnitude coordinate. Supported
+positive propagator ratios also use log coordinates, so their physical values
+remain positive.
+
+`FitEngine` is process-neutral. Start zero uses the nominal model values.
+Later starts randomize only entries marked by the process mapping: complex
+couplings receive a random log-uniform magnitude and uniform phase, and
+positive-real reference magnitudes receive a random log magnitude. Minuit runs
+MIGRAD and HESSE for each start.
+
+An attempt is accepted only when the MIGRAD/HESSE statuses, covariance status,
+EDM, parameter values, errors, and covariance pass the generic fit criteria.
+The accepted attempt with the lowest NLL is selected; deterministic covariance,
+EDM, and start-index tie breakers are used for numerically equal minima.
+
+### 6.9 Fit output contracts
+
+One output tag names four independent products:
+
+| Product | Intended consumer | Contract |
+|---|---|---|
+| `results/fit_result-<tag>.txt` | Human analyst | Complete readable diagnostics; never parsed by project code |
+| `results/fit_state-<tag>.json` | Post Calculation | Ordered free values, errors, bounds, covariance, best-fit diagnostics, model signature |
+| `results/projection-<tag>.root` | Post Plotting | Selected events, fitted accepted-MC weights, signed backgrounds, dynamic maps, provenance |
+| `runlog/fit-<tag>.log` | Human/operator | Full Slurm worker and executable output |
+
+Reusing a tag overwrites the existing products. The fit does not write copies
+of the input configuration.
+
+The text report includes every multistart attempt, best-fit diagnostics, the
+ordered free parameters, active fixed and free physical model values, and full
+covariance and correlation matrices. Its presentation can evolve without
+changing software consumers.
+
+The fit-state JSON contains only the generic fitted state. It deliberately
+does not duplicate the complete model. Downstream reconstruction therefore
+requires both the state and the exact model document and verifies their
+signature and parameter order.
+
+### 6.10 Projection ROOT contract
+
+`ProjectionWriter` is part of the GVV process boundary. It computes derived
+GVV observables on the host and serializes projection schema version 2.
+
+| Tree | Contents |
 |---|---|
-| `app/Fit.cu` | Application glue for configuration, fit, and outputs |
-| `framework/model/Model.*` | Generic model parser and signature |
-| `process/WaveRegistry.*` | GVV Wave registry and active model compiler |
-| `process/waves/*.cuh` | Complete registered GVV Waves |
-| `process/ProcessAmplitude.cuh` | Common GVV polarization and Wave contraction |
-| `process/TermEvaluator.*` | CUDA Term coefficients and coherent intensity |
-| `process/SampleLoader.*` | ROOT-to-GPU GVV sample boundary |
-| `process/ParameterMapping.*` | Minuit-vector to physical-state mapping |
-| `process/FitLikelihood.*` | GVV sample/GPU likelihood orchestration |
-| `process/ProjectionWriter.*` | Projection ROOT schema and serialization |
-| `framework/fit/FitEngine.*` | Generic multistart minimization |
-| `framework/fit/FitOutput.*` | Human report |
-| `framework/fit/FitState.*` | Machine Fit-to-Post state |
-| `post/calculation/*` | Truth/selected MC integration and uncertainty propagation |
-| `post/plotting/*` | Projection-only ROOT plotting |
+| `MC` | Accepted normalization-MC event kinematics, total fitted `weight`, coherent `weight_group`, full symmetric `weight_component` matrix |
+| `data` | Selected data event kinematics and derived observables |
+| `bg` | All configured background events with zero-based `background_index` and signed `weight_bg` |
+| `component_map` | Term index, IDs/labels, Resonance, Wave, Wave label, JPC |
+| `group_map` | Dynamic JPC group index and display label |
+| `background_map` | Dynamic background label, size, likelihood coefficient, projection weight |
+| `metadata` | Schema, tag, model signature, counts, effective yield, best fit, closure diagnostic |
 
-## Reusing the framework for another final state
+The fitted accepted-MC scale is
 
-A future project should reuse `framework/` and replace the process event,
-kinematics, sample mapping, complete Waves, Wave registry, Term compiler and
-evaluator, process likelihood wrapper, and projection writer. It should not
-copy or rewrite the generic tensor blocks, propagators, likelihood arithmetic,
-multistart driver, fit report, or fitted-state JSON contract unless their
-generic semantics genuinely change.
+```text
+projection_scale = effective_signal_yield / sum_MC I,
+
+effective_signal_yield = N_data + sum_b alpha_b N_b.
+```
+
+Background events are plotted with `weight_bg = -alpha_b`. Thus the total fit
+curve is the fitted signal projection plus the explicitly plotted background
+contribution.
+
+Term-pair components are calculated directly in bounded event batches. A
+packed upper triangle stores each diagonal `K_ii` and each complete signed
+off-diagonal interference `K_ij + K_ji`. The writer verifies that the packed
+upper-triangle sum closes to the total intensity event by event.
+
+For external convenience, `weight_component` is written as a symmetric
+`T x T` vector: the complete off-diagonal pair value is mirrored into both
+`[i,j]` and `[j,i]`. Reconstruct the total using the upper triangle only;
+naively summing the entire symmetric matrix double-counts interference.
+
+`weight_group` contains only Term pairs whose two Terms share the same JPC
+group. Cross-group interference remains in the total model and is not assigned
+to either individual group curve. All component and group weights use the same
+full-model normalization.
+
+### 6.11 Fit execution workflow
+
+```text
+1. Load and validate fit.json.
+2. Load and generically validate model.json.
+3. Compile active GVV Resonances, Terms, Wave slots, and coupling policies.
+4. Load data, normalization MC, and configured signed backgrounds.
+5. Build the omega width table and upload the compiled model.
+6. Upload every sample and cache all active Wave Gram matrices.
+7. Build the deterministic free-parameter layout.
+8. For every Minuit call:
+     a. apply the flat vector to the host process model;
+     b. synchronize mutable state to the device;
+     c. evaluate normalization MC and its normalization;
+     d. evaluate data and signed background contributions;
+     e. return the NLL.
+9. Run all configured starts and select the best accepted solution.
+10. Reapply the selected parameters.
+11. Write the human report and machine fit state independently.
+12. Evaluate bounded-batch Term components and write the projection ROOT file.
+```
+
+Compilation happens on the login node, but numerical execution requires a GPU
+allocation. `submit_fit.sh` validates immutable paths, submits a Slurm job, and
+executes `Fit.exe` through `srun` on the assigned GPU node. It does not invoke
+Post Calculation.
+
+## 7. Post-processing system
+
+Post processing is split into two modules with different inputs and different
+physics responsibilities:
+
+```text
+fit_state JSON + exact model JSON + truth MC + selected MC
+                         |
+                         v
+                  Post Calculation
+                  (GPU integration)
+                         |
+                         +--> post_result TXT/ROOT + fit-fraction LaTeX
+
+projection ROOT from Fit
+         |
+         v
+    Post Plotting
+    (ROOT histograms)
+         |
+         +--> PDF/EPS figures
+```
+
+Neither downstream module reads `fit_result-<tag>.txt`. Post Calculation does
+not read the projection file, and Post Plotting does not reconstruct the model
+or read truth MC.
+
+### 7.1 Post Calculation inputs and compatibility checks
+
+`Post.exe` requires:
+
+1. `fit_state-<tag>.json` from the selected fit;
+2. the exact `model.json` used for that fit;
+3. generated truth MC before selection;
+4. selected normalization MC from the same unweighted production.
+
+Both MC files use the same GVV `Pwa` branch contract as fit samples. The
+selected sample must represent the selected subset of the truth production;
+otherwise the selected/truth ratios are not efficiencies.
+
+Before numerical work, Post Calculation:
+
+- validates the fitted-state JSON structure, finite values, bounds, and
+  covariance symmetry;
+- recompiles the GVV model;
+- recomputes and compares the model signature;
+- rebuilds the parameter mapping and compares every parameter name in order.
+
+This prevents silently applying a covariance or parameter vector to a changed
+model.
+
+### 7.2 Component integration
+
+For each truth and selected event, the Term-level path evaluates all
+coefficients and every packed upper-triangle pair. The GPU reduces each pair
+directly over bounded event batches. Host memory therefore retains only one
+truth and one selected integral per pair, rather than an
+`N_event x N_pair` matrix.
+
+The integrated pair sum is independently checked against the optimized total
+PDF integral for both samples. This is the numerical bridge between the
+component representation and the fit representation.
+
+### 7.3 Post observables
+
+Let `T_i` be a diagonal truth integral, `S_i` its selected integral, `T_ij` a
+complete signed interference integral, and `T_total` the coherent truth sum.
+The output includes:
+
+- Term fit fraction: `T_i / T_total`;
+- Term component efficiency: `S_i / T_i`;
+- pair interference fraction: `T_ij / T_total`;
+- total coherent efficiency: `S_total / T_total`;
+- JPC-group fit fraction and efficiency, including all within-group pairs;
+- cross-JPC-group interference fractions.
+
+The sum of all diagonal fractions and all pair interference fractions must
+close to one. The sum of all group fractions and cross-group interference
+fractions must also close to one.
+
+An active ordinary Term whose fitted coupling is exactly zero has a zero fit
+fraction but an undefined component efficiency `0/0`. The current code rejects
+that observable instead of assigning an artificial value. Move a reference
+before testing it against zero, but note that an ordinary non-reference Term
+can still reach this mathematical edge case.
+
+### 7.4 Covariance propagation
+
+Post Calculation reevaluates all observables at finite parameter offsets to
+construct a numerical Jacobian `J`. It uses a central step when the requested
+step fits on both sides of a bound, otherwise a resolvable one-sided step. The
+fit covariance `V` is propagated as
+
+```text
+V_observable = J V J^T.
+```
+
+The reported errors therefore include fitted-parameter covariance only. They
+do not include finite-MC integration uncertainty or systematic uncertainty.
+
+### 7.5 Post Calculation outputs and workflow
+
+`Post.exe` writes:
+
+| Product | Contents |
+|---|---|
+| `post/calculation/results/post_result-<tag>.txt` | readable observable table, integrals, and closure values |
+| `post/calculation/results/post_result-<tag>.root` | observable tree, metadata, covariance, and correlation matrices |
+| `post/calculation/results/fit_fractions-<tag>.tex` | compact fit-fraction table |
+| `runlog/post-<tag>.log` | Slurm worker and executable output |
+
+`submit_post.sh` owns only this numerical workflow. It checks the four inputs,
+submits a separate GPU Slurm job, runs `Post.exe` through `srun`, and verifies
+the tagged TXT and ROOT products. It never submits a fit or runs plotting.
+
+### 7.6 Post Plotting
+
+Plotting reads only projection schema version 2. It discovers the active Terms,
+JPC groups, and configured backgrounds from the map trees; it does not compile
+a nominal resonance list.
+
+The common plotting utilities:
+
+- bind the dynamic ROOT branches;
+- build data, signed-background, total-fit, group, and optional diagonal-Term
+  histograms;
+- use exchange-symmetric filling for observables with interchangeable omegas;
+- calculate simple binned diagnostic chi-square values;
+- apply the project plotting style.
+
+The angular-moment utility produces exchange-symmetrized even Legendre moments
+and a separate ordered-omega odd-moment diagnostic. The latter tests
+pairing/order bias and is not a label-independent observable of two identical
+omegas.
+
+`post/plotting/draw.sh` runs the five ROOT macros and writes PDF/EPS files under
+`post/plotting/results/`. It needs no GPU and submits no Slurm job.
+
+## 8. Extension boundaries
+
+### 8.1 Add, remove, or disable a Resonance on an existing Wave
+
+This is a configuration-only operation.
+
+1. Add the Resonance object to `config/model.json` with a supported propagator
+   and its exact parameter contract.
+2. Add a Term that references the Resonance in `dynamics.resonance` and selects
+   an existing registered Wave ID.
+3. Select the coupling policy and preserve the reference rules.
+4. To remove a contribution temporarily, set its Term to `"active": false`.
+5. Run the model/registry tests, then perform the fit comparison appropriate to
+   the physics study.
+
+No source array, total count, parameter map, Projection map, Post loop, or plot
+legend should be edited. Completely deleting a contribution means deleting
+its Term and, if no other active Term uses it, its Resonance definition.
+
+### 8.2 Add a new GVV Wave
+
+A new complete tensor basis is a process-code extension.
+
+1. Derive the complete production-and-decay numerator with explicit Lorentz,
+   parity, Bose-symmetry, spin-coupling, and barrier-factor conventions.
+2. Add any genuinely reusable missing primitive to `framework/`; keep
+   GVV-specific constructions in `process/`.
+3. Implement one pure device function in a new
+   `process/waves/<DescriptiveName>.cuh` file. It receives
+   `GVVEventKinematics` and optional barrier parameters and contains no
+   Resonance ID, propagator, coupling, or model-wide index.
+4. Add one enum value and one dispatch branch in `WaveRegistry.cuh`.
+5. Add one host registry record in `WaveRegistry.cu`: stable ID, JPC, LaTeX
+   label, physically justified coherence class, and device type.
+6. Extend registry/model compilation tests.
+7. Extend GPU numerical tests for finiteness, transversality/projector
+   identities, required Bose symmetry, Gram-matrix symmetry and positivity,
+   nonzero diagonal support, and optimized/direct intensity equivalence.
+8. Only then reference the new Wave ID from `model.json` and add Resonance
+   Terms that use it.
+
+Normally `ProcessAmplitude.cuh`, `FitLikelihood`, `ParameterMapping`,
+`ProjectionWriter`, Post Calculation, and plotting require no edit. They are
+already dimensioned by the compiled model. A change to
+`ProcessAmplitude.cuh` is justified only if the process-wide polarization sum
+or Wave-pair contraction itself changes.
+
+### 8.3 Add a reusable propagator
+
+Propagator formulae and device dispatch are framework concerns, but the
+accepted JSON name and parameter policy remain a process-compiler concern.
+
+1. Implement the identity-free numerical formula in
+   `framework/dynamics/Propagators.cuh`.
+2. Extend `PropagatorModel`, `PropagatorParameters`, and
+   `evaluate_propagator` only with the numerical fields the formula needs.
+3. Define the exact GVV JSON parameter contract and validation in
+   `WaveRegistry.cu`.
+4. If a parameter is fitted, add its process binding in `ParameterMapping`.
+5. Add formula, compiler, inactive-Term, and fit-state-order tests.
+
+Do not bind a generic propagator to a Wave ID. Physical quantities such as
+orbital angular momentum must be explicit propagator parameters when they
+control the denominator.
+
+### 8.4 Reuse the project for a different final state
+
+Changing from GVV to another topology is a project conversion, not adding a
+second channel inside the current runtime model. The expected boundary is:
+
+| Reuse directly | Replace for the new process | Review/adapt at application boundary |
+|---|---|---|
+| `framework/math` | process event representation | `app/Fit.cu` assembly and branch contract |
+| `framework/tensors` | process kinematics/currents/constants | model `process` identifier and dynamics JSON |
+| generic parts of `framework/dynamics` | complete Wave files and registry | supported propagator-to-JSON compiler policy |
+| `framework/amplitude` pair algebra | Term coefficient/evaluation kernels | process parameter mapping for new free quantities |
+| `framework/likelihood` | ROOT sample loader/schema | projection observables and ROOT schema |
+| `framework/model` | process model compiler | Post observable definitions |
+| `framework/fit` | process likelihood orchestration | submission names/paths and user documentation |
+| fit-state JSON semantics | process-specific Post evaluator and plotting | tests and physics validation suite |
+
+The new process should not copy and rename generic four-vector, tensor,
+propagator, likelihood, Minuit, report, or fitted-state implementations. It
+should supply a new explicit process layer with the same small interfaces. If
+the new topology needs a generally useful primitive, that primitive belongs in
+`framework/`; a full process amplitude never does.
+
+One current presentation detail still needs adaptation during such a
+conversion: `framework/fit/FitOutput.cpp` hard-codes the GVV report heading.
+The report structure, process-detail callback, and fitted-state code remain
+reusable, but that heading must be made process-neutral or replaced for the
+new channel.
+
+## 9. Scaling and memory model
+
+Let `N` be sample events, `T` active Terms, `W` active complete Waves, and
+`P=T(T+1)/2` packed Term pairs.
+
+| Operation | Work/memory characteristic |
+|---|---|
+| F-matrix preparation | `O(N W^2)` once per sample; persistent `N W^2` doubles |
+| Fit coefficient/intensity call | `O(N(T + W^2))`; persistent `N W` complex workspace and `N` intensities |
+| Projection components | `O(N P)` in bounded batches; external per-event `T x T` ROOT vector |
+| Post component integration | `O(N P)` GPU reduction in batches; host retains `O(P)` integrals |
+| Post covariance propagation | central/one-sided reevaluations proportional to the number of free parameters |
+
+This design optimizes the repeated Minuit path for the common use case of many
+Resonances on relatively few Waves while retaining exact Term decomposition
+only in downstream work.
+
+## 10. Maintenance checklist
+
+Before accepting an architecture change, verify:
+
+- no `framework/` file includes `process/`;
+- no new fixed model-wide Resonance, Term, Wave, or parameter count appears;
+- one user-visible mapping has one owner rather than parallel lists;
+- inactive Terms are filtered before their Resonance and parameters are
+  compiled;
+- complete Waves contain no Resonance propagator or coupling;
+- denominator angular-momentum dependence is explicit and physically correct;
+- optimized total intensity closes against direct Term-pair components;
+- fit-state reconstruction checks both model signature and parameter order;
+- projection maps remain dynamic when model content changes;
+- Fit and Post submission scripts remain independent;
+- GPU runtime tests are submitted through Slurm on an allocated GPU node, not
+  run on an IHEP login node.
+
+## 11. Further reading
+
+- [`WORKFLOW.md`](WORKFLOW.md): build, Fit submission, output inspection, and
+  both Post workflows.
+- [`CODE_REFERENCE.md`](CODE_REFERENCE.md): every production file and its
+  important internal blocks.
+- [`MODEL_CONFIGURATION.md`](MODEL_CONFIGURATION.md): exact `model.json`
+  contract and Resonance/Term editing procedures.
+- [`WAVE_DEVELOPMENT.md`](WAVE_DEVELOPMENT.md): concise new-Wave checklist.
+- [`../post/README.md`](../post/README.md): Post input/output usage.
+- [`REFACTOR_LOG.md`](REFACTOR_LOG.md): refactor decisions, verification, and
+  deferred support limits.
