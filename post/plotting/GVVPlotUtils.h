@@ -132,6 +132,7 @@ struct Branches {
     double delta_phi_decay_planes = 0.0;
     double weight = 1.0;
     double weight_bg = 1.0;
+    int background_index = -1;
     std::vector<double>* weight_group = nullptr;
     std::vector<double>* weight_component = nullptr;
 
@@ -166,7 +167,9 @@ struct Branches {
             tree->SetBranchAddress("weight_component", &weight_component);
         }
         if (is_background) {
+            RequireBranch(tree, "background_index");
             RequireBranch(tree, "weight_bg");
+            tree->SetBranchAddress("background_index", &background_index);
             tree->SetBranchAddress("weight_bg", &weight_bg);
         }
     }
@@ -282,6 +285,43 @@ inline std::vector<GroupInfo> ReadGroupMap(TFile& input)
             return first.index < second.index;
         });
     return result;
+}
+
+inline void ValidateProjectionContract(TFile& input)
+{
+    TTree* metadata = nullptr;
+    input.GetObject("metadata", metadata);
+    if (metadata == nullptr || metadata->GetEntries() != 1) {
+        throw std::runtime_error(
+            "projection file has no single-row metadata tree");
+    }
+    RequireBranch(metadata, "schema_version");
+    RequireBranch(metadata, "n_background_samples");
+    int schema_version = 0;
+    int number_background_samples = 0;
+    metadata->SetBranchAddress("schema_version", &schema_version);
+    metadata->SetBranchAddress(
+        "n_background_samples", &number_background_samples);
+    metadata->GetEntry(0);
+    if (schema_version != 2) {
+        throw std::runtime_error(
+            "unsupported projection schema version "
+            + std::to_string(schema_version));
+    }
+
+    TTree* background_map = nullptr;
+    input.GetObject("background_map", background_map);
+    if (background_map == nullptr) {
+        throw std::runtime_error("projection file has no background_map tree");
+    }
+    const char* required[] = {
+        "background_index", "label", "n_events",
+        "likelihood_coefficient", "projection_weight"};
+    for (const char* name : required) RequireBranch(background_map, name);
+    if (background_map->GetEntries() != number_background_samples) {
+        throw std::runtime_error(
+            "projection background_map size is inconsistent with metadata");
+    }
 }
 
 inline TH1D* NewHistogram(
@@ -471,6 +511,7 @@ inline void DrawProjection(
         throw std::runtime_error(
             std::string("cannot open projection file ") + input_file);
     }
+    ValidateProjectionContract(*input);
     TTree* data = nullptr;
     TTree* mc = nullptr;
     TTree* background = nullptr;

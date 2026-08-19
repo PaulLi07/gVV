@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 int main()
@@ -24,6 +25,17 @@ int main()
         std::cerr << "signed likelihood composition is wrong\n";
         return 2;
     }
+    const double extreme[] = {std::numeric_limits<double>::max()};
+    const double tiny_normalization = std::numeric_limits<double>::min();
+    const double stable = ctpwa::log_likelihood_contribution(
+        extreme, 1, tiny_normalization, 1.0);
+    const double stable_reference = std::log(extreme[0])
+                                    - std::log(tiny_normalization);
+    if (!std::isfinite(stable)
+        || std::fabs(stable - stable_reference) > 1.0e-12) {
+        std::cerr << "log-space likelihood arithmetic is unstable\n";
+        return 3;
+    }
     bool rejected = false;
     try {
         const double invalid[] = {0.0};
@@ -33,8 +45,8 @@ int main()
         rejected = true;
     }
     if (!rejected) {
-        std::cerr << "invalid PDF was not rejected\n";
-        return 3;
+        std::cerr << "invalid intensity was not rejected\n";
+        return 4;
     }
     std::cout << "Likelihood tests passed\n";
     return 0;

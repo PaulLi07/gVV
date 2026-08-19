@@ -38,7 +38,7 @@ GVVSample::GVVSample(const std::string& label)
     : label_(label),
       entries_(0),
       F_matrix_(nullptr),
-      term_coefficients_(nullptr),
+      wave_coefficients_(nullptr),
       amp2_(nullptr),
       number_active_waves_(0),
       number_terms_(0)
@@ -56,8 +56,8 @@ GVVSample::~GVVSample()
     if (F_matrix_ != nullptr) {
         cudaFree(F_matrix_);
     }
-    if (term_coefficients_ != nullptr) {
-        cudaFree(term_coefficients_);
+    if (wave_coefficients_ != nullptr) {
+        cudaFree(wave_coefficients_);
     }
     if (amp2_ != nullptr) {
         cudaFree(amp2_);
@@ -154,7 +154,7 @@ void GVVSample::UploadAndBuildF(
     if (entries_ <= 0) {
         throw std::runtime_error("cannot upload empty sample " + label_);
     }
-    if (F_matrix_ != nullptr || term_coefficients_ != nullptr
+    if (F_matrix_ != nullptr || wave_coefficients_ != nullptr
         || amp2_ != nullptr) {
         throw std::runtime_error("sample has already been prepared: " + label_);
     }
@@ -188,10 +188,10 @@ void GVVSample::UploadAndBuildF(
         "cudaMallocManaged GVV F matrix");
     check_cuda(
         cudaMallocManaged(
-            &term_coefficients_,
-            static_cast<std::size_t>(entries_) * number_terms_
+            &wave_coefficients_,
+            static_cast<std::size_t>(entries_) * number_active_waves_
                 * sizeof(DeviceComplex)),
-        "cudaMallocManaged GVV Term coefficient workspace");
+        "cudaMallocManaged GVV Wave coefficient workspace");
     check_cuda(
         cudaMallocManaged(
             &amp2_, static_cast<std::size_t>(entries_) * sizeof(double)),
@@ -255,9 +255,9 @@ const double* GVVSample::FMatrix() const
     return F_matrix_;
 }
 
-DeviceComplex* GVVSample::TermCoefficientBuffer()
+DeviceComplex* GVVSample::WaveCoefficientBuffer()
 {
-    return term_coefficients_;
+    return wave_coefficients_;
 }
 
 double* GVVSample::IntensityBuffer()

@@ -103,6 +103,21 @@ int main(int argc, char* argv[])
             })",
             "unknown field");
 
+        require_invalid(
+            R"({
+              "schema_version": 1,
+              "process": "test_process",
+              "resonances": [
+                {"id":"r","propagator":"nonresonant","parameters":{}}
+              ],
+              "terms": [{
+                "id":"t","wave":"test.wave",
+                "coupling":{"mode":"fixed_complex","reference":"scale_and_phase","initial":[0,0]},
+                "dynamics":{}
+              }]
+            })",
+            "reference amplitude must be nonzero");
+
         std::cout << "Runtime model-definition tests passed\n";
     } catch (const std::exception& error) {
         std::cerr << "Model-definition test failed: " << error.what() << '\n';

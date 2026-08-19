@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -165,9 +166,11 @@ ObservableSet build_observables(
         for (std::size_t second = first + 1; second < groups.size(); ++second) {
             const double truth = cross_group_sum(
                 components.truth, model, groups[first], groups[second]);
+            const double selected = cross_group_sum(
+                components.selected, model, groups[first], groups[second]);
             result.values.push_back({
                 "interference_group", groups[first] + "__" + groups[second],
-                -1, -1, truth / result.truth_total, 0.0, truth, 0.0});
+                -1, -1, truth / result.truth_total, 0.0, truth, selected});
             group_reconstruction += truth;
         }
     }
@@ -191,48 +194,87 @@ void propagate_errors(
         const double variance = fit.best.covariance[
             static_cast<std::size_t>(parameter) * n_parameters + parameter];
         const double sigma = std::sqrt(std::max(0.0, variance));
-        const double step = std::max(
+        const double requested_step = std::max(
             1.0e-5 * std::max(1.0, std::fabs(fit.best.values[parameter])),
             0.05 * sigma);
-        const bool use_minus = !binding.fit.has_lower_bound
-            || fit.best.values[parameter] - step > binding.fit.lower_bound;
-        const bool use_plus = !binding.fit.has_upper_bound
-            || fit.best.values[parameter] + step < binding.fit.upper_bound;
-        if (!use_minus && !use_plus) {
+        const double minus_room = binding.fit.has_lower_bound
+            ? fit.best.values[parameter] - binding.fit.lower_bound
+            : requested_step;
+        const double plus_room = binding.fit.has_upper_bound
+            ? binding.fit.upper_bound - fit.best.values[parameter]
+            : requested_step;
+        const bool full_minus = !binding.fit.has_lower_bound
+            || minus_room > requested_step;
+        const bool full_plus = !binding.fit.has_upper_bound
+            || plus_room > requested_step;
+        bool use_minus = false;
+        bool use_plus = false;
+        double minus_step = 0.0;
+        double plus_step = 0.0;
+        if (full_minus && full_plus) {
+            // Use a central difference only when the requested step fits on
+            // both sides. A nearly active bound must not collapse this step
+            // to a noise-dominated value.
+            use_minus = true;
+            use_plus = true;
+            minus_step = requested_step;
+            plus_step = requested_step;
+        } else if (full_plus) {
+            use_plus = true;
+            plus_step = requested_step;
+        } else if (full_minus) {
+            use_minus = true;
+            minus_step = requested_step;
+        } else if (plus_room >= minus_room && plus_room > 0.0) {
+            use_plus = true;
+            plus_step = 0.5 * plus_room;
+        } else if (minus_room > 0.0) {
+            use_minus = true;
+            minus_step = 0.5 * minus_room;
+        }
+        const double coordinate_scale = std::max(
+            1.0, std::fabs(fit.best.values[parameter]));
+        const double minimum_step = std::sqrt(
+            std::numeric_limits<double>::epsilon()) * coordinate_scale;
+        if ((!use_minus && !use_plus)
+            || (use_minus && minus_step <= minimum_step)
+            || (use_plus && plus_step <= minimum_step)) {
             throw std::runtime_error(
-                "cannot vary fit parameter inside its configured bounds");
+                "fit-parameter bounds leave no resolvable finite-difference step");
         }
 
         ObservableSet plus;
         ObservableSet minus;
         if (use_plus) {
             std::vector<double> values = fit.best.values;
-            values[parameter] += step;
+            values[parameter] += plus_step;
             plus = build_observables(evaluator.Evaluate(values), evaluator.Model());
         }
         if (use_minus) {
             std::vector<double> values = fit.best.values;
-            values[parameter] -= step;
+            values[parameter] -= minus_step;
             minus = build_observables(evaluator.Evaluate(values), evaluator.Model());
         }
         for (int observable = 0; observable < n_observables; ++observable) {
             double derivative = 0.0;
             if (use_plus && use_minus) {
                 derivative = (plus.values[observable].value
-                              - minus.values[observable].value) / (2.0 * step);
+                              - minus.values[observable].value)
+                             / (plus_step + minus_step);
             } else if (use_plus) {
                 derivative = (plus.values[observable].value
-                              - central.values[observable].value) / step;
+                              - central.values[observable].value) / plus_step;
             } else {
                 derivative = (central.values[observable].value
-                              - minus.values[observable].value) / step;
+                              - minus.values[observable].value) / minus_step;
             }
             gradients[static_cast<std::size_t>(observable) * n_parameters
                       + parameter] = derivative;
         }
         std::cout << "Post derivative " << parameter + 1 << '/'
                   << n_parameters << ": " << fit.parameters[parameter].name
-                  << " step=" << step << '\n';
+                  << " step(-,+)=(" << minus_step << ',' << plus_step
+                  << ")\n";
     }
 
     observable_covariance.assign(

@@ -27,10 +27,10 @@ public:
     void LoadNormalizationMC(const std::string& file_name);
     void LoadData(const std::string& file_name);
 
-    // likelihood_coefficient enters exactly as
+    // Each signed background sample enters exactly as
     //   lnL_eff += coefficient * sum_events ln(P).
-    // Therefore SB1=-0.5 and SB2=+0.25 implement the requested 2D sideband
-    // subtraction without introducing a background PDF.
+    // For example, coefficients -0.5 and +0.25 reproduce the nominal 2D
+    // sideband subtraction without introducing a background PDF.
     void AddBackground(
         const std::string& file_name,
         double likelihood_coefficient,
@@ -51,10 +51,12 @@ public:
     void PrintModelSummary() const;
 
     // Narrow read/evaluate interface used by ProjectionWriter. The writer
-    // sees process samples and intensities, but never device allocations or
-    // likelihood-internal synchronization details.
-    std::vector<double> EvaluateNormalizationMCIntensity(
-        const std::vector<DeviceComplex>& couplings);
+    // sees process samples and evaluated total/component intensities, but
+    // never device allocations or likelihood-internal synchronization.
+    std::vector<double> EvaluateNormalizationMCIntensity();
+    std::vector<double> EvaluateNormalizationMCComponentBatch(
+        int first_event,
+        int number_events);
     const GVVSample& NormalizationMCSample() const;
     const GVVSample& DataSample() const;
     std::size_t NumberBackgroundSamples() const;
@@ -72,6 +74,7 @@ private:
         const std::string& label) const;
     void UploadModel();
     void SynchronizeModel();
+    void EnsureComponentBatchCapacity(int number_events);
     double EvaluateSample(
         GVVSample& sample,
         double likelihood_coefficient,
@@ -88,6 +91,9 @@ private:
     ctpwa::PropagatorParameters* device_resonances_;
     TermSpec* device_terms_;
     DeviceComplex* device_couplings_;
+    DeviceComplex* component_coefficient_buffer_;
+    double* component_value_buffer_;
+    int component_batch_capacity_;
     bool prepared_;
 };
 

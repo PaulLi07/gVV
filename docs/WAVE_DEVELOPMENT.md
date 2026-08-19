@@ -20,6 +20,11 @@ may reuse one Wave.
 Add a missing generally useful block to `framework/` with its own test. Keep a
 GVV-only formula under `process/`.
 
+Do not embed a Resonance propagator in the Wave or infer a running-width
+orbital momentum from the Wave ID. The Wave defines the numerator tensor;
+`model.json` selects the Resonance denominator and its explicit physical
+partial-width model.
+
 ## 3. Implement one Wave file
 
 Create a descriptive `process/waves/*.cuh` file exposing a pure device
@@ -47,8 +52,11 @@ pair contraction. Change it only if those process-wide rules change.
 ## 5. Test before configuring
 
 Add tests for finite device evaluation, registry lookup, self/cross Wave
-contractions, and minimal model compilation. Then reference the new Wave ID in
-`model.json`.
+contractions, Bose symmetry where required, tensor transversality, and minimal
+model compilation. Extend the explicit `make check-gpu` suite so the Wave Gram
+matrix remains symmetric and positive semidefinite and the optimized
+Wave-aggregated intensity remains identical to the direct Term contraction.
+Then reference the new Wave ID in `model.json`.
 
 Before merging, verify that the Wave contains no propagator instance, the
 framework has no GVV include, registration exists once, and all tests/builds

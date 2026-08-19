@@ -49,12 +49,13 @@ int main(int argc, char* argv[])
             "X_1835", "X_2370", "NR_0mp"};
         const std::vector<int> propagators = {
             ctpwa::PROP_SUBTRACTED_FLATTE,
-            ctpwa::PROP_SCALAR_SWAVE_BWR,
-            ctpwa::PROP_PWAVE_BWR,
-            ctpwa::PROP_PWAVE_BWR,
-            ctpwa::PROP_PWAVE_BWR,
-            ctpwa::PROP_PWAVE_BWR,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_NONRESONANT};
+        const std::vector<int> orbital_l = {0, 0, 1, 1, 1, 1, 0};
         const std::vector<double> masses = {
             1.522, 1.723, 1.751, 2.98409, 1.8340, 2.377, 0.0};
         const std::vector<double> widths = {
@@ -96,6 +97,8 @@ int main(int argc, char* argv[])
             require(model.resonances[index].propagator_model
                         == propagators[index],
                     "propagator migration mismatch");
+            require(model.resonances[index].orbital_l == orbital_l[index],
+                    "propagator orbital-L migration mismatch");
             require(close(model.resonances[index].mass, masses[index]),
                     "mass migration mismatch");
             require(close(model.resonances[index].pole_width, widths[index]),
@@ -113,6 +116,11 @@ int main(int argc, char* argv[])
             require(model.term_metadata[index].coupling_parameterization
                         == coupling_policies[index],
                     "coupling policy migration mismatch");
+            require(
+                model.term_metadata[index].wave_latex
+                    == gvv_registered_wave(
+                           model.term_metadata[index].wave_id).latex,
+                "Term Wave latex metadata mismatch");
         }
         require(close(
                     model.initial_couplings[model.find_term("eta_1760_11")].real,
@@ -168,6 +176,17 @@ int main(int argc, char* argv[])
         bad_parameter.resonances[1].parameters.emplace(
             "widht", ctpwa::ParameterDefinition());
         require_compile_invalid(bad_parameter, "does not accept parameter");
+
+        ctpwa::ModelDefinition d_wave_propagator = model.definition;
+        d_wave_propagator.resonances[1].parameters.at("orbital_l").value = 2.0;
+        const GVVCompiledModel d_wave_compiled =
+            gvv_compile_model(d_wave_propagator);
+        require(d_wave_compiled.resonances[1].orbital_l == 2,
+                "two-body running BW did not preserve orbital L=2");
+
+        ctpwa::ModelDefinition unsupported_l = model.definition;
+        unsupported_l.resonances[1].parameters.at("orbital_l").value = 3.0;
+        require_compile_invalid(unsupported_l, "supported range");
 
         ctpwa::ModelDefinition bad_dynamics = model.definition;
         bad_dynamics.terms[0].dynamics_json =

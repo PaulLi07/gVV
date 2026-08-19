@@ -12,16 +12,16 @@ namespace ctpwa {
 enum PropagatorModel {
     PROP_FIXED_BW = 0,
     PROP_SCALAR_SD_BWR = 1,
-    PROP_PWAVE_BWR = 2,
+    PROP_TWO_BODY_RUNNING_BW = 2,
     PROP_NONRESONANT = 3,
-    PROP_SCALAR_SWAVE_BWR = 4,
-    PROP_SUBTRACTED_FLATTE = 5
+    PROP_SUBTRACTED_FLATTE = 4
 };
 
 // Pure numerical device descriptor. Whether a field is fixed or fitted is a
 // process/model-binding concern and must not be stored in this framework type.
 struct PropagatorParameters {
     int propagator_model;
+    int orbital_l;
     double mass;
     double pole_width;
     double sd_ratio;
@@ -31,9 +31,11 @@ struct PropagatorParameters {
         int model = PROP_NONRESONANT,
         double m = 0.0,
         double width = 0.0,
+        int l = 0,
         double ratio = 0.0,
         double effective_channel_ratio = 0.0)
         : propagator_model(model),
+          orbital_l(l),
           mass(m),
           pole_width(width),
           sd_ratio(ratio),
@@ -73,22 +75,12 @@ __host__ __device__ inline DeviceComplex evaluate_propagator(
             daughter_mass1,
             radius_fm);
     }
-    if (resonance.propagator_model == PROP_SCALAR_SWAVE_BWR) {
+    if (resonance.propagator_model == PROP_TWO_BODY_RUNNING_BW) {
         return ctpwa::BWR_two_body_nominal(
             s,
             resonance.mass,
             resonance.pole_width,
-            0,
-            daughter_mass1,
-            daughter_mass2,
-            radius_fm);
-    }
-    if (resonance.propagator_model == PROP_PWAVE_BWR) {
-        return ctpwa::BWR_two_body_nominal(
-            s,
-            resonance.mass,
-            resonance.pole_width,
-            1,
+            resonance.orbital_l,
             daughter_mass1,
             daughter_mass2,
             radius_fm);
@@ -100,9 +92,10 @@ inline const char* propagator_name(int model)
 {
     if (model == PROP_FIXED_BW) return "fixed-width BW";
     if (model == PROP_SCALAR_SD_BWR) return "scalar S+D BWR";
-    if (model == PROP_PWAVE_BWR) return "P-wave BWR";
+    if (model == PROP_TWO_BODY_RUNNING_BW) {
+        return "two-body running-width BW";
+    }
     if (model == PROP_NONRESONANT) return "nonresonant";
-    if (model == PROP_SCALAR_SWAVE_BWR) return "scalar S-wave BWR";
     if (model == PROP_SUBTRACTED_FLATTE) {
         return "subtracted effective Flatte";
     }

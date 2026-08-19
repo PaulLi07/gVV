@@ -73,7 +73,7 @@ struct GVVTermMetadata {
     std::string label;
     std::string wave_id;
     std::string jpc;
-    std::string latex;
+    std::string wave_latex;
     std::string coherence_class;
     int registered_wave_type = -1;
     int coupling_parameterization = COUPLING_COMPLEX;

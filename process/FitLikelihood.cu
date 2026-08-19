@@ -33,6 +33,9 @@ FitLikelihood::FitLikelihood(
       device_resonances_(nullptr),
       device_terms_(nullptr),
       device_couplings_(nullptr),
+      component_coefficient_buffer_(nullptr),
+      component_value_buffer_(nullptr),
+      component_batch_capacity_(0),
       prepared_(false)
 {
 }
@@ -47,6 +50,12 @@ FitLikelihood::~FitLikelihood()
     }
     if (device_couplings_ != nullptr) {
         cudaFree(device_couplings_);
+    }
+    if (component_coefficient_buffer_ != nullptr) {
+        cudaFree(component_coefficient_buffer_);
+    }
+    if (component_value_buffer_ != nullptr) {
+        cudaFree(component_value_buffer_);
     }
 }
 
@@ -174,7 +183,7 @@ double FitLikelihood::EvaluateSample(
         device_couplings_,
         omega_width_table_.DeviceView(),
         sample.FMatrix(),
-        sample.TermCoefficientBuffer(),
+        sample.WaveCoefficientBuffer(),
         sample.IntensityBuffer(),
         NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()),
@@ -201,7 +210,7 @@ double FitLikelihood::LogLikelihood()
         device_couplings_,
         omega_width_table_.DeviceView(),
         normalization_mc_->FMatrix(),
-        normalization_mc_->TermCoefficientBuffer(),
+        normalization_mc_->WaveCoefficientBuffer(),
         normalization_mc_->IntensityBuffer(),
         NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()),
@@ -228,48 +237,112 @@ double FitLikelihood::LogLikelihood()
     return log_likelihood;
 }
 
-std::vector<double> FitLikelihood::EvaluateNormalizationMCIntensity(
-    const std::vector<DeviceComplex>& couplings)
+std::vector<double> FitLikelihood::EvaluateNormalizationMCIntensity()
 {
     if (!prepared_) {
         throw std::runtime_error(
             "call Prepare() before evaluating projection intensities");
     }
 
-    const std::vector<DeviceComplex> fitted_couplings =
-        model_.initial_couplings;
-    model_.initial_couplings = couplings;
-    try {
-        SynchronizeModel();
-        CalGVVPDF(
-            normalization_mc_->Momenta(),
-            device_resonances_,
-            device_terms_,
-            device_couplings_,
-            omega_width_table_.DeviceView(),
-            normalization_mc_->FMatrix(),
-            normalization_mc_->TermCoefficientBuffer(),
-            normalization_mc_->IntensityBuffer(),
-            NumberTerms(),
-            static_cast<int>(model_.active_wave_types.size()),
-            normalization_mc_->Entries());
+    SynchronizeModel();
+    CalGVVPDF(
+        normalization_mc_->Momenta(),
+        device_resonances_,
+        device_terms_,
+        device_couplings_,
+        omega_width_table_.DeviceView(),
+        normalization_mc_->FMatrix(),
+        normalization_mc_->WaveCoefficientBuffer(),
+        normalization_mc_->IntensityBuffer(),
+        NumberTerms(),
+        static_cast<int>(model_.active_wave_types.size()),
+        normalization_mc_->Entries());
 
-        std::vector<double> intensity(
-            static_cast<std::size_t>(normalization_mc_->Entries()), 0.0);
-        std::copy(
-            normalization_mc_->IntensityBuffer(),
-            normalization_mc_->IntensityBuffer()
-                + normalization_mc_->Entries(),
-            intensity.begin());
+    std::vector<double> intensity(
+        static_cast<std::size_t>(normalization_mc_->Entries()), 0.0);
+    std::copy(
+        normalization_mc_->IntensityBuffer(),
+        normalization_mc_->IntensityBuffer()
+            + normalization_mc_->Entries(),
+        intensity.begin());
+    return intensity;
+}
 
-        model_.initial_couplings = fitted_couplings;
-        SynchronizeModel();
-        return intensity;
-    } catch (...) {
-        model_.initial_couplings = fitted_couplings;
-        SynchronizeModel();
-        throw;
+void FitLikelihood::EnsureComponentBatchCapacity(int number_events)
+{
+    if (number_events <= component_batch_capacity_) {
+        return;
     }
+    if (component_coefficient_buffer_ != nullptr) {
+        check_cuda(
+            cudaFree(component_coefficient_buffer_),
+            "cudaFree projection Term coefficients");
+        component_coefficient_buffer_ = nullptr;
+    }
+    if (component_value_buffer_ != nullptr) {
+        check_cuda(
+            cudaFree(component_value_buffer_),
+            "cudaFree projection component values");
+        component_value_buffer_ = nullptr;
+    }
+    component_batch_capacity_ = 0;
+
+    const int number_pairs =
+        ctpwa::component_pair_count(NumberTerms());
+    check_cuda(
+        cudaMallocManaged(
+            &component_coefficient_buffer_,
+            static_cast<std::size_t>(number_events) * NumberTerms()
+                * sizeof(DeviceComplex)),
+        "cudaMallocManaged projection Term coefficients");
+    check_cuda(
+        cudaMallocManaged(
+            &component_value_buffer_,
+            static_cast<std::size_t>(number_events) * number_pairs
+                * sizeof(double)),
+        "cudaMallocManaged projection component values");
+    component_batch_capacity_ = number_events;
+}
+
+std::vector<double> FitLikelihood::EvaluateNormalizationMCComponentBatch(
+    int first_event,
+    int number_events)
+{
+    if (!prepared_) {
+        throw std::runtime_error(
+            "call Prepare() before evaluating projection components");
+    }
+    if (first_event < 0 || number_events < 0
+        || first_event > normalization_mc_->Entries() - number_events) {
+        throw std::out_of_range(
+            "normalization MC component batch is outside the sample");
+    }
+    if (number_events == 0) {
+        return {};
+    }
+
+    EnsureComponentBatchCapacity(number_events);
+    SynchronizeModel();
+    CalGVVComponentBatch(
+        normalization_mc_->Momenta(),
+        device_resonances_,
+        device_terms_,
+        device_couplings_,
+        omega_width_table_.DeviceView(),
+        normalization_mc_->FMatrix(),
+        component_coefficient_buffer_,
+        component_value_buffer_,
+        NumberTerms(),
+        static_cast<int>(model_.active_wave_types.size()),
+        first_event,
+        number_events);
+
+    const std::size_t value_count =
+        static_cast<std::size_t>(number_events)
+        * ctpwa::component_pair_count(NumberTerms());
+    return std::vector<double>(
+        component_value_buffer_,
+        component_value_buffer_ + value_count);
 }
 
 const GVVSample& FitLikelihood::NormalizationMCSample() const
@@ -358,13 +431,23 @@ void FitLikelihood::PrintModelSummary() const
                 std::cout << " (fixed)";
             }
         }
+        if (resonance.propagator_model
+            == ctpwa::PROP_TWO_BODY_RUNNING_BW) {
+            std::cout << "  L=" << resonance.orbital_l;
+        }
         std::cout << '\n';
     }
     for (int term = 0; term < NumberTerms(); ++term) {
         const GVVTermMetadata& metadata = model_.term_metadata[term];
         if (metadata.reference == ctpwa::CouplingReference::ScaleAndPhase) {
+            const DeviceComplex coupling = model_.initial_couplings[term];
             std::cout << "  scale-and-phase reference amplitude: "
-                      << metadata.id << " = 1 + 0i\n";
+                      << metadata.id << " = " << coupling.real;
+            if (coupling.imag >= 0.0) {
+                std::cout << " + " << coupling.imag << "i\n";
+            } else {
+                std::cout << " - " << -coupling.imag << "i\n";
+            }
         } else if (metadata.reference == ctpwa::CouplingReference::Phase) {
             std::cout << "  " << metadata.coherence_class
                       << " phase reference amplitude: " << metadata.id

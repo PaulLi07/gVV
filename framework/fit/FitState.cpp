@@ -3,9 +3,12 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <regex>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace ctpwa {
 namespace {
@@ -27,6 +30,22 @@ double required_number(const Json& value, const std::string& path)
         throw std::runtime_error("fit state " + path + " must be finite");
     }
     return result;
+}
+
+void require_safe_output_tag(const std::string& value)
+{
+    static const std::regex safe_tag("^[A-Za-z0-9][A-Za-z0-9._-]*$");
+    if (!std::regex_match(value, safe_tag)) {
+        throw std::runtime_error(
+            "fit state output_tag contains unsafe characters");
+    }
+}
+
+bool covariance_entries_match(double first, double second)
+{
+    const double scale = std::max(
+        1.0, std::max(std::fabs(first), std::fabs(second)));
+    return std::fabs(first - second) <= 1.0e-12 * scale;
 }
 
 } // namespace
@@ -121,6 +140,7 @@ FitState read_fit_state(const std::string& file_name)
         throw std::runtime_error("unsupported fit-state schema version");
     }
     result.output_tag = document.at("output_tag").get<std::string>();
+    require_safe_output_tag(result.output_tag);
     result.fit_config_file = document.at("fit_config").get<std::string>();
     const Json& model = document.at("model");
     result.model_config_file = model.at("file").get<std::string>();
@@ -147,6 +167,7 @@ FitState read_fit_state(const std::string& file_name)
     if (!parameters.is_array() || parameters.empty()) {
         throw std::runtime_error("fit state has no parameters");
     }
+    std::unordered_set<std::string> parameter_names;
     for (std::size_t index = 0; index < parameters.size(); ++index) {
         const Json& item = parameters[index];
         if (item.at("index").get<std::size_t>() != index) {
@@ -154,9 +175,22 @@ FitState read_fit_state(const std::string& file_name)
         }
         FitParameterSpec specification;
         specification.name = item.at("name").get<std::string>();
+        if (specification.name.empty()) {
+            throw std::runtime_error(
+                "fit-state parameter name must not be empty");
+        }
+        if (!parameter_names.insert(specification.name).second) {
+            throw std::runtime_error(
+                "duplicate fit-state parameter name '"
+                + specification.name + "'");
+        }
         specification.initial_value = required_number(
             item.at("nominal_value"), "parameter.nominal_value");
         specification.step = required_number(item.at("step"), "parameter.step");
+        if (!(specification.step > 0.0)) {
+            throw std::runtime_error(
+                "fit-state parameter step must be positive");
+        }
         const Json& lower = item.at("lower_bound");
         const Json& upper = item.at("upper_bound");
         specification.has_lower_bound = !lower.is_null();
@@ -167,11 +201,35 @@ FitState read_fit_state(const std::string& file_name)
         if (specification.has_upper_bound) {
             specification.upper_bound = required_number(upper, "upper_bound");
         }
+        if (specification.has_lower_bound
+            && specification.has_upper_bound
+            && !(specification.lower_bound < specification.upper_bound)) {
+            throw std::runtime_error(
+                "fit-state parameter bounds must be increasing");
+        }
+        const double value = required_number(item.at("value"), "value");
+        const double error = required_number(item.at("error"), "error");
+        if (error < 0.0) {
+            throw std::runtime_error(
+                "fit-state parameter error must be nonnegative");
+        }
+        const double start_value = required_number(
+            item.at("start_value"), "parameter.start_value");
+        const auto outside_bounds = [&](double candidate) {
+            return (specification.has_lower_bound
+                    && candidate < specification.lower_bound)
+                   || (specification.has_upper_bound
+                       && candidate > specification.upper_bound);
+        };
+        if (outside_bounds(specification.initial_value)
+            || outside_bounds(start_value) || outside_bounds(value)) {
+            throw std::runtime_error(
+                "fit-state parameter value is outside its bounds");
+        }
         result.parameters.push_back(specification);
-        result.best.values.push_back(required_number(item.at("value"), "value"));
-        result.best.errors.push_back(required_number(item.at("error"), "error"));
-        result.best.initial_values.push_back(required_number(
-            item.at("start_value"), "parameter.start_value"));
+        result.best.values.push_back(value);
+        result.best.errors.push_back(error);
+        result.best.initial_values.push_back(start_value);
     }
 
     const Json& covariance = document.at("covariance");
@@ -186,6 +244,20 @@ FitState read_fit_state(const std::string& file_name)
         for (std::size_t column = 0; column < size; ++column) {
             result.best.covariance.push_back(required_number(
                 covariance[row][column], "covariance"));
+        }
+    }
+    for (std::size_t row = 0; row < size; ++row) {
+        if (result.best.covariance[row * size + row] < 0.0) {
+            throw std::runtime_error(
+                "fit-state covariance has a negative diagonal entry");
+        }
+        for (std::size_t column = row + 1; column < size; ++column) {
+            if (!covariance_entries_match(
+                    result.best.covariance[row * size + column],
+                    result.best.covariance[column * size + row])) {
+                throw std::runtime_error(
+                    "fit-state covariance is not symmetric");
+            }
         }
     }
     return result;

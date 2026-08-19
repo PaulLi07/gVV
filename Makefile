@@ -65,13 +65,19 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_model.exe \
 	$(TEST_BIN_DIR)/test_wave_registry.exe \
 	$(TEST_BIN_DIR)/test_likelihood.exe
-DEPENDENCY_FILES = $(ALL_OBJECTS:.o=.d) $(TESTS:.exe=.d)
+GPU_TESTS = \
+	$(TEST_BIN_DIR)/test_gvv_wave_numerics.exe \
+	$(TEST_BIN_DIR)/test_intensity_equivalence.exe
+DEPENDENCY_FILES = \
+	$(ALL_OBJECTS:.o=.d) \
+	$(TESTS:.exe=.d) \
+	$(GPU_TESTS:.exe=.d)
 
 # Dependency generation belongs only to compilation targets, not the final
 # executable link step.
-$(ALL_OBJECTS) $(TESTS): private COMPILE_FLAGS += $(DEPENDENCY_FLAGS)
+$(ALL_OBJECTS) $(TESTS) $(GPU_TESTS): private COMPILE_FLAGS += $(DEPENDENCY_FLAGS)
 
-.PHONY: all fit post tests check clean
+.PHONY: all fit post tests check gpu-tests check-gpu clean
 
 all: fit
 
@@ -171,6 +177,13 @@ $(TEST_BIN_DIR)/test_wave_registry.exe: tests/test_wave_registry.cu $(OBJ_DIR)/W
 $(TEST_BIN_DIR)/test_likelihood.exe: tests/test_likelihood.cpp | $(TEST_BIN_DIR)
 	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
+$(TEST_BIN_DIR)/test_gvv_wave_numerics.exe: tests/test_gvv_wave_numerics.cu | $(TEST_BIN_DIR)
+	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_intensity_equivalence.exe: tests/test_intensity_equivalence.cu $(OBJ_DIR)/TermEvaluator.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/TermEvaluator.o $(PROJECT_INCLUDES) \
+		$(COMPILE_FLAGS) -o $@
+
 tests: $(TESTS)
 
 # Tests are deliberately ordinary executables so each returns a clear shell
@@ -178,9 +191,16 @@ tests: $(TESTS)
 check: tests
 	@for test in $(TESTS); do $$test || exit $$?; done
 
+# Runtime CUDA checks are explicit because login nodes may provide nvcc but no
+# device. They are never part of the ordinary host/unit-test target.
+gpu-tests: $(GPU_TESTS)
+
+check-gpu: gpu-tests
+	@for test in $(GPU_TESTS); do $$test || exit $$?; done
+
 clean:
 	rm -f $(ALL_OBJECTS) $(BIN_DIR)/Fit.exe \
-		$(BIN_DIR)/Post.exe $(TESTS) $(DEPENDENCY_FILES)
+		$(BIN_DIR)/Post.exe $(TESTS) $(GPU_TESTS) $(DEPENDENCY_FILES)
 
 # Include auto-generated header dependencies when they exist. This keeps an
 # incremental build correct after editing a nested Wave/tensor header.

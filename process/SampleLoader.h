@@ -49,7 +49,7 @@ public:
     const double* HostMomentum(int particle, int event) const;
     GVVDeviceMomenta Momenta() const;
     const double* FMatrix() const;
-    DeviceComplex* TermCoefficientBuffer();
+    DeviceComplex* WaveCoefficientBuffer();
     double* IntensityBuffer();
     int NumberActiveWaves() const;
     int NumberTerms() const;
@@ -60,7 +60,7 @@ private:
     std::array<std::vector<double>, GVV_NFINAL_PARTICLES> host_p4_;
     std::array<double*, GVV_NFINAL_PARTICLES> device_p4_;
     double* F_matrix_;
-    DeviceComplex* term_coefficients_;
+    DeviceComplex* wave_coefficients_;
     double* amp2_;
     int number_active_waves_;
     int number_terms_;

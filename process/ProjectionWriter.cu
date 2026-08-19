@@ -21,6 +21,8 @@
 namespace {
 
 constexpr double kProjectionAxisTolerance = 1.0e-12;
+constexpr std::size_t kProjectionComponentScratchBytes =
+    64ULL * 1024ULL * 1024ULL;
 
 void fill_tree(TTree& tree)
 {
@@ -301,14 +303,18 @@ void write_gvv_projection(
         likelihood.NormalizationMCSample();
     const GVVSample& data = likelihood.DataSample();
     const int number_terms = likelihood.NumberTerms();
-    const std::vector<DeviceComplex> fitted_couplings =
-        model.initial_couplings;
     const int number_mc = normalization_mc.Entries();
-    auto evaluate_mc = [&](const std::vector<DeviceComplex>& values) {
-        return likelihood.EvaluateNormalizationMCIntensity(values);
-    };
+    const int number_pairs = ctpwa::component_pair_count(number_terms);
+    // The packed values exist once in FitLikelihood's managed scratch and
+    // once in this host batch while ROOT rows are serialized.
+    const std::size_t component_bytes_per_event =
+        2ULL * static_cast<std::size_t>(number_pairs) * sizeof(double)
+        + static_cast<std::size_t>(number_terms) * sizeof(DeviceComplex);
+    const std::size_t capacity_by_bytes = std::max<std::size_t>(
+        1, kProjectionComponentScratchBytes / component_bytes_per_event);
+    const int component_batch_capacity = static_cast<int>(
+        std::min<std::size_t>(number_mc, capacity_by_bytes));
 
-    std::vector<double> total_intensity;
     std::vector<std::string> group_ids;
     for (const GVVTermMetadata& term : model.term_metadata) {
         if (std::find(group_ids.begin(), group_ids.end(), term.jpc)
@@ -316,37 +322,14 @@ void write_gvv_projection(
             group_ids.push_back(term.jpc);
         }
     }
-    std::vector<std::vector<double>> group_intensity(group_ids.size());
-    std::vector<std::vector<std::vector<double>>> pair_intensity(
-        number_terms,
-        std::vector<std::vector<double>>(number_terms));
-
-    total_intensity = evaluate_mc(fitted_couplings);
-
-    std::vector<DeviceComplex> selected(
-        number_terms, DeviceComplex(0.0, 0.0));
-    for (std::size_t group = 0; group < group_ids.size(); ++group) {
-        std::fill(
-            selected.begin(), selected.end(), DeviceComplex(0.0, 0.0));
-        for (int term = 0; term < number_terms; ++term) {
-            if (model.term_metadata[term].jpc == group_ids[group]) {
-                selected[term] = fitted_couplings[term];
-            }
-        }
-        group_intensity[group] = evaluate_mc(selected);
+    std::vector<int> term_groups(number_terms, -1);
+    for (int term = 0; term < number_terms; ++term) {
+        term_groups[term] = static_cast<int>(std::find(
+            group_ids.begin(), group_ids.end(),
+            model.term_metadata[term].jpc) - group_ids.begin());
     }
-
-    for (int first = 0; first < number_terms; ++first) {
-        for (int second = first; second < number_terms; ++second) {
-            std::fill(
-                selected.begin(),
-                selected.end(),
-                DeviceComplex(0.0, 0.0));
-            selected[first] = fitted_couplings[first];
-            selected[second] = fitted_couplings[second];
-            pair_intensity[first][second] = evaluate_mc(selected);
-        }
-    }
+    const std::vector<double> total_intensity =
+        likelihood.EvaluateNormalizationMCIntensity();
     const double sum_pdf = std::accumulate(
         total_intensity.begin(), total_intensity.end(), 0.0);
     if (!(sum_pdf > 0.0) || !std::isfinite(sum_pdf)) {
@@ -388,51 +371,69 @@ void write_gvv_projection(
 
     double maximum_closure_residual = 0.0;
     double sum_projection_weight = 0.0;
-    for (int event = 0; event < number_mc; ++event) {
-        weight = total_intensity[event] / sum_pdf * effective_yield;
-        for (std::size_t group = 0; group < group_ids.size(); ++group) {
-            weight_group[group] = group_intensity[group][event]
-                                  / sum_pdf * effective_yield;
+    for (int batch_begin = 0;
+         batch_begin < number_mc;
+         batch_begin += component_batch_capacity) {
+        const int batch_events = std::min(
+            component_batch_capacity, number_mc - batch_begin);
+        const std::vector<double> packed_components =
+            likelihood.EvaluateNormalizationMCComponentBatch(
+                batch_begin, batch_events);
+        if (packed_components.size()
+            != static_cast<std::size_t>(batch_events) * number_pairs) {
+            throw std::runtime_error(
+                "projection component batch has an inconsistent size");
         }
-        sum_projection_weight += weight;
 
-        std::fill(
-            weight_component.begin(), weight_component.end(), -1.0);
+        for (int local_event = 0;
+             local_event < batch_events;
+             ++local_event) {
+            const int event = batch_begin + local_event;
+            const double projection_scale = effective_yield / sum_pdf;
+            weight = total_intensity[event] * projection_scale;
+            sum_projection_weight += weight;
+            std::fill(weight_group.begin(), weight_group.end(), 0.0);
+            std::fill(
+                weight_component.begin(), weight_component.end(), -1.0);
 
-        double reconstructed_intensity = 0.0;
-        for (int first = 0; first < number_terms; ++first) {
-            const double diagonal = pair_intensity[first][first][event];
-            reconstructed_intensity += diagonal;
-            weight_component[
-                static_cast<std::size_t>(first) * number_terms + first] =
-                diagonal / sum_pdf * effective_yield;
-            for (int second = first + 1;
-                 second < number_terms;
-                 ++second) {
-                const double interference =
-                    pair_intensity[first][second][event]
-                    - pair_intensity[first][first][event]
-                    - pair_intensity[second][second][event];
-                reconstructed_intensity += interference;
-                const double interference_weight =
-                    interference / sum_pdf * effective_yield;
-                weight_component[
-                    static_cast<std::size_t>(first) * number_terms + second] =
-                    interference_weight;
-                weight_component[
-                    static_cast<std::size_t>(second) * number_terms + first] =
-                    interference_weight;
+            double reconstructed_intensity = 0.0;
+            const std::size_t event_offset =
+                static_cast<std::size_t>(local_event) * number_pairs;
+            // Each packed entry is already K_ii or the complete K_ij+K_ji
+            // interference. Group curves retain only pairs internal to that
+            // group; cross-group interference remains in the total model.
+            for (int first = 0; first < number_terms; ++first) {
+                for (int second = first;
+                     second < number_terms;
+                     ++second) {
+                    const double contribution = packed_components[
+                        event_offset + ctpwa::component_pair_index(
+                            first, second, number_terms)];
+                    reconstructed_intensity += contribution;
+                    if (term_groups[first] == term_groups[second]) {
+                        weight_group[term_groups[first]] +=
+                            contribution * projection_scale;
+                    }
+                    const double component_weight =
+                        contribution * projection_scale;
+                    weight_component[
+                        static_cast<std::size_t>(first) * number_terms
+                        + second] = component_weight;
+                    weight_component[
+                        static_cast<std::size_t>(second) * number_terms
+                        + first] = component_weight;
+                }
             }
-        }
-        const double closure_scale = std::max(
-            1.0, std::fabs(total_intensity[event]));
-        maximum_closure_residual = std::max(
-            maximum_closure_residual,
-            std::fabs(reconstructed_intensity - total_intensity[event])
-                / closure_scale);
+            const double closure_scale = std::max(
+                1.0, std::fabs(total_intensity[event]));
+            maximum_closure_residual = std::max(
+                maximum_closure_residual,
+                std::fabs(reconstructed_intensity - total_intensity[event])
+                    / closure_scale);
 
-        event_values.Load(normalization_mc, event);
-        fill_tree(tree_mc);
+            event_values.Load(normalization_mc, event);
+            fill_tree(tree_mc);
+        }
     }
     if (maximum_closure_residual > 1.0e-7) {
         throw std::runtime_error(
@@ -446,26 +447,58 @@ void write_gvv_projection(
         fill_tree(tree_data);
     }
 
-    TTree tree_background("bg", "combined two-dimensional sidebands");
+    TTree tree_background("bg", "weighted background samples");
     event_values.Book(tree_background);
-    int sideband_id = 0;
+    int background_index = 0;
     double weight_bg = 0.0;
-    tree_background.Branch("sideband_id", &sideband_id, "sideband_id/I");
+    tree_background.Branch(
+        "background_index", &background_index, "background_index/I");
     tree_background.Branch("weight_bg", &weight_bg, "weight_bg/D");
-    for (std::size_t background_index = 0;
-         background_index < likelihood.NumberBackgroundSamples();
-         ++background_index) {
+    for (std::size_t sample_index = 0;
+         sample_index < likelihood.NumberBackgroundSamples();
+         ++sample_index) {
         const GVVSample& background =
-            likelihood.BackgroundSampleAt(background_index);
-        sideband_id = static_cast<int>(background_index) + 1;
-        // The likelihood coefficients are (-0.5,+0.25).  The background
-        // estimate added to signal MC is therefore (+0.5,-0.25).
+            likelihood.BackgroundSampleAt(sample_index);
+        background_index = static_cast<int>(sample_index);
+        // The projection adds the negative of the signed likelihood term.
         weight_bg =
-            -likelihood.BackgroundLikelihoodCoefficient(background_index);
+            -likelihood.BackgroundLikelihoodCoefficient(sample_index);
         for (int event = 0; event < background.Entries(); ++event) {
             event_values.Load(background, event);
             fill_tree(tree_background);
         }
+    }
+
+    TTree background_map("background_map", "background sample index map");
+    int background_entries = 0;
+    double likelihood_coefficient = 0.0;
+    double projection_weight = 0.0;
+    char background_label[128] = {0};
+    background_map.Branch(
+        "background_index", &background_index, "background_index/I");
+    background_map.Branch("label", background_label, "label/C");
+    background_map.Branch(
+        "n_events", &background_entries, "n_events/I");
+    background_map.Branch(
+        "likelihood_coefficient",
+        &likelihood_coefficient,
+        "likelihood_coefficient/D");
+    background_map.Branch(
+        "projection_weight", &projection_weight, "projection_weight/D");
+    int n_background_events = 0;
+    for (std::size_t sample_index = 0;
+         sample_index < likelihood.NumberBackgroundSamples();
+         ++sample_index) {
+        const GVVSample& background =
+            likelihood.BackgroundSampleAt(sample_index);
+        background_index = static_cast<int>(sample_index);
+        background_entries = background.Entries();
+        likelihood_coefficient =
+            likelihood.BackgroundLikelihoodCoefficient(sample_index);
+        projection_weight = -likelihood_coefficient;
+        copy_checked(background_label, background.Label());
+        n_background_events += background_entries;
+        fill_tree(background_map);
     }
 
     TTree component_map("component_map", "GVV component index map");
@@ -501,7 +534,8 @@ void write_gvv_projection(
             component_resonance_id,
             model.resonance_metadata[resonance_index].id);
         copy_checked(component_wave_id, model.term_metadata[term].wave_id);
-        copy_checked(component_wave_label, model.term_metadata[term].latex);
+        copy_checked(
+            component_wave_label, model.term_metadata[term].wave_latex);
         copy_checked(component_jpc, model.term_metadata[term].jpc);
         fill_tree(component_map);
     }
@@ -526,32 +560,20 @@ void write_gvv_projection(
     }
 
     TTree metadata("metadata", "GVV projection provenance");
-    int projection_schema_version = 1;
+    int projection_schema_version = 2;
     int n_terms = number_terms;
     int n_groups = static_cast<int>(group_ids.size());
     int n_data = data.Entries();
     int n_normalization_mc = normalization_mc.Entries();
     int n_background_samples =
         static_cast<int>(likelihood.NumberBackgroundSamples());
-    int n_sb1 = likelihood.NumberBackgroundSamples() > 0
-                    ? likelihood.BackgroundSampleAt(0).Entries()
-                    : 0;
-    int n_sb2 = likelihood.NumberBackgroundSamples() > 1
-                    ? likelihood.BackgroundSampleAt(1).Entries()
-                    : 0;
-    double sb1_likelihood_coefficient =
-        likelihood.NumberBackgroundSamples() > 0
-            ? likelihood.BackgroundLikelihoodCoefficient(0)
-            : 0.0;
-    double sb2_likelihood_coefficient =
-        likelihood.NumberBackgroundSamples() > 1
-            ? likelihood.BackgroundLikelihoodCoefficient(1)
-            : 0.0;
     long long stored_best_seed = best_seed;
     char stored_output_tag[64] = {0};
     char stored_model_signature[64] = {0};
+    char background_method[64] = {0};
     copy_checked(stored_output_tag, output_tag);
     copy_checked(stored_model_signature, model_signature);
+    copy_checked(background_method, "signed_weighted_samples");
     metadata.Branch(
         "schema_version",
         &projection_schema_version,
@@ -570,16 +592,12 @@ void write_gvv_projection(
         "n_background_samples",
         &n_background_samples,
         "n_background_samples/I");
-    metadata.Branch("n_SB1", &n_sb1, "n_SB1/I");
-    metadata.Branch("n_SB2", &n_sb2, "n_SB2/I");
     metadata.Branch(
-        "SB1_likelihood_coefficient",
-        &sb1_likelihood_coefficient,
-        "SB1_likelihood_coefficient/D");
+        "n_background_events",
+        &n_background_events,
+        "n_background_events/I");
     metadata.Branch(
-        "SB2_likelihood_coefficient",
-        &sb2_likelihood_coefficient,
-        "SB2_likelihood_coefficient/D");
+        "background_method", background_method, "background_method/C");
     metadata.Branch(
         "effective_signal_yield",
         &effective_yield,

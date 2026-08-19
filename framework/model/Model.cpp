@@ -292,6 +292,13 @@ CouplingDefinition parse_coupling(
             path + ".reference",
             "fixed_complex requires the scale_and_phase reference role");
     }
+    if (result.reference == CouplingReference::ScaleAndPhase
+        && result.initial_real == 0.0 && result.initial_imag == 0.0) {
+        fail(
+            source,
+            path + ".initial",
+            "scale_and_phase reference amplitude must be nonzero");
+    }
     if (result.mode == CouplingMode::ComplexCartesian
         && result.reference != CouplingReference::None) {
         fail(

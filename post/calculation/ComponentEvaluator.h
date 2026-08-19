@@ -1,5 +1,6 @@
 // GPU-backed evaluator shared by all Post Calculation observables. It owns
-// truth/selected samples and returns integrated pairwise Term components.
+// truth/selected samples and reduces pairwise Term components in bounded
+// event batches; no event-by-pair matrix is retained.
 #ifndef GVV_POST_CALCULATION_COMPONENT_EVALUATOR_H
 #define GVV_POST_CALCULATION_COMPONENT_EVALUATOR_H
 
@@ -52,7 +53,9 @@ private:
     ctpwa::PropagatorParameters* device_resonances_;
     TermSpec* device_terms_;
     DeviceComplex* device_couplings_;
-    double* component_buffer_;
+    DeviceComplex* coefficient_workspace_;
+    double* integrated_components_;
+    int component_batch_capacity_;
 };
 
 #endif // GVV_POST_CALCULATION_COMPONENT_EVALUATOR_H

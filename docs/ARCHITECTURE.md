@@ -64,6 +64,19 @@ signature used by the Fit-to-Post contract. It does not register GVV Waves.
 `Likelihood.h` implements accepted-MC normalization and signed unbinned
 log-likelihood arithmetic. Neither module knows the event topology.
 
+The Fit hot path first evaluates every complete Term coefficient, including
+its Resonance propagator, and then aggregates only Terms with the same dense
+Wave slot. If
+
+```text
+B_w(event) = sum C_t(event) for all Terms t using Wave slot w,
+```
+
+the total intensity is the exact contraction `sum B_w B_v* F_wv`. No JPC or
+coherence-class cross term is dropped. Term-level coefficients remain
+available only where Projection or Post Calculation needs a physical
+component decomposition.
+
 ### Fit
 
 - `FitConfig` reads the run inputs, minimizer policy, and output tag.
@@ -124,6 +137,13 @@ projection ROOT trees, derived GVV observables, fitted weights, dynamic
 component/group maps, and provenance. A future final state replaces this
 writer along with the process layer; generic fit output remains reusable.
 
+Projection computes every packed upper-triangle Term pair directly in bounded
+batches. Diagonal entries are individual intensities, off-diagonal entries are
+the complete signed interference, and their sum closes to the total intensity.
+All components use the same full-model normalization. The ROOT contract keeps
+the complete symmetric per-event component matrix while avoiding an
+event-count-sized pair workspace in memory.
+
 ## Output contracts
 
 One fit tag creates four products:
@@ -138,8 +158,10 @@ the human report and the machine state, each for its intended consumer.
 
 Post Calculation loads `fit_state`, the exact `model.json`, generated truth MC,
 and selected normalization MC. It rejects a model-signature or parameter-order
-mismatch. Post Plotting loads only the projection ROOT file and discovers the
-current Terms and coherent groups from its maps.
+mismatch. Pair components are reduced on the GPU in event batches, so only one
+integral per packed Term pair is transferred to the host. Post Plotting loads
+only projection schema version 2 and discovers the current Terms, coherent
+groups, and signed background samples from its maps.
 
 ## End-to-end fit flow
 
@@ -148,8 +170,9 @@ current Terms and coherent groups from its maps.
 3. `SampleLoader` loads data, accepted normalization MC, and signed backgrounds.
 4. `TermEvaluator` caches parameter-independent Wave contractions.
 5. `ParameterMapping` generates the exact free Minuit vector.
-6. Each objective call applies that vector, integrates accepted MC, and
-   evaluates data plus signed sidebands.
+6. Each objective call applies that vector, aggregates complete Term
+   coefficients by exact Wave slot, integrates accepted MC, and evaluates data
+   plus configured signed background samples.
 7. `FitEngine` runs nominal and randomized starts, applies MIGRAD/HESSE, and
    chooses the lowest accepted NLL.
 8. The final state is written independently to the report, state JSON, and

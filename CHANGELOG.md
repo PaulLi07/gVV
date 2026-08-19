@@ -2,6 +2,18 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Aggregated fully evaluated Term coefficients by exact Wave slot in the Fit
+  hot path, reducing its contraction from `O(T^2)` to `O(T + W^2)` without
+  dropping any coherent cross-Wave term.
+- Replaced repeated masked-coupling projection calculations with bounded-batch
+  direct Term-pair components, and replaced Post's event-by-pair matrix with
+  GPU-integrated components.
+- Generalized `two_body_running_bw` to carry explicit `orbital_l=0,1,2`
+  independently of the registered Wave ID.
+- Upgraded Projection to schema version 2 with dynamic background metadata,
+  corrected Wave labels, and no fixed SB1/SB2 fields.
+- Added explicit complete-Wave and intensity-equivalence CUDA regression
+  targets while keeping GPU execution out of the ordinary test target.
 - Split downstream work into independent `post/calculation` and
   `post/plotting` modules. `make` builds only Fit and `make post` builds the
   numerical Post executable.

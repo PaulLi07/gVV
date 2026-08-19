@@ -78,7 +78,7 @@ CompiledResonance compile_resonance(
     if (input.propagator == "nonresonant") {
         require_exact_parameters(input, {});
         return {ctpwa::PropagatorParameters(
-            ctpwa::PROP_NONRESONANT, 0.0, 0.0, 0.0, 0.0)};
+            ctpwa::PROP_NONRESONANT, 0.0, 0.0, 0, 0.0, 0.0)};
     }
 
     // Reject misspelled or stale parameters here rather than silently
@@ -116,16 +116,23 @@ CompiledResonance compile_resonance(
 
     if (input.propagator == "fixed_width_bw") {
         return {ctpwa::PropagatorParameters(
-            ctpwa::PROP_FIXED_BW, mass.value, width.value, 0.0, 0.0)};
+            ctpwa::PROP_FIXED_BW,
+            mass.value,
+            width.value,
+            0,
+            0.0,
+            0.0)};
     }
     if (input.propagator == "two_body_running_bw") {
         int orbital_l = 0;
-        require_fixed_integer(input, "orbital_l", 0, 1, orbital_l);
-        const int model = orbital_l == 0
-                              ? ctpwa::PROP_SCALAR_SWAVE_BWR
-                              : ctpwa::PROP_PWAVE_BWR;
+        require_fixed_integer(input, "orbital_l", 0, 2, orbital_l);
         return {ctpwa::PropagatorParameters(
-            model, mass.value, width.value, 0.0, 0.0)};
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
+            mass.value,
+            width.value,
+            orbital_l,
+            0.0,
+            0.0)};
     }
     if (input.propagator == "scalar_sd_running_bw") {
         const ctpwa::ParameterDefinition& ratio =
@@ -140,6 +147,7 @@ CompiledResonance compile_resonance(
             ctpwa::PROP_SCALAR_SD_BWR,
             mass.value,
             width.value,
+            0,
             ratio.value,
             0.0);
         result.fit_sd_ratio = !ratio.fixed;
@@ -158,6 +166,7 @@ CompiledResonance compile_resonance(
             ctpwa::PROP_SUBTRACTED_FLATTE,
             mass.value,
             width.value,
+            0,
             0.0,
             ratio.value);
         result.fit_flatte_ratio = !ratio.fixed;
@@ -320,7 +329,7 @@ GVVCompiledModel gvv_compile_model(
             term.label,
             wave.id,
             wave.jpc,
-            term.label,
+            wave.latex,
             wave.coherence_class,
             wave.wave_type,
             coupling_parameterization(term.coupling.mode),

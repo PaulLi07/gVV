@@ -31,7 +31,7 @@ Supported GVV propagator contracts are:
 |---|---|
 | `nonresonant` | empty object |
 | `fixed_width_bw` | fixed identity `mass`, `width` |
-| `two_body_running_bw` | fixed identity `mass`, `width`, integer `orbital_l` |
+| `two_body_running_bw` | fixed identity `mass`, `width`, integer `orbital_l` in 0--2 |
 | `scalar_sd_running_bw` | fixed `mass`, `width`; positive log `sd_ratio` |
 | `subtracted_effective_flatte` | fixed `mass`, `width`; positive log `omegaomega_ratio` |
 
@@ -67,6 +67,20 @@ Coupling modes are:
 
 Every active coherence class must have exactly one phase reference. The class
 is registered with the Wave and is not repeated in every Term.
+
+The fixed `scale_and_phase` reference defines the overall amplitude scale and
+phase and therefore must have a nonzero complex value. A `positive_real`
+phase reference is fitted in its log magnitude. Choose a Term that is expected
+to remain significant; if that Term is disabled or tested against zero, assign
+the phase role to another active Term and make the tested coupling ordinary
+`complex_cartesian`.
+
+`two_body_running_bw` is independent of the registered Wave ID, but its
+running width is not independent of the physical orbital angular momentum.
+The explicit `orbital_l` controls the `q^(2L+1) B_L^2` behavior and may be 0,
+1, or 2 with the current barrier-factor library. It is not inferred from the
+Wave. A Resonance whose total width contains several partial waves requires a
+corresponding multi-channel width model such as `scalar_sd_running_bw`.
 
 Setting `active: false` removes the Term before model compilation. Its coupling
 and a Resonance used only by inactive Terms do not enter Minuit, the report,

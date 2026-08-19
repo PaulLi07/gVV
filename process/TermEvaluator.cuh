@@ -1,5 +1,5 @@
-// CUDA entry points for cached Wave contractions, process Term coefficients,
-// total intensity, and optional component decomposition.
+// CUDA entry points for cached Wave contractions, the optimized total-PDF
+// path, and the Term-level component path used by Projection and Post.
 #ifndef CTPWA_PROCESS_TERM_EVALUATOR_CUH
 #define CTPWA_PROCESS_TERM_EVALUATOR_CUH
 
@@ -18,8 +18,8 @@ void CalGVVFmatrix(
     double* F_matrix,
     int number_events);
 
-// These public composite operations validate their dimensions once. Their
-// coefficient/contraction kernel stages are private implementation details.
+// The Fit workspace is [event][active Wave]. Every Term-specific propagator
+// is evaluated before coefficients are aggregated by its exact Wave slot.
 void CalGVVPDF(
     GVVDeviceMomenta momenta,
     const ctpwa::PropagatorParameters* resonances,
@@ -27,13 +27,17 @@ void CalGVVPDF(
     const DeviceComplex* couplings,
     GVVWidthTableView omega_width_table,
     const double* F_matrix,
-    DeviceComplex* coefficient_workspace,
+    DeviceComplex* wave_coefficient_workspace,
     double* intensity,
     int number_terms,
     int number_active_waves,
     int number_events);
 
-void CalGVVComponentMatrix(
+// Evaluate a contiguous event batch into packed upper-triangle Term-pair
+// components. coefficient_workspace is [batch event][Term], while
+// packed_components is [batch event][component pair]. F_matrix and momenta
+// refer to the complete sample; first_event selects the requested slice.
+void CalGVVComponentBatch(
     GVVDeviceMomenta momenta,
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
@@ -41,7 +45,25 @@ void CalGVVComponentMatrix(
     GVVWidthTableView omega_width_table,
     const double* F_matrix,
     DeviceComplex* coefficient_workspace,
-    double* component_matrix,
+    double* packed_components,
+    int number_terms,
+    int number_active_waves,
+    int first_event,
+    int number_batch_events);
+
+// Integrate all packed Term-pair components without materializing an
+// event-by-pair matrix. coefficient_workspace has capacity
+// [batch_capacity][Term], and integrated_components has one value per pair.
+void CalGVVComponentIntegrals(
+    GVVDeviceMomenta momenta,
+    const ctpwa::PropagatorParameters* resonances,
+    const TermSpec* terms,
+    const DeviceComplex* couplings,
+    GVVWidthTableView omega_width_table,
+    const double* F_matrix,
+    DeviceComplex* coefficient_workspace,
+    double* integrated_components,
+    int batch_capacity,
     int number_terms,
     int number_active_waves,
     int number_events);

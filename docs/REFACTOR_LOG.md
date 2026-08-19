@@ -88,3 +88,75 @@ Only existing external ROOT `TStorage.h` and CUDA sm70 deprecation warnings
 appeared; no project-source compiler error or warning was introduced. Runtime
 Fit and Post Calculation jobs are intentionally left to the user. The focused
 commit identifier is available in the Git history and final work report.
+
+## Extensibility closeout (2026-08-19)
+
+Working branch: `refactor/extensibility-closeout`.
+
+This phase remains physics-equivalent and does not add a `2++` Wave or change
+the nominal active model. It closes the scaling and contract issues found in
+the post-refactor architecture audit:
+
+- unified the reusable two-body running-width propagator behind one device
+  model with explicit `orbital_l`; the GVV compiler accepts the barrier
+  library's implemented range `L=0,1,2` without coupling the propagator to a
+  registered Wave ID;
+- rejected a zero fixed scale-and-phase reference while leaving the fitted
+  phase-reference convention unchanged;
+- replaced the Fit's Term-squared contraction with an exact aggregation of
+  fully evaluated Term coefficients by dense Wave slot, reducing its hot path
+  from `O(T^2)` to `O(T + W^2)` and its sample workspace from `N*T` to `N*W`;
+- replaced Projection's repeated coupling masking with one packed direct
+  Term-pair calculation in bounded batches, preserving signed interference,
+  group definitions, full-model normalization, and the complete external
+  component matrix;
+- changed Post Calculation to reduce packed Term-pair integrals on the GPU in
+  bounded batches instead of retaining an `N_event*N_pair` matrix;
+- completed selected-sample cross-group interference output and made bounded
+  finite differences prefer a resolvable one-sided step near a fit boundary;
+- upgraded Projection to schema version 2 with dynamic `background_map`
+  metadata and removed every fixed SB1/SB2 field;
+- corrected `component_map.wave_label` to use the registered Wave label;
+- added structural fitted-state validation and log-space likelihood arithmetic
+  at their owning framework boundaries;
+- added explicit runtime CUDA regressions for complete Wave identities and
+  Term/Wave/component equivalence. These tests are separate from ordinary
+  login-node-safe checks and require an allocated GPU for execution.
+
+Verification on the fixed `lxlogin005` node completed without running an
+analysis executable or submitting a cluster job:
+
+- `make clean`, `make -j2`, and `make -j2 post` built `Fit.exe` and `Post.exe`;
+- `make -j2 tests` built the ordinary test suite and `make check` passed all
+  11 login-node-safe tests;
+- `make -j2 gpu-tests` compiled both new CUDA runtime regressions, but
+  `make check-gpu` was intentionally not run because no GPU job was allocated;
+- all five plotting macros passed a ROOT-aware C++ syntax check;
+- shell syntax, JSON syntax, and patch whitespace checks passed.
+
+### Deferred improvements
+
+The following supported-scope limitations are recorded rather than expanded
+in this closeout:
+
+- make the reusable human Fit report heading process-neutral instead of using
+  the GVV title;
+- further separate generic propagator-configuration compilation from the GVV
+  host model compiler beyond the two-body descriptor generalized here;
+- expose omega-width-table range, resolution, endpoint policy, and related
+  constants for systematic studies;
+- add optional full physical four-momentum validation at the external sample
+  boundary;
+- define an explicit Post policy for an active ordinary Term whose fitted
+  complex coupling is exactly zero: its fit fraction is zero, but its current
+  selected/truth component-efficiency ratio is mathematically `0/0`; the
+  present implementation rejects that undefined observable rather than
+  silently assigning a value;
+- continue Plotting cleanup beyond the schema-v2 reader update, including
+  ROOT-only environment loading, axis ranges that include diagnostic curves,
+  high-multiplicity styles, and goodness-of-fit presentation;
+- perform a broader historical changelog/documentation cleanup without mixing
+  it into the amplitude and fit implementation changes.
+
+No Fit, Post Calculation, GPU, Slurm, or other cluster job is submitted by
+Codex. Production runtime validation remains user-controlled.

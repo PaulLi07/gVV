@@ -44,13 +44,15 @@ inline double log_likelihood_contribution(
         || !(normalization > 0.0) || !std::isfinite(normalization)) {
         throw std::invalid_argument("invalid likelihood input");
     }
+    const double log_normalization = std::log(normalization);
     double logarithm_sum = 0.0;
     for (std::size_t event = 0; event < number_events; ++event) {
-        const double pdf = intensity[event] / normalization;
-        if (!(pdf > 0.0) || !std::isfinite(pdf)) {
-            throw std::domain_error("likelihood contains an invalid PDF");
+        if (!(intensity[event] > 0.0)
+            || !std::isfinite(intensity[event])) {
+            throw std::domain_error(
+                "likelihood contains an invalid intensity");
         }
-        logarithm_sum += std::log(pdf);
+        logarithm_sum += std::log(intensity[event]) - log_normalization;
     }
     return coefficient * logarithm_sum;
 }

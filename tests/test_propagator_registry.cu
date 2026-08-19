@@ -22,9 +22,9 @@ bool close_relative(double value, double reference, double tolerance)
 __global__ void compile_gvv_propagators(double* output)
 {
     const ctpwa::PropagatorParameters scalar(
-        ctpwa::PROP_SCALAR_SWAVE_BWR, 1.723, 0.149);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.723, 0.149, 0);
     const ctpwa::PropagatorParameters pseudoscalar(
-        ctpwa::PROP_PWAVE_BWR, 1.751, 0.240);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.751, 0.240, 1);
     output[0] = ctpwa::evaluate_propagator(
         scalar.mass * scalar.mass,
         scalar,
@@ -43,6 +43,7 @@ int main()
         ctpwa::PROP_SUBTRACTED_FLATTE,
         1.522,
         0.108,
+        0,
         0.0,
         1.0);
     if (f1500.propagator_model != ctpwa::PROP_SUBTRACTED_FLATTE
@@ -60,7 +61,7 @@ int main()
     }
 
     const ctpwa::PropagatorParameters f1710(
-        ctpwa::PROP_SCALAR_SWAVE_BWR, 1.723, 0.149);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.723, 0.149, 0);
     const double scalar_pole_width = f1710.pole_width
         * ctpwa::two_body_width_shape(
             f1710.mass * f1710.mass,
@@ -74,7 +75,7 @@ int main()
     }
 
     const ctpwa::PropagatorParameters eta1760(
-        ctpwa::PROP_PWAVE_BWR, 1.751, 0.240);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.751, 0.240, 1);
     const double p_wave_width = eta1760.pole_width
         * ctpwa::two_body_width_shape(
             eta1760.mass * eta1760.mass,
@@ -87,12 +88,26 @@ int main()
         return 4;
     }
 
+    const ctpwa::PropagatorParameters d_wave(
+        ctpwa::PROP_TWO_BODY_RUNNING_BW, 2.1, 0.2, 2);
+    const double d_wave_width = d_wave.pole_width
+        * ctpwa::two_body_width_shape(
+            d_wave.mass * d_wave.mass,
+            d_wave.mass,
+            d_wave.orbital_l,
+            GVV_OMEGA_MASS,
+            GVV_OMEGA_MASS);
+    if (!close_relative(d_wave_width, d_wave.pole_width, 1.0e-12)) {
+        std::cerr << "D-wave width is not pole-normalized\n";
+        return 5;
+    }
+
     const ctpwa::PropagatorParameters nonresonant;
     const DeviceComplex nr = ctpwa::evaluate_propagator(
         4.0, nonresonant, GVV_OMEGA_MASS, GVV_OMEGA_MASS);
     if (nr.real != 1.0 || nr.imag != 0.0) {
         std::cerr << "nonresonant propagator is not unity\n";
-        return 5;
+        return 6;
     }
 
     OmegaWidthTable omega_table;
@@ -102,11 +117,11 @@ int main()
     if (!close_relative(omega_width_at_pole, GVV_OMEGA_WIDTH, 0.02)) {
         std::cerr << "omega three-body width is not normalized at the pole: "
                   << omega_width_at_pole << '\n';
-        return 6;
+        return 7;
     }
     if (omega_table.Width(0.40 * 0.40) != 0.0) {
         std::cerr << "omega width is nonzero below three-pion threshold\n";
-        return 7;
+        return 8;
     }
 
     std::cout << "GVV model and propagator tests passed\n";

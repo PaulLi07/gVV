@@ -15,6 +15,8 @@
 
 namespace {
 
+constexpr int kPostComponentBatchSize = 4096;
+
 void check_cuda(cudaError_t status, const char* operation)
 {
     if (status != cudaSuccess) {
@@ -43,7 +45,9 @@ GVVComponentEvaluator::GVVComponentEvaluator(
       device_resonances_(nullptr),
       device_terms_(nullptr),
       device_couplings_(nullptr),
-      component_buffer_(nullptr)
+      coefficient_workspace_(nullptr),
+      integrated_components_(nullptr),
+      component_batch_capacity_(0)
 {
     truth_.Load(truth_file, branches);
     selected_.Load(selected_file, branches);
@@ -64,11 +68,17 @@ GVVComponentEvaluator::GVVComponentEvaluator(
         model_.initial_couplings.size() * sizeof(DeviceComplex)),
         "cudaMallocManaged Post couplings");
     const int maximum_entries = std::max(truth_.Entries(), selected_.Entries());
+    component_batch_capacity_ = std::min(
+        kPostComponentBatchSize, maximum_entries);
     check_cuda(cudaMallocManaged(
-        &component_buffer_,
-        static_cast<std::size_t>(maximum_entries) * NumberPairs()
-            * sizeof(double)),
-        "cudaMallocManaged Post component buffer");
+        &coefficient_workspace_,
+        static_cast<std::size_t>(component_batch_capacity_) * NumberTerms()
+            * sizeof(DeviceComplex)),
+        "cudaMallocManaged Post Term coefficient workspace");
+    check_cuda(cudaMallocManaged(
+        &integrated_components_,
+        static_cast<std::size_t>(NumberPairs()) * sizeof(double)),
+        "cudaMallocManaged Post integrated components");
 }
 
 GVVComponentEvaluator::~GVVComponentEvaluator()
@@ -76,7 +86,8 @@ GVVComponentEvaluator::~GVVComponentEvaluator()
     if (device_resonances_) cudaFree(device_resonances_);
     if (device_terms_) cudaFree(device_terms_);
     if (device_couplings_) cudaFree(device_couplings_);
-    if (component_buffer_) cudaFree(component_buffer_);
+    if (coefficient_workspace_) cudaFree(coefficient_workspace_);
+    if (integrated_components_) cudaFree(integrated_components_);
 }
 
 void GVVComponentEvaluator::Upload(const GVVCompiledModel& state)
@@ -97,21 +108,17 @@ void GVVComponentEvaluator::Upload(const GVVCompiledModel& state)
 
 std::vector<double> GVVComponentEvaluator::EvaluateSample(GVVSample& sample)
 {
-    CalGVVComponentMatrix(
+    CalGVVComponentIntegrals(
         sample.Momenta(), device_resonances_, device_terms_, device_couplings_,
         omega_width_table_.DeviceView(), sample.FMatrix(),
-        sample.TermCoefficientBuffer(), component_buffer_, NumberTerms(),
+        coefficient_workspace_, integrated_components_,
+        component_batch_capacity_, NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()), sample.Entries());
 
-    std::vector<double> integrated(NumberPairs(), 0.0);
-    for (int event = 0; event < sample.Entries(); ++event) {
-        const std::size_t offset =
-            static_cast<std::size_t>(event) * NumberPairs();
-        for (int pair = 0; pair < NumberPairs(); ++pair) {
-            integrated[pair] += component_buffer_[offset + pair];
-        }
-    }
-    if (!(sum(integrated) > 0.0) || !std::isfinite(sum(integrated))) {
+    std::vector<double> integrated(
+        integrated_components_, integrated_components_ + NumberPairs());
+    const double total = sum(integrated);
+    if (!(total > 0.0) || !std::isfinite(total)) {
         throw std::runtime_error(
             "invalid integrated intensity in " + sample.Label());
     }
@@ -134,7 +141,7 @@ void GVVComponentEvaluator::ValidateSample(
     CalGVVPDF(
         sample.Momenta(), device_resonances_, device_terms_, device_couplings_,
         omega_width_table_.DeviceView(), sample.FMatrix(),
-        sample.TermCoefficientBuffer(), sample.IntensityBuffer(), NumberTerms(),
+        sample.WaveCoefficientBuffer(), sample.IntensityBuffer(), NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()), sample.Entries());
     double direct_sum = 0.0;
     for (int event = 0; event < sample.Entries(); ++event) {

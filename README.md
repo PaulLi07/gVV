@@ -46,6 +46,9 @@ The currently registered Waves are:
   sample loading under `process/`;
 - accepted-MC normalization of an unbinned coherent intensity;
 - signed background samples for sideband-subtracted likelihoods;
+- exact Wave-slot aggregation of the Fit intensity after all Term dynamics are
+  evaluated, so adding Resonances does not retain a Term-squared hot path;
+- bounded-memory Term-pair evaluation for projection and Post Calculation;
 - multistart MIGRAD/HESSE fitting with convergence and covariance selection;
 - a complete human-readable fit report, a machine-readable fitted-state JSON,
   ROOT projection trees, and Slurm logs under one configurable output tag;
@@ -114,10 +117,13 @@ Useful Make targets are:
 | `make post` | Build `bin/Post.exe` without changing the default build |
 | `make tests` | Build all test executables |
 | `make check` | Run the complete unit-test set |
+| `make gpu-tests` | Build the explicit complete-Wave and intensity GPU checks |
+| `make check-gpu` | Run those checks on a CUDA device |
 | `make clean` | Remove generated binaries, objects, and dependency files |
 
 Build products are written under `build/` and `bin/` and are ignored by
-Git.
+Git. `make check-gpu` is deliberately separate from `make check`: a login
+node may provide `nvcc` without providing a CUDA device.
 
 ## Configure a fit
 
@@ -206,9 +212,10 @@ programs. `fit_state-<tag>.json` is the stable Fit-to-Post Calculation contract
 and contains the ordered free-parameter state and covariance.
 
 The projection file contains fitted normalization-MC weights, selected data,
-combined sideband samples, dynamic Term and JPC maps, and fit provenance in the
-`MC`, `data`, `bg`, `component_map`, `group_map`, and `metadata`
-trees.
+signed background samples, dynamic Term/JPC/background maps, and fit
+provenance in the `MC`, `data`, `bg`, `component_map`, `group_map`,
+`background_map`, and `metadata` trees. Projection schema version 2 uses
+zero-based `background_index` values and contains no fixed SB1/SB2 metadata.
 
 ## Post processing
 
@@ -258,6 +265,12 @@ For a Resonance that uses an existing Wave:
 Resonances referenced only by inactive Terms are omitted from the runtime GPU
 model and the Minuit parameter list. No production source file needs to be
 edited for this workflow.
+
+A fixed `scale_and_phase` reference must be nonzero. A fitted phase reference
+should be a stable, significant active Term. Before disabling that Term or
+testing whether its coupling is compatible with zero, move the phase reference
+to another active Term in the same coherence class and restore the tested Term
+to an ordinary complex coupling.
 
 ### Add a new Wave
 

@@ -1,6 +1,7 @@
 // ROOT serialization contract between the gVV fit and downstream projection
-// tools. FitLikelihood supplies samples/intensities; this module owns the
-// process-specific tree schema, derived observables, weights, and metadata.
+// tools. FitLikelihood supplies samples and batched Term components; this
+// module owns the process-specific tree schema, derived observables, weights,
+// and metadata.
 #ifndef CTPWA_PROCESS_PROJECTION_WRITER_H
 #define CTPWA_PROCESS_PROJECTION_WRITER_H
 
