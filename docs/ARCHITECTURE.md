@@ -709,7 +709,7 @@ Legendre arithmetic, histogram filling, and the moment chi-square calculation.
 The odd macro keeps the ordered-omega diagnostic separate because it is not a
 label-independent observable of two identical omegas.
 
-`post/plotting/draw.sh` runs the five ROOT macros and writes PDF/EPS files under
+`post/plotting/draw.sh` runs the six ROOT macros and writes PDF/EPS files under
 `post/plotting/results/`. The same macros can be executed directly with ROOT;
 their no-argument defaults and runtime relative arguments are resolved from the
 project root located from the macro source.

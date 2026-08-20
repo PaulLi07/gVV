@@ -575,7 +575,7 @@ post/plotting/draw.sh results/projection-TAG.root
 
 `draw.sh` sources the project environment, verifies the input and ROOT binary,
 derives `TAG` from the projection basename, creates
-`post/plotting/results/`, and runs five independently executable macros in ROOT
+`post/plotting/results/`, and runs six independently executable macros in ROOT
 batch mode.
 
 When calling the driver from another directory, invoke the script by an
@@ -596,14 +596,14 @@ For focused development, run any macro directly. With no arguments it uses
 
 ```bash
 source config/gvv_env.sh
-root post/plotting/macros/Draw_projection_2_3.cxx
+root post/plotting/macros/Draw_projection.cxx
 ```
 
 The same command works from the macro directory:
 
 ```bash
 cd post/plotting/macros
-root Draw_projection_2_3.cxx
+root Draw_projection.cxx
 ```
 
 For another input or output prefix, pass both arguments explicitly and use
@@ -611,7 +611,7 @@ ROOT batch mode when no interactive session is needed:
 
 ```bash
 root -l -b -q \
-  'post/plotting/macros/Draw_projection_2_3.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
+  'post/plotting/macros/Draw_projection.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
 ```
 
 The two function arguments override the defaults written in the macro. An
@@ -627,14 +627,28 @@ diagnostics, path resolution, and base style.
 
 | Macro | Output prefix | Purpose |
 |---|---|---|
-| `Draw_projection_2_3.cxx` | `projection-TAG` | Main exchange-symmetric 3x2 kinematic projection |
-| `Draw_projection.cxx` | `projection_detailed-TAG` | Detailed 4x2 diagnostic including the exchange-symmetrized omega-candidate mass |
+| `Draw_projection.cxx` | `projection-TAG` | Main exchange-symmetric 3x2 kinematic projection |
 | `Draw_projection_components.cxx` | `projection_components-TAG` | Diagonal `|A_i|^2` component curves; interference is intentionally omitted |
+| `Draw_polarization.cxx` | `polarization-TAG` | Three exchange-symmetric omega polarization angles |
+| `Draw_omega_decay_checks.cxx` | `omega_decay_checks-TAG` | Six candidate-combined pion-angle and pion-pair-mass checks |
 | `draw_angular_moments.cxx` | `angular_moments-TAG` | Exchange-symmetrized even Legendre moments `P0`, `P2`, `P4`, and `P6` |
 | `draw_angular_moments_odd.cxx` | `angular_moments_odd_diagnostic-TAG` | Ordered-omega odd moments `P1`, `P3`, and `P5` for pairing/order-bias diagnosis |
 
-Each macro writes both `.pdf` and `.eps`, yielding ten tagged figure files.
+Each macro writes both `.pdf` and `.eps`, yielding twelve tagged figure files.
 Existing same-name figures are replaced by ROOT's print operation.
+
+The main projection contains `M(omega omega)`, candidate-combined
+`M(gamma omega)`, `cos(theta_gamma)`, exchange-symmetric `cos(theta_omega)`
+and `phi_omega`, and the candidate-combined `M(pi+ pi- pi0)` distribution.
+For `phi_omega`, the omega2 exchange image is obtained by wrapping
+`phi_omega1 + pi` into `(-pi, pi]`.
+
+The polarization figure contains the candidate-combined decay-plane polar
+cosine and azimuth plus the exchange-symmetrized signed difference of the two
+local plane azimuths. The omega-decay check figure combines the two candidates
+with half weight each for the three pion helicity cosines and for
+`M(pi+ pi-)`, `M(pi+ pi0)`, and `M(pi- pi0)`. It does not add an artificial
+`+/-cos(theta_pi)` reflection.
 
 The projection utilities require projection schema version 3 and discover
 Terms, JPC groups, and background samples dynamically from `component_map`,
@@ -738,7 +752,7 @@ control and disciplined tags rather than manually editing generated states.
 | Post reports component or fraction closure failure | Treat it as a numerical/implementation failure; do not use partial outputs |
 | Post reports non-positive Term truth integral | An active fitted contribution is exactly zero/undefined for component efficiency; revisit the active model or reference choice |
 | Efficiency is implausible but the job succeeds | Verify truth and selected MC are the same unweighted production before/after selection |
-| Plotting rejects the projection schema | Use a projection written by the current schema-version-2 writer |
+| Plotting rejects the projection schema | Use a projection written by the current schema-version-3 writer |
 | Component curves do not add to total | Expected: the component diagnostic shows diagonals only and omits signed interference |
 | Odd angular moments are nonzero | Investigate omega assignment/order bias; these are intentionally ordered-omega diagnostics |
 | Same-tag outputs change unexpectedly | A repeated or concurrent job used the same directory and tag; use unique tags for simultaneous jobs |

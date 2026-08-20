@@ -697,7 +697,7 @@ macros.
 This is the user plotting entry point. It accepts exactly one projection ROOT
 file, loads the project ROOT environment, derives the tag from
 `projection-<tag>.root`, creates `post/plotting/results/`, and invokes each of
-the five macros in ROOT batch mode. It neither requests a GPU nor submits a
+the six macros in ROOT batch mode. It neither requests a GPU nor submits a
 Slurm job.
 
 ### Standalone plotting macros
@@ -709,9 +709,10 @@ configuration and presentation:
 
 | File | Figure |
 |---|---|
-| `post/plotting/macros/Draw_projection_2_3.cxx` | main `3 x 2` exchange-symmetric projections with dynamic coherent JPC groups |
-| `post/plotting/macros/Draw_projection.cxx` | detailed `4 x 2` projection including the exchange-symmetrized omega-candidate mass |
+| `post/plotting/macros/Draw_projection.cxx` | main `3 x 2` exchange-symmetric kinematic projections with dynamic coherent JPC groups |
 | `post/plotting/macros/Draw_projection_components.cxx` | diagonal Term-component diagnostic, intentionally excluding interference curves |
+| `post/plotting/macros/Draw_polarization.cxx` | candidate-combined decay-plane polar/azimuthal angles and exchange-symmetric plane-angle difference |
+| `post/plotting/macros/Draw_omega_decay_checks.cxx` | candidate-combined pion helicity cosines and pion-pair invariant-mass checks |
 | `post/plotting/macros/draw_angular_moments.cxx` | physical even `P0/P2/P4/P6` omega-angle moments |
 | `post/plotting/macros/draw_angular_moments_odd.cxx` | ordered-omega odd `P1/P3/P5` diagnostic |
 

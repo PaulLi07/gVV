@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace projection_detailed {
+namespace projection_main {
 
 // ============================================================================
 // User configuration
@@ -22,10 +22,10 @@ namespace projection_detailed {
 // Override them at runtime using:
 //   root -l -b -q 'post/plotting/macros/Draw_projection.cxx(
 //     "results/projection-TAG.root",
-//     "post/plotting/results/projection_detailed-TAG")'
+//     "post/plotting/results/projection-TAG")'
 constexpr const char* kDefaultInput = "results/projection-initial.root";
 constexpr const char* kDefaultOutput =
-    "post/plotting/results/projection_detailed-initial";
+    "post/plotting/results/projection-initial";
 
 // Observable order, binning, numerical ranges, and x-axis titles.
 const std::vector<gvvplot::VariableSpec> kVariables = {
@@ -35,23 +35,21 @@ const std::vector<gvvplot::VariableSpec> kVariables = {
      "M(#gamma#omega) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kCosThetaGamma, 40, -1.0, 1.0,
      "cos#theta_{#gamma}", false},
-    {gvvplot::kCosThetaOmega1, 40, -1.0, 1.0,
+    {gvvplot::kCosThetaOmega, 40, -1.0, 1.0,
      "sym. cos#theta_{#omega}", false},
-    {gvvplot::kPhiDecayPlaneOmega, 40, -TMath::Pi(), TMath::Pi(),
-     "#phi_{decay plane}^{#omega} (rad)", false},
-    {gvvplot::kDeltaPhiDecayPlanes, 40, -TMath::Pi(), TMath::Pi(),
-     "sym. #Delta#phi_{planes} (rad)", false},
+    {gvvplot::kPhiOmega, 40, -TMath::Pi(), TMath::Pi(),
+     "sym. #phi_{#omega} (rad)", false},
     {gvvplot::kMassOmega, 42, 0.740, 0.824,
      "M(#pi^{+}#pi^{-}#pi^{0}) (GeV/#font[12]{c}^{2})", true}};
 
-constexpr const char* kCanvasName = "gvv_projection_detailed";
-constexpr const char* kCanvasTitle = "GVV detailed projections";
-constexpr int kCanvasWidth = 1320;
+constexpr const char* kCanvasName = "gvv_projection_main";
+constexpr const char* kCanvasTitle = "GVV main projections";
+constexpr int kCanvasWidth = 1080;
 constexpr int kCanvasHeight = 720;
-constexpr int kCanvasColumns = 4;
+constexpr int kCanvasColumns = 3;
 constexpr int kCanvasRows = 2;
 constexpr double kPadGap = 0.002;
-constexpr int kLegendPad = 8;
+constexpr int kLegendPad = 1;
 
 // Data, background, total-fit, and coherent-group appearance.
 constexpr int kDataMarkerStyle = 8;
@@ -186,11 +184,11 @@ void DrawPanel(
               << '/' << chi_square.second << '\n';
 }
 
-} // namespace projection_detailed
+} // namespace projection_main
 
 void Draw_projection(
-    const char* input_file = projection_detailed::kDefaultInput,
-    const char* output_prefix = projection_detailed::kDefaultOutput)
+    const char* input_file = projection_main::kDefaultInput,
+    const char* output_prefix = projection_main::kDefaultOutput)
 {
     const std::string input_path =
         gvvplot::ResolveProjectPath(input_file, __FILE__);
@@ -200,60 +198,59 @@ void Draw_projection(
     gvvplot::SetBESIIIStyle();
     gvvplot::ProjectionInput input = gvvplot::LoadProjection(input_path.c_str());
     TCanvas* canvas = new TCanvas(
-        projection_detailed::kCanvasName,
-        projection_detailed::kCanvasTitle,
-        projection_detailed::kCanvasWidth,
-        projection_detailed::kCanvasHeight);
+        projection_main::kCanvasName,
+        projection_main::kCanvasTitle,
+        projection_main::kCanvasWidth,
+        projection_main::kCanvasHeight);
     canvas->Divide(
-        projection_detailed::kCanvasColumns,
-        projection_detailed::kCanvasRows,
-        projection_detailed::kPadGap,
-        projection_detailed::kPadGap);
+        projection_main::kCanvasColumns,
+        projection_main::kCanvasRows,
+        projection_main::kPadGap,
+        projection_main::kPadGap);
 
     std::vector<gvvplot::PanelHistograms> panels;
     for (std::size_t index = 0;
-         index < projection_detailed::kVariables.size();
+         index < projection_main::kVariables.size();
          ++index) {
         canvas->cd(static_cast<int>(index) + 1);
         panels.push_back(gvvplot::BuildPanel(
             input,
-            projection_detailed::kVariables[index],
+            projection_main::kVariables[index],
             static_cast<int>(index),
             false));
-        projection_detailed::DrawPanel(
-            panels.back(), projection_detailed::kVariables[index], index);
+        projection_main::DrawPanel(
+            panels.back(), projection_main::kVariables[index], index);
     }
 
-    canvas->cd(projection_detailed::kLegendPad);
+    canvas->cd(projection_main::kLegendPad);
     TLegend* legend = new TLegend(
-        projection_detailed::kLegendX1,
-        projection_detailed::kLegendY1,
-        projection_detailed::kLegendX2,
-        projection_detailed::kLegendY2);
-    legend->SetBorderSize(projection_detailed::kLegendBorderSize);
-    legend->SetFillStyle(projection_detailed::kLegendFillStyle);
-    legend->SetTextFont(projection_detailed::kLegendFont);
-    legend->SetTextSize(projection_detailed::kLegendTextSize);
+        projection_main::kLegendX1,
+        projection_main::kLegendY1,
+        projection_main::kLegendX2,
+        projection_main::kLegendY2);
+    legend->SetBorderSize(projection_main::kLegendBorderSize);
+    legend->SetFillStyle(projection_main::kLegendFillStyle);
+    legend->SetTextFont(projection_main::kLegendFont);
+    legend->SetTextSize(projection_main::kLegendTextSize);
     legend->AddEntry(
         panels[0].data,
-        projection_detailed::kDataLegendLabel,
-        projection_detailed::kDataLegendOption);
+        projection_main::kDataLegendLabel,
+        projection_main::kDataLegendOption);
     legend->AddEntry(
         panels[0].background,
-        projection_detailed::kBackgroundLegendLabel,
-        projection_detailed::kBackgroundLegendOption);
+        projection_main::kBackgroundLegendLabel,
+        projection_main::kBackgroundLegendOption);
     legend->AddEntry(
         panels[0].total,
-        projection_detailed::kTotalLegendLabel,
-        projection_detailed::kLineLegendOption);
+        projection_main::kTotalLegendLabel,
+        projection_main::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            projection_detailed::kGroupLegendPrefix
-            + input.groups[group].label;
+            projection_main::kGroupLegendPrefix + input.groups[group].label;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),
-            projection_detailed::kLineLegendOption);
+            projection_main::kLineLegendOption);
     }
     legend->Draw();
 

@@ -288,3 +288,33 @@ Verification was performed with ROOT 6.32.02 and CUDA 12 on the fixed
   each macro produced its PDF and EPS outputs, and the ROOT logs contained no
   error, fatal, abort, segmentation-fault, missing-branch, or unsupported-
   schema diagnostics.
+
+## Plot catalogue update (2026-08-21)
+
+Working branch: `refactor/plotting-modules`.
+
+- Renamed the main 3x2 entry point from `Draw_projection_2_3.cxx` to
+  `Draw_projection.cxx` and removed the separate detailed 4x2 figure.
+- Defined the main six panels as `M(omega omega)`, candidate-combined
+  `M(gamma omega)`, `cos(theta_gamma)`, exchange-symmetric
+  `cos(theta_omega)` and `phi_omega`, and candidate-combined
+  `M(pi+ pi- pi0)`.
+- Synchronized the diagonal-Term component figure to the same six variables.
+- Added a standalone three-angle polarization figure and a standalone 3x2
+  omega-decay check figure for the three pion helicity cosines and three
+  pion-pair invariant masses.
+- Used half-weight candidate merging for local omega-decay variables. No
+  additional pion-cosine reflection was introduced.
+- Updated `draw.sh` to run the six independent ROOT macros.
+
+Verification used an isolated schema-v3 Projection fixture and did not run
+Fit, Post Calculation, CUDA kernels, or a Slurm job:
+
+- all six macros passed ROOT-aware C++ syntax checks and direct ROOT execution;
+- focused histogram checks confirmed the `+pi` omega-azimuth exchange image,
+  the `+/-cos(theta_omega)` exchange pair, and half-weight candidate merging
+  for pion angles and pion-pair masses;
+- `draw.sh` completed successfully on `lxlogin005`, produced the expected six
+  PDF and six EPS files, and its ROOT log passed the error-marker scan;
+- the main, polarization, and omega-decay check PDFs were rendered and
+  inspected for panel content, labels, and layout.

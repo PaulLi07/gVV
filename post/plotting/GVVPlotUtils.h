@@ -26,10 +26,18 @@ enum Variable {
     kMassOmegaOmega = 0,
     kMassGammaOmega = 1,
     kCosThetaGamma = 2,
-    kCosThetaOmega1 = 3,
-    kPhiDecayPlaneOmega = 4,
-    kDeltaPhiDecayPlanes = 5,
-    kMassOmega = 6
+    kCosThetaOmega = 3,
+    kPhiOmega = 4,
+    kMassOmega = 5,
+    kCosThetaDecayPlaneOmega = 6,
+    kPhiDecayPlaneOmega = 7,
+    kDeltaPhiDecayPlanes = 8,
+    kCosThetaPipOmega = 9,
+    kCosThetaPimOmega = 10,
+    kCosThetaPi0Omega = 11,
+    kMassPipPimOmega = 12,
+    kMassPipPi0Omega = 13,
+    kMassPimPi0Omega = 14
 };
 
 // A macro supplies these values explicitly so its axes and binning can be
@@ -124,12 +132,27 @@ inline void RequireBranch(TTree* tree, const char* name)
     }
 }
 
+inline double WrapAzimuth(double angle)
+{
+    constexpr double pi = 3.14159265358979323846;
+    constexpr double two_pi = 2.0 * pi;
+    while (angle <= -pi) angle += two_pi;
+    while (angle > pi) angle -= two_pi;
+    return angle;
+}
+
 struct Branches {
     double m_omega1 = 0.0;
     double m_omega2 = 0.0;
     double m_omegaomega = 0.0;
     double m_gammaomega1 = 0.0;
     double m_gammaomega2 = 0.0;
+    double m_pip1_pim1 = 0.0;
+    double m_pip1_pi01 = 0.0;
+    double m_pim1_pi01 = 0.0;
+    double m_pip2_pim2 = 0.0;
+    double m_pip2_pi02 = 0.0;
+    double m_pim2_pi02 = 0.0;
     double cos_theta_gamma = 0.0;
     double cos_theta_omega1 = 0.0;
     double phi_omega1 = 0.0;
@@ -157,6 +180,8 @@ struct Branches {
         const char* required[] = {
             "m_omega1", "m_omega2", "m_omegaomega",
             "m_gammaomega1", "m_gammaomega2",
+            "m_pip1_pim1", "m_pip1_pi01", "m_pim1_pi01",
+            "m_pip2_pim2", "m_pip2_pi02", "m_pim2_pi02",
             "cos_theta_gamma", "cos_theta_omega1", "phi_omega1",
             "cos_theta_decay_plane_omega1", "phi_decay_plane_omega1",
             "cos_theta_decay_plane_omega2", "phi_decay_plane_omega2",
@@ -172,6 +197,12 @@ struct Branches {
         tree->SetBranchAddress("m_omegaomega", &m_omegaomega);
         tree->SetBranchAddress("m_gammaomega1", &m_gammaomega1);
         tree->SetBranchAddress("m_gammaomega2", &m_gammaomega2);
+        tree->SetBranchAddress("m_pip1_pim1", &m_pip1_pim1);
+        tree->SetBranchAddress("m_pip1_pi01", &m_pip1_pi01);
+        tree->SetBranchAddress("m_pim1_pi01", &m_pim1_pi01);
+        tree->SetBranchAddress("m_pip2_pim2", &m_pip2_pim2);
+        tree->SetBranchAddress("m_pip2_pi02", &m_pip2_pi02);
+        tree->SetBranchAddress("m_pim2_pi02", &m_pim2_pi02);
         tree->SetBranchAddress("cos_theta_gamma", &cos_theta_gamma);
         tree->SetBranchAddress("cos_theta_omega1", &cos_theta_omega1);
         tree->SetBranchAddress("phi_omega1", &phi_omega1);
@@ -237,18 +268,46 @@ inline void FillObservable(
         histogram->Fill(values.m_gammaomega2, 0.5 * weight);
     } else if (variable == kCosThetaGamma) {
         histogram->Fill(values.cos_theta_gamma, weight);
-    } else if (variable == kCosThetaOmega1) {
+    } else if (variable == kCosThetaOmega) {
         histogram->Fill(values.cos_theta_omega1, 0.5 * weight);
         histogram->Fill(-values.cos_theta_omega1, 0.5 * weight);
+    } else if (variable == kPhiOmega) {
+        histogram->Fill(values.phi_omega1, 0.5 * weight);
+        histogram->Fill(
+            WrapAzimuth(values.phi_omega1 + 3.14159265358979323846),
+            0.5 * weight);
+    } else if (variable == kMassOmega) {
+        histogram->Fill(values.m_omega1, 0.5 * weight);
+        histogram->Fill(values.m_omega2, 0.5 * weight);
+    } else if (variable == kCosThetaDecayPlaneOmega) {
+        histogram->Fill(
+            values.cos_theta_decay_plane_omega1, 0.5 * weight);
+        histogram->Fill(
+            values.cos_theta_decay_plane_omega2, 0.5 * weight);
     } else if (variable == kPhiDecayPlaneOmega) {
         histogram->Fill(values.phi_decay_plane_omega1, 0.5 * weight);
         histogram->Fill(values.phi_decay_plane_omega2, 0.5 * weight);
     } else if (variable == kDeltaPhiDecayPlanes) {
         histogram->Fill(values.delta_phi_decay_planes, 0.5 * weight);
         histogram->Fill(-values.delta_phi_decay_planes, 0.5 * weight);
-    } else if (variable == kMassOmega) {
-        histogram->Fill(values.m_omega1, 0.5 * weight);
-        histogram->Fill(values.m_omega2, 0.5 * weight);
+    } else if (variable == kCosThetaPipOmega) {
+        histogram->Fill(values.cos_theta_pip_omega1, 0.5 * weight);
+        histogram->Fill(values.cos_theta_pip_omega2, 0.5 * weight);
+    } else if (variable == kCosThetaPimOmega) {
+        histogram->Fill(values.cos_theta_pim_omega1, 0.5 * weight);
+        histogram->Fill(values.cos_theta_pim_omega2, 0.5 * weight);
+    } else if (variable == kCosThetaPi0Omega) {
+        histogram->Fill(values.cos_theta_pi0_omega1, 0.5 * weight);
+        histogram->Fill(values.cos_theta_pi0_omega2, 0.5 * weight);
+    } else if (variable == kMassPipPimOmega) {
+        histogram->Fill(values.m_pip1_pim1, 0.5 * weight);
+        histogram->Fill(values.m_pip2_pim2, 0.5 * weight);
+    } else if (variable == kMassPipPi0Omega) {
+        histogram->Fill(values.m_pip1_pi01, 0.5 * weight);
+        histogram->Fill(values.m_pip2_pi02, 0.5 * weight);
+    } else if (variable == kMassPimPi0Omega) {
+        histogram->Fill(values.m_pim1_pi01, 0.5 * weight);
+        histogram->Fill(values.m_pim2_pi02, 0.5 * weight);
     }
 }
 

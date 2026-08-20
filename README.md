@@ -429,10 +429,11 @@ Plotting is a ROOT task driven only by the projection file:
 post/plotting/draw.sh results/projection-initial.root
 ```
 
-The script writes projection, component, even angular-moment, and odd-moment
-diagnostic figures under `post/plotting/results/`. It discovers active Terms,
-JPC groups, and background samples from the projection maps instead of using a
-fixed Resonance list.
+The script writes the main and component projections, a dedicated polarization
+figure, omega-decay check distributions, and even/odd angular-moment figures
+under `post/plotting/results/`. It discovers active Terms, JPC groups, and
+background samples from the projection maps instead of using a fixed Resonance
+list.
 
 Each ROOT macro is also a standalone plotting module. After loading the
 environment, it can be executed directly with its default `initial` input and
@@ -440,7 +441,7 @@ output paths:
 
 ```bash
 source config/gvv_env.sh
-root post/plotting/macros/Draw_projection_2_3.cxx
+root post/plotting/macros/Draw_projection.cxx
 ```
 
 Observable definitions, binning, axes, canvas layout, colors, legends, and

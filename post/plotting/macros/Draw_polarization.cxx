@@ -11,45 +11,42 @@
 #include <utility>
 #include <vector>
 
-namespace projection_main {
+namespace polarization {
 
 // ============================================================================
 // User configuration
 // ============================================================================
-// Relative paths are interpreted from the project root. Run with these
-// defaults using:
-//   root post/plotting/macros/Draw_projection_2_3.cxx
-// Override them at runtime using:
-//   root -l -b -q 'post/plotting/macros/Draw_projection_2_3.cxx(
+// The two omega candidates are combined with half weight per candidate. The
+// signed plane-angle difference is filled together with its exchange image.
+// Relative paths are interpreted from the project root.
+//
+// Run with defaults:
+//   root post/plotting/macros/Draw_polarization.cxx
+// Override at runtime:
+//   root -l -b -q 'post/plotting/macros/Draw_polarization.cxx(
 //     "results/projection-TAG.root",
-//     "post/plotting/results/projection-TAG")'
+//     "post/plotting/results/polarization-TAG")'
 constexpr const char* kDefaultInput = "results/projection-initial.root";
 constexpr const char* kDefaultOutput =
-    "post/plotting/results/projection-initial";
+    "post/plotting/results/polarization-initial";
 
-// Observable order, binning, numerical ranges, and x-axis titles.
+// Polarization observables, binning, ranges, and x-axis titles.
 const std::vector<gvvplot::VariableSpec> kVariables = {
-    {gvvplot::kMassOmegaOmega, 60, 1.50, 3.20,
-     "M(#omega#omega) (GeV/#font[12]{c}^{2})", true},
-    {gvvplot::kMassGammaOmega, 60, 0.85, 2.95,
-     "M(#gamma#omega) (GeV/#font[12]{c}^{2})", true},
-    {gvvplot::kCosThetaGamma, 40, -1.0, 1.0,
-     "cos#theta_{#gamma}", false},
-    {gvvplot::kCosThetaOmega1, 40, -1.0, 1.0,
-     "sym. cos#theta_{#omega}", false},
+    {gvvplot::kCosThetaDecayPlaneOmega, 40, -1.0, 1.0,
+     "cos#theta_{decay plane}^{#omega}", false},
     {gvvplot::kPhiDecayPlaneOmega, 40, -TMath::Pi(), TMath::Pi(),
      "#phi_{decay plane}^{#omega} (rad)", false},
     {gvvplot::kDeltaPhiDecayPlanes, 40, -TMath::Pi(), TMath::Pi(),
-     "sym. #Delta#phi_{planes} (rad)", false}};
+     "sym. #Delta#phi_{decay planes} (rad)", false}};
 
-constexpr const char* kCanvasName = "gvv_projection_main";
-constexpr const char* kCanvasTitle = "GVV main projections";
-constexpr int kCanvasWidth = 1080;
-constexpr int kCanvasHeight = 720;
-constexpr int kCanvasColumns = 3;
+constexpr const char* kCanvasName = "gvv_polarization";
+constexpr const char* kCanvasTitle = "GVV polarization observables";
+constexpr int kCanvasWidth = 900;
+constexpr int kCanvasHeight = 760;
+constexpr int kCanvasColumns = 2;
 constexpr int kCanvasRows = 2;
 constexpr double kPadGap = 0.002;
-constexpr int kLegendPad = 1;
+constexpr int kLegendPad = 4;
 
 // Data, background, total-fit, and coherent-group appearance.
 constexpr int kDataMarkerStyle = 8;
@@ -69,10 +66,7 @@ constexpr std::size_t kGroupStyleCount =
 
 // Axes and automatic vertical range.
 constexpr int kAxisDivisions = 505;
-constexpr const char* kMassYAxisFormat =
-    "Events / (%.1f MeV/#font[12]{c}^{2})";
-constexpr const char* kDimensionlessYAxisFormat = "Events / %.3g";
-constexpr double kGeVToMeV = 1000.0;
+constexpr const char* kYAxisFormat = "Events / %.3g";
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
 constexpr double kPositiveRangeScale = 1.45;
@@ -85,7 +79,7 @@ constexpr double kAnnotationY = 0.84;
 constexpr const char* kAnnotationFormat =
     "(%c) #chi^{2}/N_{bin}=%.1f/%d";
 
-// ROOT draw options and layer order used by DrawPanel().
+// ROOT draw options and layer order.
 constexpr const char* kDataDrawOption = "E1";
 constexpr const char* kBackgroundDrawOption = "HIST SAME";
 constexpr const char* kGroupDrawOption = "HIST SAME";
@@ -93,12 +87,12 @@ constexpr const char* kTotalDrawOption = "HIST SAME";
 constexpr const char* kDataRedrawOption = "E1 SAME";
 
 // Legend box and text.
-constexpr double kLegendX1 = 0.54;
-constexpr double kLegendY1 = 0.60;
-constexpr double kLegendX2 = 0.93;
-constexpr double kLegendY2 = 0.86;
+constexpr double kLegendX1 = 0.10;
+constexpr double kLegendY1 = 0.18;
+constexpr double kLegendX2 = 0.92;
+constexpr double kLegendY2 = 0.82;
 constexpr int kLegendFont = 22;
-constexpr double kLegendTextSize = 0.050;
+constexpr double kLegendTextSize = 0.055;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
 constexpr const char* kDataLegendLabel = "Data";
@@ -134,10 +128,7 @@ void FormatPanel(
     const double bin_width =
         (variable.upper - variable.lower) / variable.bins;
     panel.data->GetXaxis()->SetTitle(variable.x_title);
-    panel.data->GetYaxis()->SetTitle(
-        variable.mass_axis
-            ? Form(kMassYAxisFormat, kGeVToMeV * bin_width)
-            : Form(kDimensionlessYAxisFormat, bin_width));
+    panel.data->GetYaxis()->SetTitle(Form(kYAxisFormat, bin_width));
     panel.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     panel.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
     panel.data->GetXaxis()->SetNdivisions(kAxisDivisions);
@@ -184,11 +175,11 @@ void DrawPanel(
               << '/' << chi_square.second << '\n';
 }
 
-} // namespace projection_main
+} // namespace polarization
 
-void Draw_projection_2_3(
-    const char* input_file = projection_main::kDefaultInput,
-    const char* output_prefix = projection_main::kDefaultOutput)
+void Draw_polarization(
+    const char* input_file = polarization::kDefaultInput,
+    const char* output_prefix = polarization::kDefaultOutput)
 {
     const std::string input_path =
         gvvplot::ResolveProjectPath(input_file, __FILE__);
@@ -198,59 +189,59 @@ void Draw_projection_2_3(
     gvvplot::SetBESIIIStyle();
     gvvplot::ProjectionInput input = gvvplot::LoadProjection(input_path.c_str());
     TCanvas* canvas = new TCanvas(
-        projection_main::kCanvasName,
-        projection_main::kCanvasTitle,
-        projection_main::kCanvasWidth,
-        projection_main::kCanvasHeight);
+        polarization::kCanvasName,
+        polarization::kCanvasTitle,
+        polarization::kCanvasWidth,
+        polarization::kCanvasHeight);
     canvas->Divide(
-        projection_main::kCanvasColumns,
-        projection_main::kCanvasRows,
-        projection_main::kPadGap,
-        projection_main::kPadGap);
+        polarization::kCanvasColumns,
+        polarization::kCanvasRows,
+        polarization::kPadGap,
+        polarization::kPadGap);
 
     std::vector<gvvplot::PanelHistograms> panels;
     for (std::size_t index = 0;
-         index < projection_main::kVariables.size();
+         index < polarization::kVariables.size();
          ++index) {
         canvas->cd(static_cast<int>(index) + 1);
         panels.push_back(gvvplot::BuildPanel(
             input,
-            projection_main::kVariables[index],
+            polarization::kVariables[index],
             static_cast<int>(index),
             false));
-        projection_main::DrawPanel(
-            panels.back(), projection_main::kVariables[index], index);
+        polarization::DrawPanel(
+            panels.back(), polarization::kVariables[index], index);
     }
 
-    canvas->cd(projection_main::kLegendPad);
+    canvas->cd(polarization::kLegendPad);
     TLegend* legend = new TLegend(
-        projection_main::kLegendX1,
-        projection_main::kLegendY1,
-        projection_main::kLegendX2,
-        projection_main::kLegendY2);
-    legend->SetBorderSize(projection_main::kLegendBorderSize);
-    legend->SetFillStyle(projection_main::kLegendFillStyle);
-    legend->SetTextFont(projection_main::kLegendFont);
-    legend->SetTextSize(projection_main::kLegendTextSize);
+        polarization::kLegendX1,
+        polarization::kLegendY1,
+        polarization::kLegendX2,
+        polarization::kLegendY2);
+    legend->SetBorderSize(polarization::kLegendBorderSize);
+    legend->SetFillStyle(polarization::kLegendFillStyle);
+    legend->SetTextFont(polarization::kLegendFont);
+    legend->SetTextSize(polarization::kLegendTextSize);
     legend->AddEntry(
         panels[0].data,
-        projection_main::kDataLegendLabel,
-        projection_main::kDataLegendOption);
+        polarization::kDataLegendLabel,
+        polarization::kDataLegendOption);
     legend->AddEntry(
         panels[0].background,
-        projection_main::kBackgroundLegendLabel,
-        projection_main::kBackgroundLegendOption);
+        polarization::kBackgroundLegendLabel,
+        polarization::kBackgroundLegendOption);
     legend->AddEntry(
         panels[0].total,
-        projection_main::kTotalLegendLabel,
-        projection_main::kLineLegendOption);
+        polarization::kTotalLegendLabel,
+        polarization::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            projection_main::kGroupLegendPrefix + input.groups[group].label;
+            polarization::kGroupLegendPrefix + input.groups[group].label;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),
-            projection_main::kLineLegendOption);
+            polarization::kLineLegendOption);
     }
     legend->Draw();
 

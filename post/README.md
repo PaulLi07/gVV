@@ -48,9 +48,10 @@ post/
     ├── GVVPlotUtils.h
     ├── draw.sh
     ├── macros/
-    │   ├── Draw_projection_2_3.cxx
     │   ├── Draw_projection.cxx
     │   ├── Draw_projection_components.cxx
+    │   ├── Draw_polarization.cxx
+    │   ├── Draw_omega_decay_checks.cxx
     │   ├── draw_angular_moments.cxx
     │   └── draw_angular_moments_odd.cxx
     └── results/                 generated, not source-controlled
@@ -337,7 +338,7 @@ root:
 
 ```bash
 source config/gvv_env.sh
-root post/plotting/macros/Draw_projection_2_3.cxx
+root post/plotting/macros/Draw_projection.cxx
 ```
 
 No-argument execution uses `results/projection-initial.root` and the macro's
@@ -348,18 +349,18 @@ the project root, so this also works:
 
 ```bash
 cd post/plotting/macros
-root Draw_projection_2_3.cxx
+root Draw_projection.cxx
 ```
 
 Pass an explicit Projection and output prefix for another fit tag:
 
 ```bash
 root -l -b -q \
-  'post/plotting/macros/Draw_projection_2_3.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
+  'post/plotting/macros/Draw_projection.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
 ```
 
-Use the same calling convention for the other four macros. `draw.sh` remains
-the convenient way to derive one tag and run all five together. An absolute
+Use the same calling convention for the other five macros. `draw.sh` remains
+the convenient way to derive one tag and run all six together. An absolute
 input or output path is accepted unchanged.
 
 ### Where to change a figure
@@ -405,33 +406,37 @@ histogram. The signed background projection weight is the negative of the
 corresponding likelihood coefficient, matching the data-minus-background
 visual convention.
 
-### Five plot products
+### Six plot products
 
 `draw.sh` runs these ROOT entry points:
 
 | Entry point | Interpretation | Output basename |
 |---|---|---|
-| `Draw_projection_2_3.cxx` | Main 3x2 exchange-symmetric projection | `projection-<tag>` |
-| `Draw_projection.cxx` | Detailed 4x2 projection including the exchange-symmetrized omega-candidate mass | `projection_detailed-<tag>` |
+| `Draw_projection.cxx` | Main 3x2 exchange-symmetric projection | `projection-<tag>` |
 | `Draw_projection_components.cxx` | Per-Term diagonal component diagnostic | `projection_components-<tag>` |
+| `Draw_polarization.cxx` | Three omega polarization-angle projections | `polarization-<tag>` |
+| `Draw_omega_decay_checks.cxx` | Pion-angle and pion-pair-mass checks | `omega_decay_checks-<tag>` |
 | `draw_angular_moments.cxx` | Symmetrized even `P0/P2/P4/P6` moments | `angular_moments-<tag>` |
 | `draw_angular_moments_odd.cxx` | Ordered-omega `P1/P3/P5` diagnostic | `angular_moments_odd_diagnostic-<tag>` |
 
 Each basename is written as both PDF and EPS under
-`post/plotting/results/`, for ten files in a complete run.
+`post/plotting/results/`, for twelve files in a complete run.
 
 The main observables are `M(omega omega)`, symmetrized `M(gamma omega)`,
-`cos(theta_gamma)`, symmetrized `cos_theta_omega1`, the two
-`phi_decay_plane_omega1/2` values, and the symmetrized decay-plane-angle
-difference. The detailed projection also fills the two omega-candidate
-`M(pi+ pi- pi0)` values with half weight, forming one exchange-symmetrized
-candidate-mass distribution.
+`cos(theta_gamma)`, exchange-symmetric `cos_theta_omega` and `phi_omega`, and
+the two omega-candidate `M(pi+ pi- pi0)` values combined with half weight each.
+The omega2 azimuthal exchange image is reconstructed as wrapped
+`phi_omega1 + pi` because the two omegas are back-to-back in the X frame.
 
-The schema-v3 reader additionally binds `phi_omega1`, both decay-plane-normal
-polar cosines, all six pion helicity polar cosines, and both unnormalized
-decay-plane-normal magnitudes. They are available to new human-readable macros
-without extending the shared input layer; the current five standard figures
-do not add extra panels for them.
+The polarization figure combines both candidates for the decay-plane polar
+cosine and azimuth, and symmetrizes the signed difference of the two local
+plane azimuths. The omega-decay check figure combines both candidates with
+half weight each for `cos_theta_pip_omega`, `cos_theta_pim_omega`,
+`cos_theta_pi0_omega`, `M(pi+ pi-)`, `M(pi+ pi0)`, and `M(pi- pi0)`. The pion
+cosines are not additionally reflected because each is already defined in its
+parent omega helicity frame. The stored unnormalized plane-normal magnitudes
+remain available for future dedicated studies but are not included in these
+standard figures.
 
 The component diagnostic draws only diagonal `|A_i|^2` entries. It cannot and
 should not close to the total coherent curve when interference is present.
@@ -444,7 +449,7 @@ ordering and should be interpreted only as assignment/order-bias diagnostics.
 
 ### Plotting acceptance checklist
 
-1. confirm all ten PDF/EPS products were created;
+1. confirm all twelve PDF/EPS products were created;
 2. check ROOT printed no missing-tree, missing-branch, schema, or map-size
    exception;
 3. verify the legends contain the intended dynamic Terms and JPC groups;

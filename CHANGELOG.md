@@ -2,6 +2,10 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Replaced the old main/detailed projection split with one clearly named
+  `Draw_projection.cxx` 3x2 figure, synchronized the component figure, and
+  added standalone polarization and omega-decay check figures with explicit
+  exchange-symmetric candidate handling.
 - Upgraded Projection from schema version 2 to version 3 with an explicit X
   helicity frame, the complete omega1 production direction, both oriented
   omega decay-plane-normal directions and magnitudes, and all six pion

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# One-command driver for the five independently executable ROOT macros.
+# One-command driver for the six independently executable ROOT macros.
 # Each macro owns its own plot configuration; this script only supplies a
 # common Projection input and tagged output prefixes.
 set -euo pipefail
@@ -37,11 +37,13 @@ OUTPUT_TAG=${OUTPUT_TAG%.root}
 cd "$PROJECT"
 
 "$ROOT_BIN" -l -b -q \
-    "$PLOT_DIR/Draw_projection_2_3.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/projection-$OUTPUT_TAG\")"
-"$ROOT_BIN" -l -b -q \
-    "$PLOT_DIR/Draw_projection.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/projection_detailed-$OUTPUT_TAG\")"
+    "$PLOT_DIR/Draw_projection.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/projection-$OUTPUT_TAG\")"
 "$ROOT_BIN" -l -b -q \
     "$PLOT_DIR/Draw_projection_components.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/projection_components-$OUTPUT_TAG\")"
+"$ROOT_BIN" -l -b -q \
+    "$PLOT_DIR/Draw_polarization.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/polarization-$OUTPUT_TAG\")"
+"$ROOT_BIN" -l -b -q \
+    "$PLOT_DIR/Draw_omega_decay_checks.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/omega_decay_checks-$OUTPUT_TAG\")"
 "$ROOT_BIN" -l -b -q \
     "$PLOT_DIR/draw_angular_moments.cxx(\"$PROJECTION\",\"$OUTPUT_DIR/angular_moments-$OUTPUT_TAG\")"
 "$ROOT_BIN" -l -b -q \
