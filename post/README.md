@@ -329,6 +329,55 @@ which checks for the configured `nvcc`. Until a ROOT-only loader is added, the
 CUDA installation must therefore be readable even though plotting executes no
 CUDA code.
 
+### Run one macro directly
+
+Each `.cxx` file is a complete ROOT macro whose top-level function matches its
+filename. After loading the environment, execute it directly from the project
+root:
+
+```bash
+source config/gvv_env.sh
+root post/plotting/macros/Draw_projection_2_3.cxx
+```
+
+No-argument execution uses `results/projection-initial.root` and the macro's
+matching `initial` output prefix under `post/plotting/results/`. Defaults are
+resolved relative to the macro source, so this also works:
+
+```bash
+cd post/plotting/macros
+root Draw_projection_2_3.cxx
+```
+
+Pass an explicit Projection and output prefix for another fit tag:
+
+```bash
+root -l -b -q \
+  'post/plotting/macros/Draw_projection_2_3.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
+```
+
+Use the same calling convention for the other four macros. `draw.sh` remains
+the convenient way to derive one tag and run all five together.
+
+### Where to change a figure
+
+Each macro owns its complete presentation configuration:
+
+- observable list or Legendre orders;
+- bins and numerical axis ranges;
+- axis titles and event/bin normalization labels;
+- canvas dimensions and pad layout;
+- curve colors, line/marker/fill styles, and draw order;
+- legends, panel labels, diagnostic text, and output defaults.
+
+`GVVPlotUtils.h` retains only schema-v2 input handling, dynamic maps, branch
+binding, exchange-symmetric observable filling, unstyled projection-histogram
+construction, Pearson diagnostics, macro-relative path resolution, and the
+common base style. `GVVAngularMoments.h` retains only Legendre/moment
+arithmetic, unstyled moment-histogram construction, and the moment diagnostic.
+Do not add figure-specific axes, binning, canvas layout, or colors to either
+header.
+
 ### Projection contract consumed
 
 `GVVPlotUtils.h` requires projection schema version 2. It reads:

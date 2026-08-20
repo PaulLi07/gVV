@@ -686,15 +686,20 @@ The common plotting utilities:
   histograms;
 - use exchange-symmetric filling for observables with interchangeable omegas;
 - calculate simple binned diagnostic chi-square values;
-- apply the project plotting style.
+- provide the common base ROOT style and macro-relative default-path helper.
 
-The angular-moment utility produces exchange-symmetrized even Legendre moments
-and a separate ordered-omega odd-moment diagnostic. The latter tests
-pairing/order bias and is not a label-independent observable of two identical
-omegas.
+Each `.cxx` macro is the complete presentation module for one figure. It owns
+its observable list or moment orders, binning, axis labels and ranges, canvas
+layout, curve styles, legend, annotations, and output defaults. The angular-
+moment header retains only Legendre arithmetic, histogram filling, and the
+moment chi-square calculation. The odd macro keeps the ordered-omega
+diagnostic separate because it is not a label-independent observable of two
+identical omegas.
 
 `post/plotting/draw.sh` runs the five ROOT macros and writes PDF/EPS files under
-`post/plotting/results/`. It needs no GPU and submits no Slurm job.
+`post/plotting/results/`. The same macros can be executed directly with ROOT;
+their no-argument defaults are resolved relative to their source locations.
+Plotting needs no GPU and submits no Slurm job.
 
 ## 8. Extension boundaries
 

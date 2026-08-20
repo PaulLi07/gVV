@@ -1,23 +1,19 @@
-// Projection plotting utilities. All component/group identities are read from
-// the projection ROOT contract; this file contains no nominal resonance list.
+// Shared Projection I/O and histogram-building utilities.
+// Plot-specific observables, binning, axes, colors, canvas layout, legends,
+// annotations, and output names belong in each ROOT macro under macros/.
 #ifndef GVV_PLOT_UTILS_H
 #define GVV_PLOT_UTILS_H
 
-#include "TCanvas.h"
-#include "TColor.h"
 #include "TFile.h"
 #include "TH1D.h"
-#include "TLatex.h"
-#include "TLegend.h"
-#include "TMath.h"
 #include "TROOT.h"
+#include "TString.h"
 #include "TStyle.h"
+#include "TSystem.h"
 #include "TTree.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -36,6 +32,8 @@ enum Variable {
     kMassOmega = 6
 };
 
+// A macro supplies these values explicitly so its axes and binning can be
+// reviewed and changed without editing a shared plotting header.
 struct VariableSpec {
     Variable variable;
     int bins;
@@ -45,29 +43,8 @@ struct VariableSpec {
     bool mass_axis;
 };
 
-inline std::vector<VariableSpec> MainVariables()
-{
-    return {
-        {kMassOmegaOmega, 60, 1.50, 3.20,
-         "M(#omega#omega) (GeV/#font[12]{c}^{2})", true},
-        {kMassGammaOmega, 60, 0.85, 2.95,
-         "M(#gamma#omega) (GeV/#font[12]{c}^{2})", true},
-        {kCosThetaGamma, 40, -1.0, 1.0,
-         "cos#theta_{#gamma}", false},
-        {kCosThetaOmega, 40, -1.0, 1.0,
-         "sym. cos#theta_{#omega}", false},
-        {kOmegaDecayPlane, 40, -TMath::Pi(), TMath::Pi(),
-         "#phi_{#omega} (rad)", false},
-        {kDeltaPhiDecayPlanes, 40, -TMath::Pi(), TMath::Pi(),
-         "sym. #Delta#phi_{planes} (rad)", false}};
-}
-
-inline VariableSpec OmegaMassVariable()
-{
-    return {kMassOmega, 42, 0.740, 0.824,
-            "M(#pi^{+}#pi^{-}#pi^{0}) (GeV/#font[12]{c}^{2})", true};
-}
-
+// Common ROOT defaults shared by every gVV figure. Individual macros remain
+// free to override any setting after this function returns.
 inline void SetBESIIIStyle()
 {
     TStyle* style = dynamic_cast<TStyle*>(
@@ -108,6 +85,27 @@ inline void SetBESIIIStyle()
     style->SetEndErrorSize(0.0);
     gROOT->SetStyle("gvv_bes3");
     gROOT->ForceStyle();
+}
+
+// Resolve no-argument defaults relative to the macro source rather than the
+// caller's working directory. An explicit argument is returned unchanged.
+inline std::string ResolveMacroArgument(
+    const char* argument,
+    const char* macro_file,
+    const char* relative_default)
+{
+    if (argument != nullptr && argument[0] != '\0') return argument;
+
+    TString source = macro_file == nullptr ? "" : macro_file;
+    if (!gSystem->IsAbsoluteFileName(source.Data())) {
+        source = TString::Format(
+            "%s/%s", gSystem->WorkingDirectory(), source.Data());
+    }
+    const TString directory = gSystem->DirName(source.Data());
+    TString result = TString::Format(
+        "%s/%s", directory.Data(), relative_default);
+    gSystem->ExpandPathName(result);
+    return result.Data();
 }
 
 inline void RequireBranch(TTree* tree, const char* name)
@@ -175,6 +173,8 @@ struct Branches {
     }
 };
 
+// Identical-omega observables use the project's exchange-symmetric fill
+// convention. The odd-moment diagnostic intentionally does not use it.
 inline void FillObservable(
     TH1D* histogram,
     const Branches& values,
@@ -246,7 +246,8 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
     for (Long64_t row = 0; row < tree->GetEntries(); ++row) {
         tree->GetEntry(row);
         if (component_index < 0) {
-            throw std::runtime_error("invalid component index in component_map");
+            throw std::runtime_error(
+                "invalid component index in component_map");
         }
         result.push_back({component_index, name, label, jpc});
     }
@@ -324,6 +325,39 @@ inline void ValidateProjectionContract(TFile& input)
     }
 }
 
+// Own the input file together with the trees and dynamic maps used by every
+// plotting macro. The file must outlive the returned TTree pointers.
+struct ProjectionInput {
+    std::unique_ptr<TFile> file;
+    TTree* data = nullptr;
+    TTree* mc = nullptr;
+    TTree* background = nullptr;
+    std::vector<ComponentInfo> components;
+    std::vector<GroupInfo> groups;
+};
+
+inline ProjectionInput LoadProjection(const char* input_file)
+{
+    ProjectionInput result;
+    result.file.reset(TFile::Open(input_file, "READ"));
+    if (!result.file || result.file->IsZombie()) {
+        throw std::runtime_error(
+            std::string("cannot open projection file ") + input_file);
+    }
+    ValidateProjectionContract(*result.file);
+    result.file->GetObject("data", result.data);
+    result.file->GetObject("MC", result.mc);
+    result.file->GetObject("bg", result.background);
+    if (result.data == nullptr || result.mc == nullptr
+        || result.background == nullptr) {
+        throw std::runtime_error(
+            "projection file is missing data/MC/bg tree");
+    }
+    result.components = ReadComponentMap(*result.file);
+    result.groups = ReadGroupMap(*result.file);
+    return result;
+}
+
 inline TH1D* NewHistogram(
     const std::string& prefix,
     const VariableSpec& specification,
@@ -349,70 +383,78 @@ struct PanelHistograms {
     std::vector<TH1D*> components;
 };
 
+// Convert one Projection observable into unstyled histograms. The caller owns
+// axis formatting, curve styling, draw order, annotations, and legends.
 inline PanelHistograms BuildPanel(
-    TTree* data_tree,
-    TTree* mc_tree,
-    TTree* background_tree,
+    const ProjectionInput& input,
     const VariableSpec& specification,
     int serial,
-    const std::vector<GroupInfo>& groups,
-    const std::vector<ComponentInfo>& components,
     bool fill_components)
 {
     PanelHistograms result;
     result.data = NewHistogram("gvv_data", specification, serial);
     result.background = NewHistogram("gvv_bg", specification, serial);
     result.signal = NewHistogram("gvv_signal", specification, serial);
-    for (std::size_t index = 0; index < groups.size(); ++index) {
+    for (std::size_t index = 0; index < input.groups.size(); ++index) {
         result.groups.push_back(NewHistogram(
             "gvv_group_" + std::to_string(index), specification, serial));
     }
     if (fill_components) {
-        for (std::size_t index = 0; index < components.size(); ++index) {
+        for (std::size_t index = 0; index < input.components.size(); ++index) {
             result.components.push_back(NewHistogram(
                 "gvv_component_" + std::to_string(index),
                 specification,
                 serial));
         }
     }
+
     Branches data_values;
-    data_values.Bind(data_tree, false, false);
-    for (Long64_t event = 0; event < data_tree->GetEntries(); ++event) {
-        data_tree->GetEntry(event);
+    data_values.Bind(input.data, false, false);
+    for (Long64_t event = 0; event < input.data->GetEntries(); ++event) {
+        input.data->GetEntry(event);
         FillObservable(result.data, data_values, specification.variable, 1.0);
     }
+
     Branches background_values;
-    background_values.Bind(background_tree, false, true);
-    for (Long64_t event = 0; event < background_tree->GetEntries(); ++event) {
-        background_tree->GetEntry(event);
+    background_values.Bind(input.background, false, true);
+    for (Long64_t event = 0;
+         event < input.background->GetEntries();
+         ++event) {
+        input.background->GetEntry(event);
         FillObservable(
             result.background,
             background_values,
             specification.variable,
             background_values.weight_bg);
     }
+
     Branches mc_values;
-    mc_values.Bind(mc_tree, true, false);
-    for (Long64_t event = 0; event < mc_tree->GetEntries(); ++event) {
-        mc_tree->GetEntry(event);
+    mc_values.Bind(input.mc, true, false);
+    for (Long64_t event = 0; event < input.mc->GetEntries(); ++event) {
+        input.mc->GetEntry(event);
         FillObservable(
-            result.signal, mc_values, specification.variable, mc_values.weight);
+            result.signal,
+            mc_values,
+            specification.variable,
+            mc_values.weight);
         if (mc_values.weight_group == nullptr
-            || mc_values.weight_group->size() != groups.size()) {
+            || mc_values.weight_group->size() != input.groups.size()) {
             throw std::runtime_error(
                 "projection group-weight layout is inconsistent");
         }
-        for (std::size_t group = 0; group < groups.size(); ++group) {
+        for (std::size_t group = 0; group < input.groups.size(); ++group) {
             FillObservable(
-                result.groups[group], mc_values, specification.variable,
+                result.groups[group],
+                mc_values,
+                specification.variable,
                 mc_values.weight_group->at(group));
         }
         if (fill_components) {
             for (std::size_t component = 0;
-                 component < components.size();
+                 component < input.components.size();
                  ++component) {
-                const int index = components[component].index;
-                const std::size_t matrix_size = components.size();
+                const int index = input.components[component].index;
+                const std::size_t matrix_size = input.components.size();
                 if (mc_values.weight_component == nullptr
                     || mc_values.weight_component->size()
                            != matrix_size * matrix_size
@@ -421,7 +463,8 @@ inline PanelHistograms BuildPanel(
                         "projection component-weight layout is inconsistent");
                 }
                 FillObservable(
-                    result.components[component], mc_values,
+                    result.components[component],
+                    mc_values,
                     specification.variable,
                     mc_values.weight_component->at(
                         static_cast<std::size_t>(index) * matrix_size
@@ -429,6 +472,7 @@ inline PanelHistograms BuildPanel(
             }
         }
     }
+
     result.total = dynamic_cast<TH1D*>(
         result.signal->Clone(Form("gvv_total_%d", serial)));
     result.total->SetDirectory(nullptr);
@@ -451,165 +495,6 @@ inline std::pair<double, int> PearsonChiSquare(
         ++number_bins;
     }
     return std::make_pair(chi_square, number_bins);
-}
-
-inline void FormatAxes(
-    TH1D* data,
-    const VariableSpec& specification,
-    const TH1D* total)
-{
-    const double width =
-        (specification.upper - specification.lower) / specification.bins;
-    data->GetXaxis()->SetTitle(specification.x_title);
-    if (specification.mass_axis) {
-        data->GetYaxis()->SetTitle(
-            Form("Events / (%.1f MeV/#font[12]{c}^{2})", 1000.0 * width));
-    } else {
-        data->GetYaxis()->SetTitle(Form("Events / %.3g", width));
-    }
-    data->GetXaxis()->CenterTitle(kTRUE);
-    data->GetYaxis()->CenterTitle(kTRUE);
-    data->GetXaxis()->SetNdivisions(505);
-    data->GetYaxis()->SetNdivisions(505);
-    data->SetMarkerStyle(8);
-    data->SetMarkerSize(0.55);
-    data->SetLineColor(kBlack);
-    data->SetLineWidth(1);
-    const double maximum = std::max(data->GetMaximum(), total->GetMaximum());
-    const double minimum = std::min(0.0, total->GetMinimum());
-    data->GetYaxis()->SetRangeUser(
-        minimum < 0.0 ? 1.25 * minimum : 0.0,
-        maximum > 0.0 ? 1.45 * maximum : 1.0);
-}
-
-inline void StylePanel(PanelHistograms& panel)
-{
-    panel.background->SetFillStyle(3004);
-    panel.background->SetFillColor(kBlue);
-    panel.background->SetLineColor(kBlue);
-    panel.total->SetLineColor(kBlue + 1);
-    panel.total->SetLineWidth(2);
-    const int styles[] = {2, 7, 9, 3, 5};
-    const int colors[] = {kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7,
-                          kCyan + 2};
-    for (std::size_t group = 0; group < panel.groups.size(); ++group) {
-        panel.groups[group]->SetLineColor(colors[group % 5]);
-        panel.groups[group]->SetLineStyle(styles[group % 5]);
-        panel.groups[group]->SetLineWidth(2);
-    }
-}
-
-inline void DrawProjection(
-    const char* input_file,
-    const char* output_prefix,
-    bool detailed,
-    bool show_components)
-{
-    SetBESIIIStyle();
-    std::unique_ptr<TFile> input(TFile::Open(input_file, "READ"));
-    if (!input || input->IsZombie()) {
-        throw std::runtime_error(
-            std::string("cannot open projection file ") + input_file);
-    }
-    ValidateProjectionContract(*input);
-    TTree* data = nullptr;
-    TTree* mc = nullptr;
-    TTree* background = nullptr;
-    input->GetObject("data", data);
-    input->GetObject("MC", mc);
-    input->GetObject("bg", background);
-    if (data == nullptr || mc == nullptr || background == nullptr) {
-        throw std::runtime_error("projection file is missing data/MC/bg tree");
-    }
-    const std::vector<ComponentInfo> components = ReadComponentMap(*input);
-    const std::vector<GroupInfo> groups = ReadGroupMap(*input);
-    std::vector<VariableSpec> variables = MainVariables();
-    if (detailed) variables.push_back(OmegaMassVariable());
-    const int columns = detailed || show_components ? 4 : 3;
-    TCanvas* canvas = new TCanvas(
-        Form("gvv_projection_%d_%d", detailed, show_components),
-        "GVV projections", columns == 4 ? 1320 : 1080, 720);
-    canvas->Divide(columns, 2, 0.002, 0.002);
-    const std::array<int, 7> colors = {
-        TColor::GetColor("#08306B"),  // dark blue
-        TColor::GetColor("#2171B5"),  // blue
-        TColor::GetColor("#6BAED6"),  // baby blue
-        TColor::GetColor("#9ECAE1"),  // light blue
-        TColor::GetColor("#41AB5D"),  // green
-        TColor::GetColor("#A1D76A"),  // yellow green
-        TColor::GetColor("#FDE725")   // yellow
-    };
-    std::vector<PanelHistograms> panels;
-    for (std::size_t variable = 0; variable < variables.size(); ++variable) {
-        canvas->cd(static_cast<int>(variable) + 1);
-        PanelHistograms panel = BuildPanel(
-            data, mc, background, variables[variable],
-            static_cast<int>(variable), groups, components, show_components);
-        StylePanel(panel);
-        FormatAxes(panel.data, variables[variable], panel.total);
-        panel.data->Draw("E1");
-        panel.background->Draw("HIST SAME");
-        if (show_components) {
-            for (std::size_t component = 0;
-                 component < panel.components.size(); ++component) {
-                panel.components[component]->SetLineColor(
-                    colors[component % colors.size()]);
-                panel.components[component]->SetLineStyle(1);
-                panel.components[component]->SetLineWidth(1);
-                panel.components[component]->SetMarkerStyle(0);
-                panel.components[component]->SetMarkerSize(0);
-                panel.components[component]->SetFillStyle(0);
-                panel.components[component]->Draw("HIST C SAME");
-            }
-        } else {
-            for (TH1D* group : panel.groups) group->Draw("HIST SAME");
-        }
-        panel.total->Draw("HIST SAME");
-        panel.data->Draw("E1 SAME");
-        const std::pair<double, int> chi_square =
-            PearsonChiSquare(panel.data, panel.total);
-        TLatex label;
-        label.SetNDC();
-        label.SetTextFont(22);
-        label.SetTextSize(0.047);
-        const char panel_letter = static_cast<char>('a' + variable);
-        label.DrawLatex(
-            0.18, 0.84,
-            Form("(%c) #chi^{2}/N_{bin}=%.1f/%d", panel_letter,
-                 chi_square.first, chi_square.second));
-        std::cout << variables[variable].x_title
-                  << "  chi2/Nbin=" << chi_square.first
-                  << '/' << chi_square.second << '\n';
-        panels.push_back(panel);
-    }
-    const int legend_pad = detailed ? 8 : (show_components ? 7 : 1);
-    canvas->cd(legend_pad);
-    TLegend* legend = show_components
-                          ? new TLegend(0.10, 0.08, 0.94, 0.92)
-                          : new TLegend(0.54, 0.60, 0.93, 0.86);
-    legend->SetBorderSize(0);
-    legend->SetFillStyle(0);
-    legend->SetTextFont(22);
-    legend->SetTextSize(show_components ? 0.055 : 0.050);
-    legend->AddEntry(panels[0].data, "Data", "lep");
-    legend->AddEntry(panels[0].background, "Background", "f");
-    legend->AddEntry(panels[0].total, "Total fit", "l");
-    if (show_components) {
-        for (std::size_t component = 0;
-             component < components.size(); ++component) {
-            legend->AddEntry(
-                panels[0].components[component],
-                RootLabel(components[component].label).c_str(), "l");
-        }
-    } else {
-        for (std::size_t group = 0; group < groups.size(); ++group) {
-            const std::string label = "coherent " + groups[group].label;
-            legend->AddEntry(panels[0].groups[group], label.c_str(), "l");
-        }
-    }
-    legend->Draw();
-    canvas->Print((std::string(output_prefix) + ".pdf").c_str());
-    canvas->Print((std::string(output_prefix) + ".eps").c_str());
 }
 
 } // namespace gvvplot

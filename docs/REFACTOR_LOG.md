@@ -135,9 +135,11 @@ completed without running Fit or Post Calculation:
 
 At the user's request, the two CUDA runtime regressions were subsequently
 submitted as background Slurm job `23444` (`gvv-gpu-tests`), with output
-routed to `runlog/gpu-tests-23444.log`. This log records the submission only;
-the runtime outcome is intentionally not claimed here until the user reports
-the completed job result.
+routed to `runlog/gpu-tests-23444.log`. On 2026-08-20 the user reported
+completion; Slurm recorded the job, batch shell, and `make` step as
+`COMPLETED` with exit code `0:0`. Both runtime markers were present:
+`GVV complete-Wave GPU numerical tests passed` and
+`GVV Term/Wave/component GPU equivalence tests passed`.
 
 ### Deferred improvements
 
@@ -196,3 +198,44 @@ The documentation was checked for valid local links, balanced Markdown code
 fences, parseability of every complete embedded JSON example, trailing
 whitespace, and English-only prose. No Fit, Post, CUDA executable, or new
 Slurm job was run for this documentation-only phase.
+
+## Standalone Plotting macros (2026-08-20)
+
+Working branch: `refactor/plotting-modules`.
+
+- Kept `post/plotting/draw.sh` as the one-command driver for all five figures.
+- Converted every plotting `.cxx` from a thin wrapper into an independently
+  executable ROOT macro with source-relative no-argument defaults.
+- Moved each figure's observable or moment list, binning, axes, canvas layout,
+  curve styles, legend, annotations, and output defaults into that figure's
+  `.cxx` file.
+- Reduced `GVVPlotUtils.h` to the shared Projection schema reader, dynamic map
+  and branch handling, exchange-symmetric filling, unstyled histogram
+  construction, Pearson diagnostic, source-relative path helper, and common
+  base style.
+- Reduced `GVVAngularMoments.h` to Legendre/moment arithmetic, unstyled moment
+  construction, and the moment chi-square diagnostic.
+- Preserved the Projection schema, dynamic Term/JPC/background discovery,
+  physics weights, binning, draw order, styles, and output products of the
+  previous macros.
+
+Verification was performed with ROOT 6.32.02 on the fixed `lxlogin005` node,
+without running Fit, Post Calculation, CUDA code, or a Slurm job:
+
+- all five macros passed ROOT parsing;
+- each macro was invoked directly by basename with no arguments from its
+  `macros/` directory against an isolated synthetic schema-v2 Projection;
+- the main projection macro was also invoked by its repository-relative path
+  from the isolated project root;
+- the five direct invocations produced the expected five PDF and five EPS
+  files;
+- the copied `draw.sh` wrapper processed the same Projection under a second
+  tag and produced the expected five PDF and five EPS files;
+- ROOT logs contained no fatal/error/abort markers, and representative
+  detailed-projection and angular-moment PDFs were rendered for visual
+  inspection.
+
+The repository's pre-existing `results/projection-initial.root` is schema
+version 1 and is intentionally rejected by the schema-v2 reader. It was not
+modified. A new Fit result produced by the current Projection writer is needed
+before the no-argument project default can draw a physical result.

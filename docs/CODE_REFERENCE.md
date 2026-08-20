@@ -662,28 +662,30 @@ uncertainties are outside the current implementation.
 
 ### `post/plotting/GVVPlotUtils.h` — Plotting
 
-This header owns the common projection plotting implementation:
+This header owns only common Projection data services:
 
-- the supported observable catalogue and binning;
-- BESIII-style ROOT formatting;
+- the observable enum/specification type supplied by individual macros;
+- the common BESIII base ROOT style and macro-relative path resolution;
 - schema-v2 and required-branch validation;
 - dynamic component/group map readers;
 - event branch binding and exchange-symmetric observable filling;
 - construction of data, signed-background, fitted-signal, total, group, and
   optional diagonal-Term histograms;
-- simple Pearson chi-square diagnostics, axis formatting, legends, and
-  PDF/EPS output.
+- simple Pearson chi-square diagnostics.
 
 It reads no `model.json` and has no built-in Resonance list. Component plots
 use diagonal `weight_component[i][i]` only, so they are not expected to sum to
-the coherent total when interference is present.
+the coherent total when interference is present. It deliberately contains no
+plot catalogue, binning table, axis formatting, canvas, legend, or output
+writer.
 
 ### `post/plotting/GVVAngularMoments.h` — Plotting
 
-Provides the Legendre recurrence, moment chi-square diagnostic, and mass-binned
-angular-moment drawing. Even moments are explicitly symmetrized under
-`omega1 <-> omega2`. Odd moments use the input-labelled omega and are clearly
-separated as an ordering-bias diagnostic.
+Provides the Legendre recurrence, even/odd moment weights, mass-binned
+data-minus-background and fitted-MC histogram construction, and the moment
+chi-square diagnostic. It contains no moment-order list, axes, styles, canvas,
+annotations, or output writer; those choices belong to the even and odd
+macros.
 
 ### `post/plotting/draw.sh` — Plotting, Infrastructure
 
@@ -693,10 +695,10 @@ file, loads the project ROOT environment, derives the tag from
 the five macros in ROOT batch mode. It neither requests a GPU nor submits a
 Slurm job.
 
-### Plotting macro wrappers
+### Standalone plotting macros
 
-The macro files are intentionally thin entry points around the two common
-headers:
+Each macro matches its ROOT-callable filename and can be executed directly.
+It owns its complete plot configuration and presentation:
 
 | File | Figure |
 |---|---|
@@ -706,9 +708,10 @@ headers:
 | `post/plotting/macros/draw_angular_moments.cxx` | physical even `P0/P2/P4/P6` omega-angle moments |
 | `post/plotting/macros/draw_angular_moments_odd.cxx` | ordered-omega odd `P1/P3/P5` diagnostic |
 
-Changing common branch interpretation, styles, or histogram logic belongs in
-the headers; a wrapper should normally remain only a named ROOT-callable
-function and its default paths.
+Change a figure's variables, bins, axes, colors, canvas, legend, annotation, or
+output defaults in that figure's `.cxx` file. Change a shared header only for a
+genuinely common Projection contract, histogram-building rule, moment formula,
+or base style.
 
 ### `post/README.md` — Calculation and Plotting user contract
 

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# One-command driver for the five independently executable ROOT macros.
+# Each macro owns its own plot configuration; this script only supplies a
+# common Projection input and tagged output prefixes.
 set -euo pipefail
 
 SCRIPT_PATH=$(readlink -f -- "${BASH_SOURCE[0]}")

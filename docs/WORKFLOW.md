@@ -552,7 +552,8 @@ post/plotting/draw.sh results/projection-TAG.root
 
 `draw.sh` sources the project environment, verifies the input and ROOT binary,
 derives `TAG` from the projection basename, creates
-`post/plotting/results/`, and runs five macros in ROOT batch mode:
+`post/plotting/results/`, and runs five independently executable macros in ROOT
+batch mode.
 
 When calling the driver from another directory, invoke the script by an
 absolute path and pass an absolute Projection path, or a Projection path
@@ -565,6 +566,36 @@ However, the current driver sources the full `config/gvv_env.sh`, which also
 checks that the configured `nvcc` exists. Until a ROOT-only environment loader
 is introduced, the plotting shell therefore still requires the project CUDA
 installation to be readable even though it does not execute CUDA code.
+
+For focused development, run any macro directly. With no arguments it uses
+`results/projection-initial.root` and writes its `initial` PDF/EPS pair under
+`post/plotting/results/`:
+
+```bash
+source config/gvv_env.sh
+root post/plotting/macros/Draw_projection_2_3.cxx
+```
+
+The same command works from the macro directory:
+
+```bash
+cd post/plotting/macros
+root Draw_projection_2_3.cxx
+```
+
+For another input or output prefix, pass both arguments explicitly and use
+ROOT batch mode when no interactive session is needed:
+
+```bash
+root -l -b -q \
+  'post/plotting/macros/Draw_projection_2_3.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
+```
+
+Every plot-specific setting is visible in the selected `.cxx`: variables or
+moment orders, binning, axes, canvas geometry, colors, line/marker styles,
+legend, annotations, and output defaults. Shared headers contain only common
+Projection reading, histogram/moment construction, diagnostics, and base
+style.
 
 | Macro | Output prefix | Purpose |
 |---|---|---|
@@ -659,9 +690,9 @@ control and disciplined tags rather than manually editing generated states.
 | `post/calculation/PostCalculation.cu` | Calculation executable glue, observable construction, covariance propagation, and result serialization |
 | `post/calculation/ComponentEvaluator.*` | Batched GPU integration and coherent/component closure checks |
 | `post/plotting/draw.sh` | Plot-only ROOT driver and tagged output routing |
-| `post/plotting/GVVPlotUtils.h` | Dynamic projection-schema reader and projection drawing implementation |
-| `post/plotting/GVVAngularMoments.h` | Even physical and odd diagnostic angular-moment implementation |
-| `post/plotting/macros/*.cxx` | Small ROOT-callable entry points selecting each figure layout |
+| `post/plotting/GVVPlotUtils.h` | Dynamic Projection reader, common histogram construction, diagnostics, path helper, and base style |
+| `post/plotting/GVVAngularMoments.h` | Shared Legendre/moment arithmetic and unstyled histogram construction |
+| `post/plotting/macros/*.cxx` | Independently executable, fully configured figure modules |
 
 ### 14. Common failures and their meaning
 
