@@ -665,7 +665,7 @@ uncertainties are outside the current implementation.
 This header owns only common Projection data services:
 
 - the observable enum/specification type supplied by individual macros;
-- the common BESIII base ROOT style and macro-relative path resolution;
+- the common BESIII base ROOT style and project-root path resolution;
 - schema-v2 and required-branch validation;
 - dynamic component/group map readers;
 - event branch binding and exchange-symmetric observable filling;
@@ -698,7 +698,9 @@ Slurm job.
 ### Standalone plotting macros
 
 Each macro matches its ROOT-callable filename and can be executed directly.
-It owns its complete plot configuration and presentation:
+Its function signature exposes the default Projection and output prefix, and a
+clearly delimited `User configuration` preamble owns the complete plot
+configuration and presentation:
 
 | File | Figure |
 |---|---|
@@ -708,10 +710,11 @@ It owns its complete plot configuration and presentation:
 | `post/plotting/macros/draw_angular_moments.cxx` | physical even `P0/P2/P4/P6` omega-angle moments |
 | `post/plotting/macros/draw_angular_moments_odd.cxx` | ordered-omega odd `P1/P3/P5` diagnostic |
 
-Change a figure's variables, bins, axes, colors, canvas, legend, annotation, or
-output defaults in that figure's `.cxx` file. Change a shared header only for a
-genuinely common Projection contract, histogram-building rule, moment formula,
-or base style.
+Change a figure's default paths, variables, bins, axes, colors, canvas, draw
+options, legend, or annotations in that preamble. Relative runtime paths are
+interpreted from the project root; absolute paths are preserved. Change a
+shared header only for a genuinely common Projection contract,
+histogram-building rule, moment formula, path rule, or base style.
 
 ### `post/README.md` — Calculation and Plotting user contract
 

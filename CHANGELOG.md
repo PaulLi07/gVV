@@ -3,10 +3,11 @@
 ## gVV v1.1.0-dev — modular architecture refactor
 
 - Refactored Post Plotting so every ROOT `.cxx` macro is independently
-  executable and owns its variables/moments, binning, axes, canvas, styles,
-  legends, annotations, and output defaults; shared headers now retain only
-  common Projection I/O, histogram/moment construction, diagnostics, and base
-  style, while `draw.sh` remains the one-command driver.
+  executable and exposes a readable `User configuration` preamble containing
+  default paths, variables/moments, binning, axes, canvas, styles, draw options,
+  legends, and annotations; relative runtime paths resolve from the project
+  root, shared headers retain only common services, and `draw.sh` remains the
+  one-command driver.
 - Reworked the documentation into a user-facing installation/physics README,
   a complete architecture guide, separate Fit/Post workflow manual, per-file
   code reference, and detailed Resonance/Term and Wave extension guides.

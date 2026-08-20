@@ -87,23 +87,30 @@ inline void SetBESIIIStyle()
     gROOT->ForceStyle();
 }
 
-// Resolve no-argument defaults relative to the macro source rather than the
-// caller's working directory. An explicit argument is returned unchanged.
-inline std::string ResolveMacroArgument(
-    const char* argument,
-    const char* macro_file,
-    const char* relative_default)
+// Resolve a plotting-macro path. Absolute paths are preserved; relative paths
+// are interpreted from the project root found three levels above macros/.
+// This makes the user-facing defaults and runtime overrides independent of the
+// directory from which ROOT is launched.
+inline std::string ResolveProjectPath(
+    const char* path,
+    const char* macro_file)
 {
-    if (argument != nullptr && argument[0] != '\0') return argument;
+    if (path == nullptr || path[0] == '\0') {
+        throw std::runtime_error("plot path must not be empty");
+    }
+    if (gSystem->IsAbsoluteFileName(path)) return path;
 
     TString source = macro_file == nullptr ? "" : macro_file;
     if (!gSystem->IsAbsoluteFileName(source.Data())) {
         source = TString::Format(
             "%s/%s", gSystem->WorkingDirectory(), source.Data());
     }
-    const TString directory = gSystem->DirName(source.Data());
+    const TString macro_directory = gSystem->DirName(source.Data());
+    TString project_root = TString::Format(
+        "%s/../../..", macro_directory.Data());
+    gSystem->ExpandPathName(project_root);
     TString result = TString::Format(
-        "%s/%s", directory.Data(), relative_default);
+        "%s/%s", project_root.Data(), path);
     gSystem->ExpandPathName(result);
     return result.Data();
 }

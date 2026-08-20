@@ -591,11 +591,16 @@ root -l -b -q \
   'post/plotting/macros/Draw_projection_2_3.cxx("results/projection-TAG.root","post/plotting/results/projection-TAG")'
 ```
 
-Every plot-specific setting is visible in the selected `.cxx`: variables or
-moment orders, binning, axes, canvas geometry, colors, line/marker styles,
-legend, annotations, and output defaults. Shared headers contain only common
-Projection reading, histogram/moment construction, diagnostics, and base
-style.
+The two function arguments override the defaults written in the macro. An
+absolute path is used unchanged; a relative path is interpreted from the
+project root regardless of the caller's current directory.
+
+Every plot-specific setting is collected in the `User configuration` block at
+the top of the selected `.cxx`: default paths, variables or moment orders,
+binning, axes, canvas geometry, colors, line/marker styles, draw options,
+legend, and annotations. The implementation follows below that block. Shared
+headers contain only common Projection reading, histogram/moment construction,
+diagnostics, path resolution, and base style.
 
 | Macro | Output prefix | Purpose |
 |---|---|---|

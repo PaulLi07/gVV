@@ -341,8 +341,10 @@ root post/plotting/macros/Draw_projection_2_3.cxx
 ```
 
 No-argument execution uses `results/projection-initial.root` and the macro's
-matching `initial` output prefix under `post/plotting/results/`. Defaults are
-resolved relative to the macro source, so this also works:
+matching `initial` output prefix under `post/plotting/results/`. Both defaults
+are visible in the function signature and in the `User configuration` block
+near the top of the file. Relative input/output arguments are interpreted from
+the project root, so this also works:
 
 ```bash
 cd post/plotting/macros
@@ -357,11 +359,13 @@ root -l -b -q \
 ```
 
 Use the same calling convention for the other four macros. `draw.sh` remains
-the convenient way to derive one tag and run all five together.
+the convenient way to derive one tag and run all five together. An absolute
+input or output path is accepted unchanged.
 
 ### Where to change a figure
 
-Each macro owns its complete presentation configuration:
+Each macro begins with a clearly delimited `User configuration` block. It owns
+the complete presentation configuration:
 
 - observable list or Legendre orders;
 - bins and numerical axis ranges;
@@ -372,8 +376,8 @@ Each macro owns its complete presentation configuration:
 
 `GVVPlotUtils.h` retains only schema-v2 input handling, dynamic maps, branch
 binding, exchange-symmetric observable filling, unstyled projection-histogram
-construction, Pearson diagnostics, macro-relative path resolution, and the
-common base style. `GVVAngularMoments.h` retains only Legendre/moment
+construction, Pearson diagnostics, project-root path resolution, and the common
+base style. `GVVAngularMoments.h` retains only Legendre/moment
 arithmetic, unstyled moment-histogram construction, and the moment diagnostic.
 Do not add figure-specific axes, binning, canvas layout, or colors to either
 header.

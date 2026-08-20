@@ -205,14 +205,14 @@ Working branch: `refactor/plotting-modules`.
 
 - Kept `post/plotting/draw.sh` as the one-command driver for all five figures.
 - Converted every plotting `.cxx` from a thin wrapper into an independently
-  executable ROOT macro with source-relative no-argument defaults.
+  executable ROOT macro with no-argument defaults.
 - Moved each figure's observable or moment list, binning, axes, canvas layout,
   curve styles, legend, annotations, and output defaults into that figure's
   `.cxx` file.
 - Reduced `GVVPlotUtils.h` to the shared Projection schema reader, dynamic map
   and branch handling, exchange-symmetric filling, unstyled histogram
-  construction, Pearson diagnostic, source-relative path helper, and common
-  base style.
+  construction, Pearson diagnostic, project-root path helper, and common base
+  style.
 - Reduced `GVVAngularMoments.h` to Legendre/moment arithmetic, unstyled moment
   construction, and the moment chi-square diagnostic.
 - Preserved the Projection schema, dynamic Term/JPC/background discovery,
@@ -239,3 +239,19 @@ The repository's pre-existing `results/projection-initial.root` is schema
 version 1 and is intentionally rejected by the schema-v2 reader. It was not
 modified. A new Fit result produced by the current Projection writer is needed
 before the no-argument project default can draw a physical result.
+
+Follow-up readability work collected every figure-specific setting into a
+clearly delimited `User configuration` preamble in each macro. Default input
+and output paths now appear directly in each ROOT-callable function signature.
+Relative defaults and runtime overrides such as `results/projection-TAG.root`
+and `post/plotting/results/projection-TAG` are resolved from the project root;
+absolute paths remain unchanged. The drawing implementation below each
+preamble contains no duplicated default-path literals.
+
+The follow-up was verified with ROOT 6.32.02 on `lxlogin005` using an isolated
+schema-v2 Projection fixture. All five macros parsed and ran with no arguments
+from the isolated project root, producing ten default PDF/EPS files. The main
+macro also ran with no arguments from `post/plotting/macros/`, and the explicit
+two-argument form produced the requested custom output prefix. The unchanged
+`draw.sh` driver produced its ten tagged files, all ROOT logs passed the error
+scan, and no Fit, Post Calculation, CUDA executable, or Slurm job was run.

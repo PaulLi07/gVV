@@ -441,9 +441,12 @@ root post/plotting/macros/Draw_projection_2_3.cxx
 ```
 
 Observable definitions, binning, axes, canvas layout, colors, legends, and
-annotations are defined in the corresponding `.cxx` file. The shared headers
-retain only Projection I/O, histogram construction, moment arithmetic, and the
-common base style.
+annotations are collected in the clearly marked `User configuration` block at
+the top of the corresponding `.cxx` file. Its function signature also shows
+the default Projection and output prefix. Runtime relative paths are resolved
+from the project root, and absolute paths are accepted unchanged. The shared
+headers retain only Projection I/O, histogram construction, moment arithmetic,
+and the common base style.
 
 See [Workflow](docs/WORKFLOW.md) for the complete operational sequence,
 validation checklists, output contracts, and failure diagnosis.
