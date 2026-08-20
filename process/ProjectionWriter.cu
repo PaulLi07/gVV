@@ -1,4 +1,9 @@
-// GVV projection ROOT schema and event-observable serialization.
+// GVV fitted-projection ROOT producer.
+//
+// This process-specific module derives plotting observables from each event,
+// converts the fitted normalization-MC intensity and Term-pair components into
+// projection weights, and serializes the stable Fit-to-Plotting ROOT contract.
+// It does not perform the Minuit fit or write the human/machine fit summaries.
 #include "process/ProjectionWriter.h"
 #include "process/FitLikelihood.h"
 
@@ -19,6 +24,10 @@
 #include <vector>
 
 namespace {
+
+// -----------------------------------------------------------------------------
+// Common serialization and geometry utilities
+// -----------------------------------------------------------------------------
 
 constexpr double kProjectionAxisTolerance = 1.0e-12;
 constexpr std::size_t kProjectionComponentScratchBytes =
@@ -128,38 +137,47 @@ double omega_decay_plane_phi(
         unit_normal.Dot(y_axis), unit_normal.Dot(local_x_axis));
 }
 
+// -----------------------------------------------------------------------------
+// Event-level kinematic observables and their ROOT branch schema
+// -----------------------------------------------------------------------------
+
 struct ProjectionEvent {
-    double p4_pip1[4];
-    double p4_pim1[4];
-    double p4_pi01[4];
-    double p4_pip2[4];
-    double p4_pim2[4];
-    double p4_pi02[4];
-    double p4_gam[4];
-    double p4_omega1[4];
-    double p4_omega2[4];
-    double p4_X[4];
+    // Four-momenta use the ROOT convention [px, py, pz, E]. They are stored
+    // in the same frame as the input event record.
+    double p4_pip1[4];   // Four-momentum of pi+ from the first omega candidate.
+    double p4_pim1[4];   // Four-momentum of pi- from the first omega candidate.
+    double p4_pi01[4];   // Four-momentum of pi0 from the first omega candidate.
+    double p4_pip2[4];   // Four-momentum of pi+ from the second omega candidate.
+    double p4_pim2[4];   // Four-momentum of pi- from the second omega candidate.
+    double p4_pi02[4];   // Four-momentum of pi0 from the second omega candidate.
+    double p4_gam[4];    // Four-momentum of the radiative photon.
+    double p4_omega1[4]; // Four-momentum of omega1 = pi+_1 + pi-_1 + pi0_1.
+    double p4_omega2[4]; // Four-momentum of omega2 = pi+_2 + pi-_2 + pi0_2.
+    double p4_X[4];      // Four-momentum of X = omega1 + omega2.
 
-    double m_omega1;
-    double m_omega2;
-    double m_omegaomega;
-    double m_gammaomega1;
-    double m_gammaomega2;
-    double m_pip1_pim1;
-    double m_pip1_pi01;
-    double m_pim1_pi01;
-    double m_pip2_pim2;
-    double m_pip2_pi02;
-    double m_pim2_pi02;
+    double m_omega1;       // Invariant mass M(pi+_1 pi-_1 pi0_1).
+    double m_omega2;       // Invariant mass M(pi+_2 pi-_2 pi0_2).
+    double m_omegaomega;   // Invariant mass M(omega1 omega2), i.e. M(X).
+    double m_gammaomega1;  // Invariant mass M(gamma omega1).
+    double m_gammaomega2;  // Invariant mass M(gamma omega2).
+    double m_pip1_pim1;    // Invariant mass M(pi+_1 pi-_1).
+    double m_pip1_pi01;    // Invariant mass M(pi+_1 pi0_1).
+    double m_pim1_pi01;    // Invariant mass M(pi-_1 pi0_1).
+    double m_pip2_pim2;    // Invariant mass M(pi+_2 pi-_2).
+    double m_pip2_pi02;    // Invariant mass M(pi+_2 pi0_2).
+    double m_pim2_pi02;    // Invariant mass M(pi-_2 pi0_2).
 
-    double cos_theta_gamma;
-    double cos_theta_omega;
-    double omega1_decay_plane_angle;
-    double omega2_decay_plane_angle;
-    double delta_phi_decay_planes;
+    // Angular observables follow the coordinate convention documented in
+    // CalculateAngularObservables() below. Angles are stored in radians.
+    double cos_theta_gamma;            // cos(theta_gamma) in the psi rest frame.
+    double cos_theta_omega;            // cos(theta_omega1) in the X rest frame.
+    double omega1_decay_plane_angle;   // Oriented omega1 decay-plane azimuth.
+    double omega2_decay_plane_angle;   // Oriented omega2 decay-plane azimuth.
+    double delta_phi_decay_planes;     // Wrapped phi_omega1 - phi_omega2.
 
     void Book(TTree& tree)
     {
+        // Stored final-state and composite four-momenta.
         tree.Branch("p4_pip1", p4_pip1, "p4_pip1[4]/D");
         tree.Branch("p4_pim1", p4_pim1, "p4_pim1[4]/D");
         tree.Branch("p4_pi01", p4_pi01, "p4_pi01[4]/D");
@@ -171,6 +189,7 @@ struct ProjectionEvent {
         tree.Branch("p4_omega2", p4_omega2, "p4_omega2[4]/D");
         tree.Branch("p4_X", p4_X, "p4_X[4]/D");
 
+        // Stored invariant masses.
         tree.Branch("m_omega1", &m_omega1, "m_omega1/D");
         tree.Branch("m_omega2", &m_omega2, "m_omega2/D");
         tree.Branch("m_omegaomega", &m_omegaomega, "m_omegaomega/D");
@@ -185,6 +204,7 @@ struct ProjectionEvent {
         tree.Branch("m_pip2_pi02", &m_pip2_pi02, "m_pip2_pi02/D");
         tree.Branch("m_pim2_pi02", &m_pim2_pi02, "m_pim2_pi02/D");
 
+        // Stored production and decay-plane angles.
         tree.Branch(
             "cos_theta_gamma", &cos_theta_gamma, "cos_theta_gamma/D");
         tree.Branch(
@@ -205,6 +225,7 @@ struct ProjectionEvent {
 
     void Load(const GVVSample& sample, int event)
     {
+        // Read the seven final-state particles from the process sample.
         const TLorentzVector pip1 = make_four_vector(
             sample.HostMomentum(kPip1, event));
         const TLorentzVector pim1 = make_four_vector(
@@ -220,11 +241,13 @@ struct ProjectionEvent {
         const TLorentzVector gamma = make_four_vector(
             sample.HostMomentum(kGamma, event));
 
+        // Reconstruct the two omega candidates, their parent X, and psi.
         const TLorentzVector omega1 = pip1 + pim1 + pi01;
         const TLorentzVector omega2 = pip2 + pim2 + pi02;
         const TLorentzVector x_state = omega1 + omega2;
         const TLorentzVector psi = x_state + gamma;
 
+        // Serialize input and composite four-momenta in [px, py, pz, E].
         store_four_vector(pip1, p4_pip1);
         store_four_vector(pim1, p4_pim1);
         store_four_vector(pi01, p4_pi01);
@@ -236,6 +259,7 @@ struct ProjectionEvent {
         store_four_vector(omega2, p4_omega2);
         store_four_vector(x_state, p4_X);
 
+        // Calculate the omega, omega-omega, gamma-omega, and pion-pair masses.
         m_omega1 = omega1.M();
         m_omega2 = omega2.M();
         m_omegaomega = x_state.M();
@@ -248,6 +272,37 @@ struct ProjectionEvent {
         m_pip2_pi02 = (pip2 + pi02).M();
         m_pim2_pi02 = (pim2 + pi02).M();
 
+        CalculateAngularObservables(
+            pip1, pim1, pi01, pip2, pim2, pi02, gamma, psi);
+    }
+
+private:
+    void CalculateAngularObservables(
+        const TLorentzVector& pip1,
+        const TLorentzVector& pim1,
+        const TLorentzVector& pi01,
+        const TLorentzVector& pip2,
+        const TLorentzVector& pim2,
+        const TLorentzVector& pi02,
+        const TLorentzVector& gamma,
+        const TLorentzVector& psi)
+    {
+        // Coordinate-system convention
+        // ----------------------------
+        // 1. In the psi rest frame, the global +z axis is the e+e- beam axis.
+        //    theta_gamma is the polar angle of the radiative photon relative
+        //    to this axis.
+        // 2. In the X rest frame, the helicity +z_H axis points opposite to
+        //    the radiative photon. theta_omega is the polar angle of omega1
+        //    relative to +z_H.
+        // 3. For each omega_i decay plane, +z_i follows the omega_i momentum
+        //    in the X rest frame, +y_i is parallel to z_H cross z_i, and
+        //    +x_i completes the right-handed basis y_i cross z_i. After the
+        //    pions are boosted to the omega_i rest frame, the oriented plane
+        //    normal is n_i = p(pi+_i) cross p(pi-_i). Its azimuth is
+        //    atan2(n_i dot y_i, n_i dot x_i).
+
+        // Boost every final-state particle into the psi rest frame.
         std::array<TLorentzVector, GVV_NFINAL_PARTICLES> in_psi = {{
             pip1, pim1, pi01, pip2, pim2, pi02, gamma}};
         const TVector3 boost_to_psi = -psi.BoostVector();
@@ -259,10 +314,13 @@ struct ProjectionEvent {
         const TLorentzVector omega2_psi =
             in_psi[kPip2] + in_psi[kPim2] + in_psi[kPi02];
         const TLorentzVector x_psi = omega1_psi + omega2_psi;
+
+        // cos(theta_gamma): photon polar angle relative to the beam +z axis.
         cos_theta_gamma = safe_unit(
             in_psi[kGamma].Vect(), TVector3(0.0, 0.0, 1.0))
                               .Dot(TVector3(0.0, 0.0, 1.0));
 
+        // Boost from the psi rest frame into the omega-omega (X) rest frame.
         std::array<TLorentzVector, GVV_NFINAL_PARTICLES> in_x = in_psi;
         const TVector3 boost_to_x = -x_psi.BoostVector();
         for (TLorentzVector& vector : in_x) {
@@ -274,18 +332,86 @@ struct ProjectionEvent {
             in_x[kPip2] + in_x[kPim2] + in_x[kPi02];
         const TVector3 x_helicity_axis = safe_unit(
             -in_x[kGamma].Vect(), TVector3(0.0, 0.0, 1.0));
+
+        // cos(theta_omega): omega1 polar angle relative to +z_H = -p_gamma.
         cos_theta_omega = safe_unit(
             omega1_x.Vect(), TVector3(0.0, 0.0, 1.0))
                               .Dot(x_helicity_axis);
 
+        // phi_omega1 and phi_omega2: oriented decay-plane azimuths defined
+        // from the pi+ cross pi- normals in their respective omega rest frames.
         omega1_decay_plane_angle = omega_decay_plane_phi(
             in_x[kPip1], in_x[kPim1], omega1_x, x_helicity_axis);
         omega2_decay_plane_angle = omega_decay_plane_phi(
             in_x[kPip2], in_x[kPim2], omega2_x, x_helicity_axis);
+
+        // Delta phi: signed plane-angle difference wrapped to (-pi, pi].
         delta_phi_decay_planes = wrap_angle(
             omega1_decay_plane_angle - omega2_decay_plane_angle);
     }
 };
+
+// -----------------------------------------------------------------------------
+// Model grouping, batch sizing, and display-label bookkeeping
+// -----------------------------------------------------------------------------
+
+struct ProjectionGrouping {
+    std::vector<std::string> group_ids;
+    std::vector<int> term_groups;
+};
+
+ProjectionGrouping build_projection_grouping(
+    const GVVCompiledModel& model,
+    int number_terms)
+{
+    ProjectionGrouping grouping;
+
+    // Preserve the first-appearance order of JPC labels in model.json.
+    for (const GVVTermMetadata& term : model.term_metadata) {
+        if (std::find(
+                grouping.group_ids.begin(),
+                grouping.group_ids.end(),
+                term.jpc)
+            == grouping.group_ids.end()) {
+            grouping.group_ids.push_back(term.jpc);
+        }
+    }
+
+    // Record the JPC group index of each active Term.
+    grouping.term_groups.assign(number_terms, -1);
+    for (int term = 0; term < number_terms; ++term) {
+        grouping.term_groups[term] = static_cast<int>(std::find(
+            grouping.group_ids.begin(),
+            grouping.group_ids.end(),
+            model.term_metadata[term].jpc) - grouping.group_ids.begin());
+    }
+
+    return grouping;
+}
+
+int projection_component_batch_capacity(
+    int number_mc,
+    int number_terms,
+    int number_pairs)
+{
+    // The packed values exist once in FitLikelihood's managed scratch and
+    // once in this host batch while ROOT rows are serialized.
+    const std::size_t component_bytes_per_event =
+        2ULL * static_cast<std::size_t>(number_pairs) * sizeof(double)
+        + static_cast<std::size_t>(number_terms) * sizeof(DeviceComplex);
+    const std::size_t capacity_by_bytes = std::max<std::size_t>(
+        1, kProjectionComponentScratchBytes / component_bytes_per_event);
+    return static_cast<int>(
+        std::min<std::size_t>(number_mc, capacity_by_bytes));
+}
+
+std::string make_group_label(const std::string& jpc)
+{
+    return jpc.size() >= 3
+        ? jpc.substr(0, jpc.size() - 2)
+              + "^{" + jpc.substr(jpc.size() - 2) + "}"
+        : jpc;
+}
 
 } // namespace
 
@@ -298,6 +424,10 @@ void write_gvv_projection(
     long long best_seed,
     double minimum)
 {
+    // -------------------------------------------------------------------------
+    // 1. Collect the fitted model and input samples
+    // -------------------------------------------------------------------------
+
     const GVVCompiledModel& model = likelihood.Model();
     const GVVSample& normalization_mc =
         likelihood.NormalizationMCSample();
@@ -305,29 +435,19 @@ void write_gvv_projection(
     const int number_terms = likelihood.NumberTerms();
     const int number_mc = normalization_mc.Entries();
     const int number_pairs = ctpwa::component_pair_count(number_terms);
-    // The packed values exist once in FitLikelihood's managed scratch and
-    // once in this host batch while ROOT rows are serialized.
-    const std::size_t component_bytes_per_event =
-        2ULL * static_cast<std::size_t>(number_pairs) * sizeof(double)
-        + static_cast<std::size_t>(number_terms) * sizeof(DeviceComplex);
-    const std::size_t capacity_by_bytes = std::max<std::size_t>(
-        1, kProjectionComponentScratchBytes / component_bytes_per_event);
-    const int component_batch_capacity = static_cast<int>(
-        std::min<std::size_t>(number_mc, capacity_by_bytes));
 
-    std::vector<std::string> group_ids;
-    for (const GVVTermMetadata& term : model.term_metadata) {
-        if (std::find(group_ids.begin(), group_ids.end(), term.jpc)
-            == group_ids.end()) {
-            group_ids.push_back(term.jpc);
-        }
-    }
-    std::vector<int> term_groups(number_terms, -1);
-    for (int term = 0; term < number_terms; ++term) {
-        term_groups[term] = static_cast<int>(std::find(
-            group_ids.begin(), group_ids.end(),
-            model.term_metadata[term].jpc) - group_ids.begin());
-    }
+    const ProjectionGrouping grouping =
+        build_projection_grouping(model, number_terms);
+    const std::vector<std::string>& group_ids = grouping.group_ids;
+    const std::vector<int>& term_groups = grouping.term_groups;
+    const int component_batch_capacity =
+        projection_component_batch_capacity(
+            number_mc, number_terms, number_pairs);
+
+    // -------------------------------------------------------------------------
+    // 2. Establish the common MC normalization for all fitted weights
+    // -------------------------------------------------------------------------
+
     const std::vector<double> total_intensity =
         likelihood.EvaluateNormalizationMCIntensity();
     const double sum_pdf = std::accumulate(
@@ -350,6 +470,13 @@ void write_gvv_projection(
             "non-positive effective signal yield for projection");
     }
 
+    // Every fitted MC, JPC-group, and Term-pair weight uses this one scale.
+    const double projection_scale = effective_yield / sum_pdf;
+
+    // -------------------------------------------------------------------------
+    // 3. Create the output file and the accepted-MC projection tree
+    // -------------------------------------------------------------------------
+
     TFile output(save_name.c_str(), "RECREATE");
     if (output.IsZombie()) {
         throw std::runtime_error(
@@ -359,6 +486,12 @@ void write_gvv_projection(
     ProjectionEvent event_values;
     TTree tree_mc("MC", "accepted normalization MC with fitted weights");
     event_values.Book(tree_mc);
+
+    // weight is the full coherent fitted model. weight_group contains each
+    // JPC group's internal coherent sum, excluding cross-group interference.
+    // weight_component stores the symmetric Term-pair matrix: diagonals are
+    // individual intensities and off-diagonals are complete interference
+    // contributions K_ij + K_ji.
     double weight = 0.0;
     std::vector<double> weight_group(group_ids.size(), 0.0);
     std::vector<double> weight_component(
@@ -371,6 +504,9 @@ void write_gvv_projection(
 
     double maximum_closure_residual = 0.0;
     double sum_projection_weight = 0.0;
+
+    // Evaluate Term-pair components in bounded batches, then immediately
+    // serialize one accepted-MC row per event.
     for (int batch_begin = 0;
          batch_begin < number_mc;
          batch_begin += component_batch_capacity) {
@@ -389,7 +525,6 @@ void write_gvv_projection(
              local_event < batch_events;
              ++local_event) {
             const int event = batch_begin + local_event;
-            const double projection_scale = effective_yield / sum_pdf;
             weight = total_intensity[event] * projection_scale;
             sum_projection_weight += weight;
             std::fill(weight_group.begin(), weight_group.end(), 0.0);
@@ -440,6 +575,10 @@ void write_gvv_projection(
             "projection component closure check failed");
     }
 
+    // -------------------------------------------------------------------------
+    // 4. Serialize selected data and dynamic signed-background samples
+    // -------------------------------------------------------------------------
+
     TTree tree_data("data", "selected data");
     event_values.Book(tree_data);
     for (int event = 0; event < data.Entries(); ++event) {
@@ -460,7 +599,8 @@ void write_gvv_projection(
         const GVVSample& background =
             likelihood.BackgroundSampleAt(sample_index);
         background_index = static_cast<int>(sample_index);
-        // The projection adds the negative of the signed likelihood term.
+        // Plotting adds the negative of the signed likelihood contribution
+        // to the fitted signal-MC histogram.
         weight_bg =
             -likelihood.BackgroundLikelihoodCoefficient(sample_index);
         for (int event = 0; event < background.Entries(); ++event) {
@@ -468,6 +608,10 @@ void write_gvv_projection(
             fill_tree(tree_background);
         }
     }
+
+    // -------------------------------------------------------------------------
+    // 5. Serialize background, Term-component, and JPC-group index maps
+    // -------------------------------------------------------------------------
 
     TTree background_map("background_map", "background sample index map");
     int background_entries = 0;
@@ -550,14 +694,14 @@ void write_gvv_projection(
     for (std::size_t group = 0; group < group_ids.size(); ++group) {
         group_index = static_cast<int>(group);
         copy_checked(group_jpc, group_ids[group]);
-        const std::string label = group_ids[group].size() >= 3
-            ? group_ids[group].substr(0, group_ids[group].size() - 2)
-                  + "^{" + group_ids[group].substr(group_ids[group].size() - 2)
-                  + "}"
-            : group_ids[group];
+        const std::string label = make_group_label(group_ids[group]);
         copy_checked(group_label, label);
         fill_tree(group_map);
     }
+
+    // -------------------------------------------------------------------------
+    // 6. Serialize fit and schema provenance
+    // -------------------------------------------------------------------------
 
     TTree metadata("metadata", "GVV projection provenance");
     int projection_schema_version = 2;
@@ -610,6 +754,10 @@ void write_gvv_projection(
         &maximum_closure_residual,
         "maximum_component_closure_residual/D");
     fill_tree(metadata);
+
+    // -------------------------------------------------------------------------
+    // 7. Commit all trees to disk and report the normalization closure
+    // -------------------------------------------------------------------------
 
     if (output.Write() <= 0) {
         throw std::runtime_error(
