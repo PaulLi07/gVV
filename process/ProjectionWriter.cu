@@ -111,30 +111,64 @@ double wrap_angle(double angle)
     return angle;
 }
 
-double omega_decay_plane_phi(
+double cosine_to_axis(const TVector3& vector, const TVector3& axis)
+{
+    if (vector.Mag2() <= kProjectionAxisTolerance) {
+        return 0.0;
+    }
+    return vector.Unit().Dot(axis);
+}
+
+struct OmegaDecayObservables {
+    double cos_theta_decay_plane = 0.0;
+    double phi_decay_plane = 0.0;
+    double cos_theta_pip = 0.0;
+    double cos_theta_pim = 0.0;
+    double cos_theta_pi0 = 0.0;
+    double decay_plane_normal_magnitude = 0.0;
+};
+
+OmegaDecayObservables calculate_omega_decay_observables(
     const TLorentzVector& pip_in_x,
     const TLorentzVector& pim_in_x,
+    const TLorentzVector& pi0_in_x,
     const TLorentzVector& omega_in_x,
-    const TVector3& x_helicity_axis)
+    const TVector3& x_parent_z_axis)
 {
+    // omega helicity frame: z follows the omega flight direction in the X
+    // rest frame, y is normal to the X -> omega omega decay plane, and x
+    // completes the right-handed basis.
     const TVector3 z_axis = safe_unit(
         omega_in_x.Vect(), TVector3(0.0, 0.0, 1.0));
-    const TVector3 y_axis = transverse_axis(x_helicity_axis, z_axis);
-    const TVector3 local_x_axis = safe_unit(
+    const TVector3 y_axis = transverse_axis(x_parent_z_axis, z_axis);
+    const TVector3 x_axis = safe_unit(
         y_axis.Cross(z_axis), TVector3(1.0, 0.0, 0.0));
 
     TLorentzVector pip = pip_in_x;
     TLorentzVector pim = pim_in_x;
+    TLorentzVector pi0 = pi0_in_x;
     const TVector3 boost_to_omega = -omega_in_x.BoostVector();
     pip.Boost(boost_to_omega);
     pim.Boost(boost_to_omega);
-    const TVector3 normal = pip.Vect().Cross(pim.Vect());
-    if (normal.Mag2() <= kProjectionAxisTolerance) {
-        return 0.0;
+    pi0.Boost(boost_to_omega);
+
+    OmegaDecayObservables result;
+    result.cos_theta_pip = cosine_to_axis(pip.Vect(), z_axis);
+    result.cos_theta_pim = cosine_to_axis(pim.Vect(), z_axis);
+    result.cos_theta_pi0 = cosine_to_axis(pi0.Vect(), z_axis);
+
+    // The oriented three-pion decay-plane normal is p(pi+) cross p(pi-).
+    // Its magnitude carries the Dalitz-dependent omega decay-analyser scale.
+    const TVector3 decay_plane_normal = pip.Vect().Cross(pim.Vect());
+    result.decay_plane_normal_magnitude = decay_plane_normal.Mag();
+    if (decay_plane_normal.Mag2() <= kProjectionAxisTolerance) {
+        return result;
     }
-    const TVector3 unit_normal = normal.Unit();
-    return std::atan2(
-        unit_normal.Dot(y_axis), unit_normal.Dot(local_x_axis));
+    const TVector3 unit_normal = decay_plane_normal.Unit();
+    result.cos_theta_decay_plane = unit_normal.Dot(z_axis);
+    result.phi_decay_plane = std::atan2(
+        unit_normal.Dot(y_axis), unit_normal.Dot(x_axis));
+    return result;
 }
 
 // -----------------------------------------------------------------------------
@@ -168,12 +202,34 @@ struct ProjectionEvent {
     double m_pim2_pi02;    // Invariant mass M(pi-_2 pi0_2).
 
     // Angular observables follow the coordinate convention documented in
-    // CalculateAngularObservables() below. Angles are stored in radians.
-    double cos_theta_gamma;            // cos(theta_gamma) in the psi rest frame.
-    double cos_theta_omega;            // cos(theta_omega1) in the X rest frame.
-    double omega1_decay_plane_angle;   // Oriented omega1 decay-plane azimuth.
-    double omega2_decay_plane_angle;   // Oriented omega2 decay-plane azimuth.
-    double delta_phi_decay_planes;     // Wrapped phi_omega1 - phi_omega2.
+    // CalculateAngularObservables() below. Azimuths are stored in radians.
+    double cos_theta_gamma; // Photon polar cosine in the psi rest frame.
+
+    // Direction of omega1 in the X = omega1 omega2 helicity frame. The omega2
+    // direction is back-to-back and therefore is not stored separately.
+    double cos_theta_omega1; // Polar cosine of omega1 relative to z_X.
+    double phi_omega1;       // Azimuth of omega1 relative to the production plane.
+
+    // Direction of each oriented 3-pion decay-plane normal in its parent
+    // omega helicity frame. The normal is p(pi+) cross p(pi-).
+    double cos_theta_decay_plane_omega1; // Polar cosine of the omega1 normal.
+    double phi_decay_plane_omega1;       // Azimuth of the omega1 normal.
+    double cos_theta_decay_plane_omega2; // Polar cosine of the omega2 normal.
+    double phi_decay_plane_omega2;       // Azimuth of the omega2 normal.
+    double delta_phi_decay_planes;       // Wrapped phi_plane1 - phi_plane2.
+
+    // Pion polar cosines in the corresponding omega helicity frame.
+    double cos_theta_pip_omega1; // pi+ from omega1 relative to z_1.
+    double cos_theta_pim_omega1; // pi- from omega1 relative to z_1.
+    double cos_theta_pi0_omega1; // pi0 from omega1 relative to z_1.
+    double cos_theta_pip_omega2; // pi+ from omega2 relative to z_2.
+    double cos_theta_pim_omega2; // pi- from omega2 relative to z_2.
+    double cos_theta_pi0_omega2; // pi0 from omega2 relative to z_2.
+
+    // Magnitude of p(pi+) cross p(pi-) in each omega rest frame. For project
+    // four-momenta in GeV, these quantities have units of GeV^2.
+    double decay_plane_normal_magnitude_omega1;
+    double decay_plane_normal_magnitude_omega2;
 
     void Book(TTree& tree)
     {
@@ -204,23 +260,70 @@ struct ProjectionEvent {
         tree.Branch("m_pip2_pi02", &m_pip2_pi02, "m_pip2_pi02/D");
         tree.Branch("m_pim2_pi02", &m_pim2_pi02, "m_pim2_pi02/D");
 
-        // Stored production and decay-plane angles.
+        // Photon and omega1 production angles.
         tree.Branch(
             "cos_theta_gamma", &cos_theta_gamma, "cos_theta_gamma/D");
         tree.Branch(
-            "cos_theta_omega", &cos_theta_omega, "cos_theta_omega/D");
+            "cos_theta_omega1", &cos_theta_omega1, "cos_theta_omega1/D");
+        tree.Branch("phi_omega1", &phi_omega1, "phi_omega1/D");
+
+        // Complete polar and azimuthal angles of both decay-plane normals.
         tree.Branch(
-            "omega1_decay_plane_angle",
-            &omega1_decay_plane_angle,
-            "omega1_decay_plane_angle/D");
+            "cos_theta_decay_plane_omega1",
+            &cos_theta_decay_plane_omega1,
+            "cos_theta_decay_plane_omega1/D");
         tree.Branch(
-            "omega2_decay_plane_angle",
-            &omega2_decay_plane_angle,
-            "omega2_decay_plane_angle/D");
+            "phi_decay_plane_omega1",
+            &phi_decay_plane_omega1,
+            "phi_decay_plane_omega1/D");
+        tree.Branch(
+            "cos_theta_decay_plane_omega2",
+            &cos_theta_decay_plane_omega2,
+            "cos_theta_decay_plane_omega2/D");
+        tree.Branch(
+            "phi_decay_plane_omega2",
+            &phi_decay_plane_omega2,
+            "phi_decay_plane_omega2/D");
         tree.Branch(
             "delta_phi_decay_planes",
             &delta_phi_decay_planes,
             "delta_phi_decay_planes/D");
+
+        // Polar angles of all six pions in their parent omega helicity frames.
+        tree.Branch(
+            "cos_theta_pip_omega1",
+            &cos_theta_pip_omega1,
+            "cos_theta_pip_omega1/D");
+        tree.Branch(
+            "cos_theta_pim_omega1",
+            &cos_theta_pim_omega1,
+            "cos_theta_pim_omega1/D");
+        tree.Branch(
+            "cos_theta_pi0_omega1",
+            &cos_theta_pi0_omega1,
+            "cos_theta_pi0_omega1/D");
+        tree.Branch(
+            "cos_theta_pip_omega2",
+            &cos_theta_pip_omega2,
+            "cos_theta_pip_omega2/D");
+        tree.Branch(
+            "cos_theta_pim_omega2",
+            &cos_theta_pim_omega2,
+            "cos_theta_pim_omega2/D");
+        tree.Branch(
+            "cos_theta_pi0_omega2",
+            &cos_theta_pi0_omega2,
+            "cos_theta_pi0_omega2/D");
+
+        // Unnormalized omega decay-plane analyser magnitudes.
+        tree.Branch(
+            "decay_plane_normal_magnitude_omega1",
+            &decay_plane_normal_magnitude_omega1,
+            "decay_plane_normal_magnitude_omega1/D");
+        tree.Branch(
+            "decay_plane_normal_magnitude_omega2",
+            &decay_plane_normal_magnitude_omega2,
+            "decay_plane_normal_magnitude_omega2/D");
     }
 
     void Load(const GVVSample& sample, int event)
@@ -289,18 +392,21 @@ private:
     {
         // Coordinate-system convention
         // ----------------------------
-        // 1. In the psi rest frame, the global +z axis is the e+e- beam axis.
-        //    theta_gamma is the polar angle of the radiative photon relative
-        //    to this axis.
-        // 2. In the X rest frame, the helicity +z_H axis points opposite to
-        //    the radiative photon. theta_omega is the polar angle of omega1
-        //    relative to +z_H.
-        // 3. For each omega_i decay plane, +z_i follows the omega_i momentum
-        //    in the X rest frame, +y_i is parallel to z_H cross z_i, and
-        //    +x_i completes the right-handed basis y_i cross z_i. After the
-        //    pions are boosted to the omega_i rest frame, the oriented plane
-        //    normal is n_i = p(pi+_i) cross p(pi-_i). Its azimuth is
-        //    atan2(n_i dot y_i, n_i dot x_i).
+        // 1. psi rest frame: the global +z_beam axis is the e+e- beam axis.
+        //    theta_gamma is the radiative-photon polar angle relative to it.
+        // 2. X rest frame: +z_X points opposite to the radiative photon,
+        //    equivalently along the X flight direction in the psi rest frame.
+        //    The production plane is spanned by z_beam and z_X. We choose
+        //      y_X = unit(z_beam cross z_X),
+        //      x_X = unit(y_X cross z_X).
+        //    theta_omega1 and phi_omega1 locate omega1 in this basis.
+        // 3. omega_i rest frame: +z_i follows the omega_i flight direction in
+        //    the X rest frame, y_i = unit(z_X cross z_i), and
+        //    x_i = unit(y_i cross z_i). The oriented decay-plane normal is
+        //      n_i = unit(p(pi+_i) cross p(pi-_i)).
+        //    Its polar and azimuthal angles are measured in (x_i,y_i,z_i).
+
+        const TVector3 beam_z_axis(0.0, 0.0, 1.0);
 
         // Boost every final-state particle into the psi rest frame.
         std::array<TLorentzVector, GVV_NFINAL_PARTICLES> in_psi = {{
@@ -317,8 +423,7 @@ private:
 
         // cos(theta_gamma): photon polar angle relative to the beam +z axis.
         cos_theta_gamma = safe_unit(
-            in_psi[kGamma].Vect(), TVector3(0.0, 0.0, 1.0))
-                              .Dot(TVector3(0.0, 0.0, 1.0));
+            in_psi[kGamma].Vect(), beam_z_axis).Dot(beam_z_axis);
 
         // Boost from the psi rest frame into the omega-omega (X) rest frame.
         std::array<TLorentzVector, GVV_NFINAL_PARTICLES> in_x = in_psi;
@@ -330,24 +435,53 @@ private:
             in_x[kPip1] + in_x[kPim1] + in_x[kPi01];
         const TLorentzVector omega2_x =
             in_x[kPip2] + in_x[kPim2] + in_x[kPi02];
-        const TVector3 x_helicity_axis = safe_unit(
-            -in_x[kGamma].Vect(), TVector3(0.0, 0.0, 1.0));
+        const TVector3 x_z_axis = safe_unit(
+            -in_x[kGamma].Vect(), beam_z_axis);
+        const TVector3 x_y_axis = transverse_axis(beam_z_axis, x_z_axis);
+        const TVector3 x_x_axis = safe_unit(
+            x_y_axis.Cross(x_z_axis), TVector3(1.0, 0.0, 0.0));
 
-        // cos(theta_omega): omega1 polar angle relative to +z_H = -p_gamma.
-        cos_theta_omega = safe_unit(
-            omega1_x.Vect(), TVector3(0.0, 0.0, 1.0))
-                              .Dot(x_helicity_axis);
+        // Complete omega1 direction in the X helicity frame.
+        const TVector3 omega1_direction = safe_unit(
+            omega1_x.Vect(), TVector3(0.0, 0.0, 1.0));
+        cos_theta_omega1 = omega1_direction.Dot(x_z_axis);
+        phi_omega1 = std::atan2(
+            omega1_direction.Dot(x_y_axis),
+            omega1_direction.Dot(x_x_axis));
 
-        // phi_omega1 and phi_omega2: oriented decay-plane azimuths defined
-        // from the pi+ cross pi- normals in their respective omega rest frames.
-        omega1_decay_plane_angle = omega_decay_plane_phi(
-            in_x[kPip1], in_x[kPim1], omega1_x, x_helicity_axis);
-        omega2_decay_plane_angle = omega_decay_plane_phi(
-            in_x[kPip2], in_x[kPim2], omega2_x, x_helicity_axis);
+        // Complete decay-plane-normal and pion polar-angle observables for
+        // both omega candidates in their respective helicity frames.
+        const OmegaDecayObservables omega1_decay =
+            calculate_omega_decay_observables(
+                in_x[kPip1], in_x[kPim1], in_x[kPi01],
+                omega1_x, x_z_axis);
+        const OmegaDecayObservables omega2_decay =
+            calculate_omega_decay_observables(
+                in_x[kPip2], in_x[kPim2], in_x[kPi02],
+                omega2_x, x_z_axis);
 
-        // Delta phi: signed plane-angle difference wrapped to (-pi, pi].
+        cos_theta_decay_plane_omega1 =
+            omega1_decay.cos_theta_decay_plane;
+        phi_decay_plane_omega1 = omega1_decay.phi_decay_plane;
+        cos_theta_pip_omega1 = omega1_decay.cos_theta_pip;
+        cos_theta_pim_omega1 = omega1_decay.cos_theta_pim;
+        cos_theta_pi0_omega1 = omega1_decay.cos_theta_pi0;
+        decay_plane_normal_magnitude_omega1 =
+            omega1_decay.decay_plane_normal_magnitude;
+
+        cos_theta_decay_plane_omega2 =
+            omega2_decay.cos_theta_decay_plane;
+        phi_decay_plane_omega2 = omega2_decay.phi_decay_plane;
+        cos_theta_pip_omega2 = omega2_decay.cos_theta_pip;
+        cos_theta_pim_omega2 = omega2_decay.cos_theta_pim;
+        cos_theta_pi0_omega2 = omega2_decay.cos_theta_pi0;
+        decay_plane_normal_magnitude_omega2 =
+            omega2_decay.decay_plane_normal_magnitude;
+
+        // Signed difference of the two local decay-plane azimuths, wrapped to
+        // (-pi, pi]. This is not an unsigned geometric plane-opening angle.
         delta_phi_decay_planes = wrap_angle(
-            omega1_decay_plane_angle - omega2_decay_plane_angle);
+            phi_decay_plane_omega1 - phi_decay_plane_omega2);
     }
 };
 
@@ -704,7 +838,7 @@ void write_gvv_projection(
     // -------------------------------------------------------------------------
 
     TTree metadata("metadata", "GVV projection provenance");
-    int projection_schema_version = 2;
+    int projection_schema_version = 3;
     int n_terms = number_terms;
     int n_groups = static_cast<int>(group_ids.size());
     int n_data = data.Entries();

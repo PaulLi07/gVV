@@ -364,7 +364,7 @@ pair it with a model file from a different model scan.
 
 #### 7.3 Projection ROOT schema
 
-`projection-TAG.root` uses projection schema version 2. It contains:
+`projection-TAG.root` uses projection schema version 3. It contains:
 
 | ROOT object | Content |
 |---|---|
@@ -377,9 +377,32 @@ pair it with a model file from a different model scan.
 | `metadata` tree | Schema/tag/model provenance, sample and model sizes, background method, effective signal yield, selected-fit identity, and component-closure diagnostic |
 
 Each event tree contains the seven input four-vectors, reconstructed
-`p4_omega1`, `p4_omega2`, and `p4_X`, two- and three-body invariant masses,
-`cos_theta_gamma`, `cos_theta_omega`, both omega decay-plane angles, and their
-wrapped difference.
+`p4_omega1`, `p4_omega2`, and `p4_X`, and all two- and three-body invariant
+masses used by the projection plots. The polarization-oriented branches are:
+
+- `cos_theta_gamma` in the psi rest frame;
+- `cos_theta_omega1` and `phi_omega1`, which give the complete omega1
+  direction in the X helicity frame;
+- `cos_theta_decay_plane_omega1`, `phi_decay_plane_omega1`,
+  `cos_theta_decay_plane_omega2`, and `phi_decay_plane_omega2`, which give the
+  complete direction of each oriented `p(pi+) cross p(pi-)` normal in its
+  parent omega helicity frame;
+- `delta_phi_decay_planes`, the wrapped difference of those two local normal
+  azimuths;
+- `cos_theta_pip_omega1`, `cos_theta_pim_omega1`,
+  `cos_theta_pi0_omega1`, `cos_theta_pip_omega2`,
+  `cos_theta_pim_omega2`, and `cos_theta_pi0_omega2`, the six pion polar
+  cosines in their parent omega helicity frames;
+- `decay_plane_normal_magnitude_omega1` and
+  `decay_plane_normal_magnitude_omega2`, the unnormalized analyser magnitudes
+  in the two omega rest frames.
+
+The X-frame axes use `z_X = -unit(p_gamma)`,
+`y_X = unit(z_beam cross z_X)`, and `x_X = unit(y_X cross z_X)`. For omega_i,
+`z_i` follows its X-frame flight direction, `y_i = unit(z_X cross z_i)`, and
+`x_i = unit(y_i cross z_i)`. Azimuths are in radians. The omega2 production
+angles are not stored because its X-frame direction is back-to-back with
+omega1.
 
 The total normalization-MC weights sum to the effective fitted signal yield
 
@@ -613,7 +636,7 @@ diagnostics, path resolution, and base style.
 Each macro writes both `.pdf` and `.eps`, yielding ten tagged figure files.
 Existing same-name figures are replaced by ROOT's print operation.
 
-The projection utilities require projection schema version 2 and discover
+The projection utilities require projection schema version 3 and discover
 Terms, JPC groups, and background samples dynamically from `component_map`,
 `group_map`, and `background_map`. The main plots compare data with fitted
 signal plus signed background. The diagonal-component plot is not expected to

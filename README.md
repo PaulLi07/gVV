@@ -373,10 +373,13 @@ free-parameter state, parameter metadata, covariance, and model signature. It
 is the machine-readable numerical bridge; downstream code does not parse the
 human report.
 
-The projection ROOT file uses schema version 2. It stores data, signed
+The projection ROOT file uses schema version 3. It stores data, signed
 backgrounds, fitted accepted-MC weights, complete Term-pair component weights,
 JPC group weights, dynamic component/group/background maps, and provenance.
-Old schema-version-1 projection files are not accepted by the current plotting
+Its event record includes the complete omega-production direction, both
+three-pion decay-plane-normal directions, pion helicity polar angles, and the
+decay-plane analyser magnitudes needed for polarization studies. Projection
+files from schema versions 1 and 2 are not accepted by the current plotting
 reader.
 
 ## Run Post-processing

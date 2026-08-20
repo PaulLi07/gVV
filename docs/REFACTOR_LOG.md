@@ -255,3 +255,36 @@ macro also ran with no arguments from `post/plotting/macros/`, and the explicit
 two-argument form produced the requested custom output prefix. The unchanged
 `draw.sh` driver produced its ten tagged files, all ROOT logs passed the error
 scan, and no Fit, Post Calculation, CUDA executable, or Slurm job was run.
+
+## Projection polarization observables (2026-08-21)
+
+Working branch: `refactor/plotting-modules`.
+
+- Upgraded the fitted Projection contract from schema version 2 to version 3.
+- Completed the omega1 direction with `cos_theta_omega1` and `phi_omega1` in
+  the X helicity frame defined by the beam-X production plane.
+- Replaced the ambiguous omega decay-plane branch names with
+  `phi_decay_plane_omega1/2` and added the matching
+  `cos_theta_decay_plane_omega1/2` polar cosines.
+- Added all six charged/neutral pion polar cosines in their parent omega
+  helicity frames and the two unnormalized `p(pi+) cross p(pi-)` magnitudes.
+- Kept all existing pion-pair invariant masses and the wrapped signed
+  difference of the two local decay-plane azimuths.
+- Updated the shared plotting reader, angular-moment helper, standard macro
+  identifiers/axis label, and current schema documentation without adding new
+  standard figure panels.
+
+Verification was performed with ROOT 6.32.02 and CUDA 12 on the fixed
+`lxlogin005` node, without running Fit, Post Calculation, or a Slurm job:
+
+- the changed Projection writer compiled and `make check` passed all 11
+  login-node tests;
+- a focused host-side kinematics test checked the decay-plane polar cosine,
+  decay-plane azimuth, representative pion polar cosines, and unnormalized
+  plane-normal magnitude for a constructed boosted omega decay;
+- a branch-contract comparison found exactly the 14 intended additions and
+  the three intended branch renames, with every other branch preserved;
+- an isolated schema-v3 ROOT fixture was accepted by all five plotting macros;
+  each macro produced its PDF and EPS outputs, and the ROOT logs contained no
+  error, fatal, abort, segmentation-fault, missing-branch, or unsupported-
+  schema diagnostics.

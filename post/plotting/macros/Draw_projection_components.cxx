@@ -40,10 +40,10 @@ const std::vector<gvvplot::VariableSpec> kVariables = {
      "M(#gamma#omega) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kCosThetaGamma, 40, -1.0, 1.0,
      "cos#theta_{#gamma}", false},
-    {gvvplot::kCosThetaOmega, 40, -1.0, 1.0,
+    {gvvplot::kCosThetaOmega1, 40, -1.0, 1.0,
      "sym. cos#theta_{#omega}", false},
-    {gvvplot::kOmegaDecayPlane, 40, -TMath::Pi(), TMath::Pi(),
-     "#phi_{#omega} (rad)", false},
+    {gvvplot::kPhiDecayPlaneOmega, 40, -TMath::Pi(), TMath::Pi(),
+     "#phi_{decay plane}^{#omega} (rad)", false},
     {gvvplot::kDeltaPhiDecayPlanes, 40, -TMath::Pi(), TMath::Pi(),
      "sym. #Delta#phi_{planes} (rad)", false}};
 

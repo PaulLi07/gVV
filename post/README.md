@@ -374,7 +374,7 @@ the complete presentation configuration:
 - curve colors, line/marker/fill styles, and draw order;
 - legends, panel labels, diagnostic text, and output defaults.
 
-`GVVPlotUtils.h` retains only schema-v2 input handling, dynamic maps, branch
+`GVVPlotUtils.h` retains only schema-v3 input handling, dynamic maps, branch
 binding, exchange-symmetric observable filling, unstyled projection-histogram
 construction, Pearson diagnostics, project-root path resolution, and the common
 base style. `GVVAngularMoments.h` retains only Legendre/moment
@@ -384,7 +384,7 @@ header.
 
 ### Projection contract consumed
 
-`GVVPlotUtils.h` requires projection schema version 2. It reads:
+`GVVPlotUtils.h` requires projection schema version 3. It reads:
 
 - `data`: unweighted selected data observables;
 - `MC`: accepted normalization-MC observables, total fitted `weight`, coherent
@@ -421,10 +421,17 @@ Each basename is written as both PDF and EPS under
 `post/plotting/results/`, for ten files in a complete run.
 
 The main observables are `M(omega omega)`, symmetrized `M(gamma omega)`,
-`cos(theta_gamma)`, symmetrized `cos(theta_omega)`, the omega decay-plane
-angle, and symmetrized decay-plane-angle difference. The detailed projection
-also fills the two omega-candidate `M(pi+ pi- pi0)` values with half weight,
-forming one exchange-symmetrized candidate-mass distribution.
+`cos(theta_gamma)`, symmetrized `cos_theta_omega1`, the two
+`phi_decay_plane_omega1/2` values, and the symmetrized decay-plane-angle
+difference. The detailed projection also fills the two omega-candidate
+`M(pi+ pi- pi0)` values with half weight, forming one exchange-symmetrized
+candidate-mass distribution.
+
+The schema-v3 reader additionally binds `phi_omega1`, both decay-plane-normal
+polar cosines, all six pion helicity polar cosines, and both unnormalized
+decay-plane-normal magnitudes. They are available to new human-readable macros
+without extending the shared input layer; the current five standard figures
+do not add extra panels for them.
 
 The component diagnostic draws only diagonal `|A_i|^2` entries. It cannot and
 should not close to the total coherent curve when interference is present.

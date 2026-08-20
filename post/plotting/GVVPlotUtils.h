@@ -26,8 +26,8 @@ enum Variable {
     kMassOmegaOmega = 0,
     kMassGammaOmega = 1,
     kCosThetaGamma = 2,
-    kCosThetaOmega = 3,
-    kOmegaDecayPlane = 4,
+    kCosThetaOmega1 = 3,
+    kPhiDecayPlaneOmega = 4,
     kDeltaPhiDecayPlanes = 5,
     kMassOmega = 6
 };
@@ -131,10 +131,21 @@ struct Branches {
     double m_gammaomega1 = 0.0;
     double m_gammaomega2 = 0.0;
     double cos_theta_gamma = 0.0;
-    double cos_theta_omega = 0.0;
-    double omega1_decay_plane_angle = 0.0;
-    double omega2_decay_plane_angle = 0.0;
+    double cos_theta_omega1 = 0.0;
+    double phi_omega1 = 0.0;
+    double cos_theta_decay_plane_omega1 = 0.0;
+    double phi_decay_plane_omega1 = 0.0;
+    double cos_theta_decay_plane_omega2 = 0.0;
+    double phi_decay_plane_omega2 = 0.0;
     double delta_phi_decay_planes = 0.0;
+    double cos_theta_pip_omega1 = 0.0;
+    double cos_theta_pim_omega1 = 0.0;
+    double cos_theta_pi0_omega1 = 0.0;
+    double cos_theta_pip_omega2 = 0.0;
+    double cos_theta_pim_omega2 = 0.0;
+    double cos_theta_pi0_omega2 = 0.0;
+    double decay_plane_normal_magnitude_omega1 = 0.0;
+    double decay_plane_normal_magnitude_omega2 = 0.0;
     double weight = 1.0;
     double weight_bg = 1.0;
     int background_index = -1;
@@ -146,9 +157,15 @@ struct Branches {
         const char* required[] = {
             "m_omega1", "m_omega2", "m_omegaomega",
             "m_gammaomega1", "m_gammaomega2",
-            "cos_theta_gamma", "cos_theta_omega",
-            "omega1_decay_plane_angle", "omega2_decay_plane_angle",
-            "delta_phi_decay_planes"};
+            "cos_theta_gamma", "cos_theta_omega1", "phi_omega1",
+            "cos_theta_decay_plane_omega1", "phi_decay_plane_omega1",
+            "cos_theta_decay_plane_omega2", "phi_decay_plane_omega2",
+            "delta_phi_decay_planes",
+            "cos_theta_pip_omega1", "cos_theta_pim_omega1",
+            "cos_theta_pi0_omega1", "cos_theta_pip_omega2",
+            "cos_theta_pim_omega2", "cos_theta_pi0_omega2",
+            "decay_plane_normal_magnitude_omega1",
+            "decay_plane_normal_magnitude_omega2"};
         for (const char* name : required) RequireBranch(tree, name);
         tree->SetBranchAddress("m_omega1", &m_omega1);
         tree->SetBranchAddress("m_omega2", &m_omega2);
@@ -156,13 +173,38 @@ struct Branches {
         tree->SetBranchAddress("m_gammaomega1", &m_gammaomega1);
         tree->SetBranchAddress("m_gammaomega2", &m_gammaomega2);
         tree->SetBranchAddress("cos_theta_gamma", &cos_theta_gamma);
-        tree->SetBranchAddress("cos_theta_omega", &cos_theta_omega);
+        tree->SetBranchAddress("cos_theta_omega1", &cos_theta_omega1);
+        tree->SetBranchAddress("phi_omega1", &phi_omega1);
         tree->SetBranchAddress(
-            "omega1_decay_plane_angle", &omega1_decay_plane_angle);
+            "cos_theta_decay_plane_omega1",
+            &cos_theta_decay_plane_omega1);
         tree->SetBranchAddress(
-            "omega2_decay_plane_angle", &omega2_decay_plane_angle);
+            "phi_decay_plane_omega1", &phi_decay_plane_omega1);
+        tree->SetBranchAddress(
+            "cos_theta_decay_plane_omega2",
+            &cos_theta_decay_plane_omega2);
+        tree->SetBranchAddress(
+            "phi_decay_plane_omega2", &phi_decay_plane_omega2);
         tree->SetBranchAddress(
             "delta_phi_decay_planes", &delta_phi_decay_planes);
+        tree->SetBranchAddress(
+            "cos_theta_pip_omega1", &cos_theta_pip_omega1);
+        tree->SetBranchAddress(
+            "cos_theta_pim_omega1", &cos_theta_pim_omega1);
+        tree->SetBranchAddress(
+            "cos_theta_pi0_omega1", &cos_theta_pi0_omega1);
+        tree->SetBranchAddress(
+            "cos_theta_pip_omega2", &cos_theta_pip_omega2);
+        tree->SetBranchAddress(
+            "cos_theta_pim_omega2", &cos_theta_pim_omega2);
+        tree->SetBranchAddress(
+            "cos_theta_pi0_omega2", &cos_theta_pi0_omega2);
+        tree->SetBranchAddress(
+            "decay_plane_normal_magnitude_omega1",
+            &decay_plane_normal_magnitude_omega1);
+        tree->SetBranchAddress(
+            "decay_plane_normal_magnitude_omega2",
+            &decay_plane_normal_magnitude_omega2);
         if (is_mc) {
             const char* weights[] = {
                 "weight", "weight_group", "weight_component"};
@@ -195,12 +237,12 @@ inline void FillObservable(
         histogram->Fill(values.m_gammaomega2, 0.5 * weight);
     } else if (variable == kCosThetaGamma) {
         histogram->Fill(values.cos_theta_gamma, weight);
-    } else if (variable == kCosThetaOmega) {
-        histogram->Fill(values.cos_theta_omega, 0.5 * weight);
-        histogram->Fill(-values.cos_theta_omega, 0.5 * weight);
-    } else if (variable == kOmegaDecayPlane) {
-        histogram->Fill(values.omega1_decay_plane_angle, 0.5 * weight);
-        histogram->Fill(values.omega2_decay_plane_angle, 0.5 * weight);
+    } else if (variable == kCosThetaOmega1) {
+        histogram->Fill(values.cos_theta_omega1, 0.5 * weight);
+        histogram->Fill(-values.cos_theta_omega1, 0.5 * weight);
+    } else if (variable == kPhiDecayPlaneOmega) {
+        histogram->Fill(values.phi_decay_plane_omega1, 0.5 * weight);
+        histogram->Fill(values.phi_decay_plane_omega2, 0.5 * weight);
     } else if (variable == kDeltaPhiDecayPlanes) {
         histogram->Fill(values.delta_phi_decay_planes, 0.5 * weight);
         histogram->Fill(-values.delta_phi_decay_planes, 0.5 * weight);
@@ -311,7 +353,7 @@ inline void ValidateProjectionContract(TFile& input)
     metadata->SetBranchAddress(
         "n_background_samples", &number_background_samples);
     metadata->GetEntry(0);
-    if (schema_version != 2) {
+    if (schema_version != 3) {
         throw std::runtime_error(
             "unsupported projection schema version "
             + std::to_string(schema_version));

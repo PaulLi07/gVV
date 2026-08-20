@@ -2,6 +2,11 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Upgraded Projection from schema version 2 to version 3 with an explicit X
+  helicity frame, the complete omega1 production direction, both oriented
+  omega decay-plane-normal directions and magnitudes, and all six pion
+  helicity polar cosines; renamed the decay-plane azimuth branches so they
+  cannot be mistaken for omega flight-direction azimuths.
 - Refactored Post Plotting so every ROOT `.cxx` macro is independently
   executable and exposes a readable `User configuration` preamble containing
   default paths, variables/moments, binning, axes, canvas, styles, draw options,

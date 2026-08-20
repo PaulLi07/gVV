@@ -492,7 +492,7 @@ signature and parameter order.
 ### 6.10 Projection ROOT contract
 
 `ProjectionWriter` is part of the GVV process boundary. It computes derived
-GVV observables on the host and serializes projection schema version 2.
+GVV observables on the host and serializes projection schema version 3.
 
 | Tree | Contents |
 |---|---|
@@ -503,6 +503,19 @@ GVV observables on the host and serializes projection schema version 2.
 | `group_map` | Dynamic JPC group index and display label |
 | `background_map` | Dynamic background label, size, likelihood coefficient, projection weight |
 | `metadata` | Schema, tag, model signature, counts, effective yield, best fit, closure diagnostic |
+
+Every event tree carries the complete schema-v3 polarization coordinates.
+In the X rest frame, `z_X` points opposite the radiative photon,
+`y_X` follows `z_beam cross z_X`, and `x_X = y_X cross z_X`.
+`cos_theta_omega1` and `phi_omega1` locate omega1 in this basis; omega2 is
+back-to-back and is not duplicated. In each omega_i helicity frame, `z_i`
+follows its X-frame momentum, `y_i` follows `z_X cross z_i`, and
+`x_i = y_i cross z_i`. The oriented normal
+`unit(p(pi+) cross p(pi-))` supplies `cos_theta_decay_plane_omega1/2` and
+`phi_decay_plane_omega1/2`. The tree also stores all six pion polar cosines,
+the two unnormalized normal magnitudes, and the wrapped difference of the two
+local decay-plane azimuths. All pion-pair masses remain available for direct
+Dalitz-plot work.
 
 The fitted accepted-MC scale is
 
@@ -675,7 +688,7 @@ the tagged TXT and ROOT products. It never submits a fit or runs plotting.
 
 ### 7.6 Post Plotting
 
-Plotting reads only projection schema version 2. It discovers the active Terms,
+Plotting reads only projection schema version 3. It discovers the active Terms,
 JPC groups, and configured backgrounds from the map trees; it does not compile
 a nominal resonance list.
 

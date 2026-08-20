@@ -94,7 +94,7 @@ inline MomentHistograms BuildMomentHistograms(
         result.data->Fill(
             data_values.m_omegaomega,
             MomentWeight(
-                order, data_values.cos_theta_omega, odd_diagnostic));
+                order, data_values.cos_theta_omega1, odd_diagnostic));
     }
 
     Branches background_values;
@@ -107,7 +107,7 @@ inline MomentHistograms BuildMomentHistograms(
             background_values.m_omegaomega,
             MomentWeight(
                 order,
-                background_values.cos_theta_omega,
+                background_values.cos_theta_omega1,
                 odd_diagnostic)
                 * background_values.weight_bg);
     }
@@ -118,7 +118,7 @@ inline MomentHistograms BuildMomentHistograms(
         input.mc->GetEntry(event);
         result.model->Fill(
             mc_values.m_omegaomega,
-            MomentWeight(order, mc_values.cos_theta_omega, odd_diagnostic)
+            MomentWeight(order, mc_values.cos_theta_omega1, odd_diagnostic)
                 * mc_values.weight);
     }
 

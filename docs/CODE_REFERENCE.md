@@ -599,12 +599,17 @@ narrow interface keeps output details out of the likelihood class.
 
 ### `process/ProjectionWriter.cu` — Fit
 
-This is the complete schema-version-2 projection writer. Its important blocks
+This is the complete schema-version-3 projection writer. Its important blocks
 are:
 
 - host reconstruction of final-state/composite four-vectors;
-- masses, photon/omega helicity angles, omega decay-plane angles, and wrapped
-  plane differences;
+- all pion-pair and composite masses;
+- the photon polar angle and complete omega1 production direction in the X
+  helicity frame;
+- the complete direction and unnormalized magnitude of each oriented
+  three-pion decay-plane normal in its omega helicity frame;
+- all six pion polar cosines and the wrapped difference of the two local
+  decay-plane azimuths;
 - bounded-batch direct Term-pair evaluation and event-level closure checking;
 - accepted-MC total, JPC-group, and symmetric Term-component weights under one
   full-model normalization;
@@ -666,7 +671,7 @@ This header owns only common Projection data services:
 
 - the observable enum/specification type supplied by individual macros;
 - the common BESIII base ROOT style and project-root path resolution;
-- schema-v2 and required-branch validation;
+- schema-v3 and required-branch validation;
 - dynamic component/group map readers;
 - event branch binding and exchange-symmetric observable filling;
 - construction of data, signed-background, fitted-signal, total, group, and
