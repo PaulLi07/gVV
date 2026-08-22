@@ -33,6 +33,12 @@ omega decay factors are common to all current GVV Waves. A Resonance can be
 used by more than one Term, and any number of Resonances can reuse the same
 Wave.
 
+The fixed daughter factors are not additional `resonances` entries. The rho
+subchannel uses the reusable two-body P-wave BWR, while the omega uses the
+shared Breit-Wigner denominator with a process-built tabulated three-pion
+running width. Their common `omega -> rho pi -> 3pi` implementation belongs to
+the process decay model rather than the configurable X Resonance catalogue.
+
 This separation has two practical consequences:
 
 - adding or removing a Resonance on an already registered Wave is a JSON-only

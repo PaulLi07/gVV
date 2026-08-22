@@ -106,10 +106,17 @@ int main()
         probe_s, f0_mass, f0_width, 0.0, omega_mass);
     const DeviceComplex fixed_bw = ctpwa::BW_fixed_width(
         probe_s, f0_mass, f0_width);
+    const DeviceComplex shared_bw = ctpwa::BW_from_width(
+        probe_s, f0_mass, f0_width);
+    if (!close_to(shared_bw.real, fixed_bw.real)
+        || !close_to(shared_bw.imag, fixed_bw.imag)) {
+        std::cerr << "fixed-width BW bypasses the shared denominator\n";
+        return 6;
+    }
     if (!close_to(flatte_zero.real, fixed_bw.real)
         || !close_to(flatte_zero.imag, fixed_bw.imag)) {
         std::cerr << "R_omegaomega=0 does not recover the fixed-width BW\n";
-        return 6;
+        return 7;
     }
 
     const DeviceComplex flatte_at_mass = ctpwa::Flatte_subtracted_effective(
@@ -119,7 +126,51 @@ int main()
     if (!close_to(flatte_at_mass.real, bw_at_mass.real)
         || !close_to(flatte_at_mass.imag, bw_at_mass.imag)) {
         std::cerr << "subtraction does not preserve the fixed mass point\n";
-        return 7;
+        return 8;
+    }
+
+    // The event current and omega-width integration must use the same
+    // coherent rho-isobar function. Reconstruct the former local expression
+    // here as an independent regression reference.
+    const double s_omega = GVV_OMEGA_MASS * GVV_OMEGA_MASS;
+    const double s0 = GVV_PI0_MASS * GVV_PI0_MASS;
+    const double s1 = GVV_PIP_MASS * GVV_PIP_MASS;
+    const double s2 = GVV_PIM_MASS * GVV_PIM_MASS;
+    const double s12 = 0.220;
+    const double s10 = 0.225;
+    const double s20 = s_omega + s0 + s1 + s2 - s12 - s10;
+    const RhoBWRParameters rho;
+    const auto old_isobar = [&](double s_pair,
+                                double s_bachelor,
+                                double s_first,
+                                double s_second) {
+        const double q_parent = ctpwa::two_body_Q(
+            s_omega, s_pair, s_bachelor);
+        const double q_pair = ctpwa::two_body_Q(
+            s_pair, s_first, s_second);
+        return ctpwa::blatt_weisskopf(
+                   q_parent, 1, rho.omega_vertex_radius_fm)
+               * ctpwa::BWR(
+                   s_pair,
+                   rho.mass,
+                   rho.width,
+                   1,
+                   s_first,
+                   s_second,
+                   rho.rho_vertex_radius_fm)
+               * ctpwa::blatt_weisskopf(
+                   q_pair, 1, rho.rho_vertex_radius_fm);
+    };
+    const DeviceComplex old_coherent_rho =
+        old_isobar(s12, s0, s1, s2)
+        + old_isobar(s10, s2, s1, s0)
+        + old_isobar(s20, s1, s2, s0);
+    const DeviceComplex shared_coherent_rho = coherent_omega_rho_factor(
+        s_omega, s12, s10, s20, s0, s1, s2, rho);
+    if (!close_to(shared_coherent_rho.real, old_coherent_rho.real)
+        || !close_to(shared_coherent_rho.imag, old_coherent_rho.imag)) {
+        std::cerr << "shared omega rho-isobar factor changed the decay model\n";
+        return 9;
     }
 
     std::cout << "Dynamics tests passed\n";

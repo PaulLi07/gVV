@@ -43,7 +43,11 @@ E^mu = epsilon^{mu nu lambda sigma}
 and multiplies it by the coherent sum of the three rho-isobar configurations,
 including their P-wave barrier factors and running rho propagators. The omega
 line shape uses the tabulated three-body running width implemented by
-`OmegaWidthTable`.
+`OmegaWidthTable`. The rho calls the reusable analytic two-body `BWR`, while
+the omega interpolates `Gamma_omega(s)` and calls the same framework-level
+Breit-Wigner denominator used by the other line shapes. One shared host/device
+rho-isobar implementation is used by both the event current and the omega-width
+integration.
 
 ### Resonance, Wave, and Term
 

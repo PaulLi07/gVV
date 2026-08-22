@@ -3,60 +3,24 @@
 #ifndef CTPWA_PROCESS_OMEGA_WIDTH_TABLE_H
 #define CTPWA_PROCESS_OMEGA_WIDTH_TABLE_H
 
-#include "framework/math/DeviceComplex.cuh"
-#include "process/ProcessKinematics.cuh"
+#include "framework/dynamics/Propagators.cuh"
+#include "framework/dynamics/TabulatedFunction.cuh"
+#include "process/OmegaDecayModel.cuh"
 
 #include <vector>
 
-struct GVVWidthTableView {
-    const double* values;
-    int size;
-    double s_min;
-    double s_step;
-
-    __host__ __device__ GVVWidthTableView(
-        const double* table = nullptr,
-        int table_size = 0,
-        double minimum = 0.0,
-        double step = 0.0)
-        : values(table), size(table_size), s_min(minimum), s_step(step)
-    {
-    }
-
-    __host__ __device__ double interpolate(double s) const
-    {
-        if (values == nullptr || size <= 0 || s_step <= 0.0) {
-            return 0.0;
-        }
-        if (s <= s_min) {
-            return values[0];
-        }
-        const double coordinate = (s - s_min) / s_step;
-        int lower = static_cast<int>(coordinate);
-        if (lower >= size - 1) {
-            return values[size - 1];
-        }
-        if (lower < 0) {
-            lower = 0;
-        }
-        const double fraction = coordinate - lower;
-        return values[lower] * (1.0 - fraction)
-               + values[lower + 1] * fraction;
-    }
-};
-
 __host__ __device__ inline DeviceComplex gvv_omega_propagator(
     double s,
-    const GVVWidthTableView& width_table)
+    const ctpwa::TabulatedFunctionView& width_table)
 {
-    const double gamma_s = width_table.interpolate(s);
-    return 1.0 / DeviceComplex(
-        GVV_OMEGA_MASS * GVV_OMEGA_MASS - s,
-        -GVV_OMEGA_MASS * gamma_s);
+    return ctpwa::BW_from_width(
+        s,
+        GVV_OMEGA_MASS,
+        width_table.interpolate_clamped(s));
 }
 
-// Host-side three-body width builder and optional GPU upload.  The table is
-// based on the same coherent rho-isobar current used in process/ProcessKinematics.cuh.
+// Host-side three-body width builder and optional GPU upload. The table and
+// event current share process/OmegaDecayModel.cuh as their rho-isobar source.
 class OmegaWidthTable {
 public:
     OmegaWidthTable();
@@ -73,8 +37,8 @@ public:
     void Upload();
 
     double Width(double s) const;
-    GVVWidthTableView HostView() const;
-    GVVWidthTableView DeviceView() const;
+    ctpwa::TabulatedFunctionView HostView() const;
+    ctpwa::TabulatedFunctionView DeviceView() const;
 
 private:
     std::vector<double> values_;

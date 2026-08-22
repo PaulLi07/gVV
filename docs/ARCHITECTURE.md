@@ -70,7 +70,7 @@ gVV/
 │   └── gvv_env.sh              Project-local CUDA/ROOT environment
 ├── framework/                  Process-independent reusable layer
 │   ├── amplitude/              Coherent intensity algebra
-│   ├── dynamics/               Kinematics and propagator formulae
+│   ├── dynamics/               Propagators, kinematics, tabulated functions
 │   ├── fit/                    Run config, Minuit, report, fitted state
 │   ├── likelihood/             Normalization and log-likelihood arithmetic
 │   ├── math/                   Complex, four-vector, Lorentz conventions
@@ -79,7 +79,8 @@ gVV/
 ├── process/                    GVV replacement boundary
 │   ├── waves/                  Complete registered GVV numerator bases
 │   ├── ProcessEvent.cuh        Device event view
-│   ├── ProcessKinematics.cuh   omega currents and GVV constants
+│   ├── OmegaDecayModel.cuh     shared omega -> rho pi -> 3pi dynamics
+│   ├── ProcessKinematics.cuh   omega currents from event four-vectors
 │   ├── ProcessAmplitude.cuh    common GVV polarization contraction
 │   ├── WaveRegistry.*          Wave catalogue and GVV model compiler
 │   ├── TermEvaluator.*         CUDA F, coefficient, intensity, component path
@@ -305,6 +306,12 @@ barrier factors. The same omega decay model is common to every production
 Wave, which allows the real geometric tensors to form the cached Gram matrix
 while the common complex factor stays in each Term coefficient.
 
+`OmegaDecayModel.cuh` is the single host/device implementation of this
+coherent rho-isobar factor. Both event-current construction and the numerical
+omega-width integration call it, so the numerator and the width table cannot
+silently drift to different rho masses, widths, barriers, or line shapes. The
+rho itself calls the process-independent two-body `ctpwa::BWR` function.
+
 ### 6.3 Complete Waves
 
 A complete Wave function returns the GVV covariant numerator tensor for one
@@ -358,7 +365,10 @@ C_t(event; theta) = c_t(theta)
 two-body-running-width propagator receives its physical `orbital_l` explicitly;
 it does not infer the width power from the Wave ID. The omega propagators use a
 prebuilt, interpolated three-pion running-width table normalized at the omega
-pole.
+pole. Their denominator is evaluated by the same framework-level
+`BW_from_width` function used by fixed and analytic-running Breit-Wigner
+models; only the process-specific construction of `Gamma_omega(s)` remains in
+`OmegaWidthTable`.
 
 After every Term coefficient has been fully evaluated, Terms that share the
 same complete Wave are aggregated:
@@ -779,6 +789,11 @@ accepted JSON name and parameter policy remain a process-compiler concern.
 Do not bind a generic propagator to a Wave ID. Physical quantities such as
 orbital angular momentum must be explicit propagator parameters when they
 control the denominator.
+
+Fixed daughter and subchannel line shapes are a separate process concern from
+the configurable X Resonance registry. They should call the same reusable
+framework formulae, but they do not need model JSON entries or device registry
+enums unless the analysis intentionally makes those submodels configurable.
 
 ### 8.4 Reuse the project for a different final state
 

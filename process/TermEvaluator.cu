@@ -114,7 +114,7 @@ void CalGVVFmatrix(
 
 __device__ DeviceComplex gvv_common_omega_factor(
     const GVVEventKinematics& event,
-    GVVWidthTableView omega_width_table)
+    ctpwa::TabulatedFunctionView omega_width_table)
 {
     const double s_omega1 = event.omega1 * event.omega1;
     const double s_omega2 = event.omega2 * event.omega2;
@@ -145,7 +145,7 @@ __global__ void CalGVVWaveCoefficients_device(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     DeviceComplex* wave_coefficients,
     int number_terms,
     int number_active_waves,
@@ -183,7 +183,7 @@ __global__ void CalGVVTermCoefficients_device(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     DeviceComplex* coefficients,
     int number_terms,
     int first_event,
@@ -236,7 +236,7 @@ void CalGVVPDF(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     const double* F_matrix,
     DeviceComplex* wave_coefficient_workspace,
     double* intensity,
@@ -383,7 +383,7 @@ static void launch_term_coefficients(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     DeviceComplex* coefficient_workspace,
     int number_terms,
     int first_event,
@@ -412,7 +412,7 @@ void CalGVVComponentBatch(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     const double* F_matrix,
     DeviceComplex* coefficient_workspace,
     double* packed_components,
@@ -460,7 +460,7 @@ void CalGVVComponentIntegrals(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     const double* F_matrix,
     DeviceComplex* coefficient_workspace,
     double* integrated_components,

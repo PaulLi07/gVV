@@ -56,7 +56,7 @@ __global__ void term_reference_intensity(
     const ctpwa::PropagatorParameters* resonances,
     const TermSpec* terms,
     const DeviceComplex* couplings,
-    GVVWidthTableView omega_width_table,
+    ctpwa::TabulatedFunctionView omega_width_table,
     const double* F_matrix,
     double* output,
     int number_terms,
@@ -250,7 +250,7 @@ void prepare_model(ManagedBuffers& buffers)
 void check_term_count(ManagedBuffers& buffers, int number_terms)
 {
     const int number_pairs = ctpwa::component_pair_count(number_terms);
-    const GVVWidthTableView width_table(
+    const ctpwa::TabulatedFunctionView width_table(
         buffers.width_values, 2, 0.0, 10.0);
     const GVVDeviceMomenta momenta = momenta_view(buffers);
 

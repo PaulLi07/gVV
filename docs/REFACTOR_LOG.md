@@ -318,3 +318,38 @@ Fit, Post Calculation, CUDA kernels, or a Slurm job:
   PDF and six EPS files, and its ROOT log passed the error-marker scan;
 - the main, polarization, and omega-decay check PDFs were rendered and
   inspected for panel content, labels, and layout.
+
+## Unified omega and rho line-shape building blocks (2026-08-22)
+
+Working branch: `refactor/unified-omega-lineshape`.
+
+- Added the process-independent `BW_from_width` denominator and routed fixed,
+  analytic-running, scalar-S+D, nominal two-body, and tabulated omega widths
+  through the same sign convention.
+- Added a reusable host/device uniform-table view while preserving the existing
+  clamped interpolation behavior exactly.
+- Extracted `process/OmegaDecayModel.cuh` as the single definition of particle
+  constants, rho parameters, both P-wave barriers, the analytic rho BWR, and
+  the coherent three-rho sum.
+- Removed the duplicate rho-isobar expression from `OmegaWidthTable.cu`; the
+  event current and the three-body width integration now call the same
+  host/device function.
+- Kept the rho and omega as fixed process daughter/subchannel dynamics rather
+  than adding particle-specific entries to the configurable X Resonance
+  registry.
+
+The refactor preserves all masses, widths, radii, table dimensions, Dalitz
+binning, interpolation boundaries, amplitude factorization, model JSON, fit
+parameters, and output contracts. Verification was performed with ROOT 6.32.02
+and CUDA 12 on the fixed `lxlogin005` node:
+
+- `make check` passed all 11 login-node tests;
+- the focused dynamics regression independently reconstructed the previous
+  three-rho expression and matched the shared omega-decay helper;
+- the propagator regression matched the tabulated omega wrapper to the shared
+  `BW_from_width` denominator;
+- `make`, `make post`, and `make gpu-tests` compiled and linked Fit, Post
+  Calculation, and both GPU regression executables.
+
+Fit, Post Calculation, and the GPU regression executables were not run, and no
+Slurm job was submitted during this architecture-only verification.

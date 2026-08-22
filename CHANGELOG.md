@@ -2,6 +2,11 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Unified all ordinary Breit-Wigner denominators behind one reusable
+  `BW_from_width` function, moved uniform table interpolation into the generic
+  dynamics library, and made the event current and omega-width integration
+  share one host/device rho-isobar implementation without changing the line
+  shapes or amplitude factorization.
 - Replaced the old main/detailed projection split with one clearly named
   `Draw_projection.cxx` 3x2 figure, synchronized the component figure, and
   added standalone polarization and omega-decay check figures with explicit

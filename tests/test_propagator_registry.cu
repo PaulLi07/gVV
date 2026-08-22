@@ -123,6 +123,20 @@ int main()
         std::cerr << "omega width is nonzero below three-pion threshold\n";
         return 8;
     }
+    const double omega_probe_s = 0.81 * 0.81;
+    const DeviceComplex omega_propagator = gvv_omega_propagator(
+        omega_probe_s, omega_table.HostView());
+    const DeviceComplex shared_denominator = ctpwa::BW_from_width(
+        omega_probe_s,
+        GVV_OMEGA_MASS,
+        omega_table.Width(omega_probe_s));
+    if (!close_relative(
+            omega_propagator.real, shared_denominator.real, 1.0e-12)
+        || !close_relative(
+            omega_propagator.imag, shared_denominator.imag, 1.0e-12)) {
+        std::cerr << "omega line shape bypasses the shared BW denominator\n";
+        return 9;
+    }
 
     std::cout << "GVV model and propagator tests passed\n";
     return 0;

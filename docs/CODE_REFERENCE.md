@@ -227,6 +227,7 @@ policy used by the reusable running-width functions.
 
 Contains identity-free line-shape formulae:
 
+- one shared relativistic Breit-Wigner denominator for a supplied width;
 - generic relativistic running width and Breit-Wigner;
 - constant-width Breit-Wigner;
 - analytic equal-mass two-body phase space with complex continuation;
@@ -238,6 +239,13 @@ Every function receives explicit physical inputs and knows no Resonance ID or
 registered Wave. In particular, a two-body running width receives `L`
 explicitly because `q^(2L+1)` and the barrier factor belong to denominator
 physics.
+
+### `framework/dynamics/TabulatedFunction.cuh` — Shared
+
+Defines a lightweight uniform-grid view with host/device clamped linear
+interpolation. It owns no memory and contains no particle names. The process
+that owns a table remains responsible for building, uploading, and assigning
+physical meaning to its sampled values.
 
 ### `framework/dynamics/PropagatorRegistry.cuh` — Shared
 
@@ -372,19 +380,28 @@ the stored model signature and parameter order to a freshly compiled model.
 
 ### 6.1 Event and kinematic construction
 
+### `process/OmegaDecayModel.cuh` — Shared Fit/Calculation
+
+Owns the process parameters and scalar dynamics shared by the event current
+and omega-width integration:
+
+- nominal omega, rho, and pion masses and widths;
+- `RhoBWRParameters` for the rho and two vertex radii;
+- `omega_rho_isobar_factor`, which calls the reusable two-body P-wave `BWR`
+  and applies the two vertex barrier factors;
+- `coherent_omega_rho_factor`, the one host/device implementation of the three
+  rho-pairing sum.
+
 ### `process/ProcessKinematics.cuh` — Shared Fit/Calculation
 
-Owns GVV constants and the complete `omega -> 3pi` current construction. Its
-important blocks are:
+Constructs the complete event-level `omega -> 3pi` current. Its important
+blocks are:
 
-- nominal omega and rho mass/width constants;
-- `RhoBWRParameters` for the rho and two vertex radii;
 - `omega_geometric_current`, including metric lowering under the common
   Levi-Civita convention;
-- `rho_isobar_factor`, which combines the rho propagator with P-wave barrier
-  factors at both vertices;
-- `build_omega_decay_current`, which coherently sums the three rho pairings
-  and keeps the real geometry separate from the complex rho factor.
+- `build_omega_decay_current`, which derives the three pair invariants, calls
+  the shared coherent rho factor, and keeps real geometry separate from the
+  complex dynamics.
 
 This file is process-specific even though it uses reusable dynamics.
 
@@ -478,17 +495,21 @@ the common GVV polarization convention itself changes.
 
 ### `process/OmegaWidthTable.h` — Shared Fit/Calculation
 
-Declares `GVVWidthTableView`, linear interpolation, the omega propagator helper,
-and the owning `OmegaWidthTable` class. Separate host and device views allow
-the same table to be inspected on the host and used inside Term kernels.
+Declares the omega propagator wrapper and the owning `OmegaWidthTable` class.
+The wrapper interpolates a generic `ctpwa::TabulatedFunctionView` and delegates
+the denominator to the reusable `BW_from_width` function. Separate host and
+device views allow the same table to be inspected on the host and used inside
+Term kernels.
 
 ### `process/OmegaWidthTable.cu` — Shared Fit/Calculation
 
 Numerically integrates the coherent three-pion rho-isobar model over a Dalitz
 grid, normalizes it at the omega pole, builds an invariant-mass-squared lookup
-table, and uploads it to managed device memory. The current default table range,
-resolution, and Dalitz binning live in `Build()` and are process support
-parameters rather than model.json fields.
+table, and uploads it to managed device memory. It calls the same
+`coherent_omega_rho_factor` as the event current rather than maintaining a
+second rho-isobar expression. The current default table range, resolution, and
+Dalitz binning live in `Build()` and are process support parameters rather than
+model.json fields.
 
 ### 6.6 CUDA evaluation
 
@@ -740,9 +761,9 @@ two GPU runtime tests are separate because an IHEP login node may provide
 
 | File | What it guards |
 |---|---|
-| `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy barrier normalization, running-width pole normalization, threshold continuation, Flatte subtraction, and compilation of the omega device path |
+| `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy barrier normalization, shared BW denominator, running-width pole normalization, threshold continuation, Flatte subtraction, shared rho-isobar equivalence, and compilation of the omega device path |
 | `tests/test_gvv_amplitude.cu` | compile-time integration of registered Waves with the common GVV amplitude contraction |
-| `tests/test_propagator_registry.cu` | propagator device dispatch, nominal line-shape contracts, and host omega-width interpolation/build behavior |
+| `tests/test_propagator_registry.cu` | propagator device dispatch, nominal line-shape contracts, host omega-width interpolation/build behavior, and the omega wrapper's use of the shared BW denominator |
 | `tests/test_fit_parameters.cu` | deterministic GVV free-parameter layout, coupling/reference parameterizations, log-ratio bindings, and state application |
 | `tests/test_fit_config.cpp` | strict `fit.json` parsing and tag-derived output naming |
 | `tests/test_fit_output.cpp` | presence of the required sections in the complete human Fit report |

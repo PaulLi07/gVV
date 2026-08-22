@@ -10,6 +10,20 @@
 
 namespace ctpwa {
 
+// Common relativistic Breit-Wigner denominator for a supplied width value:
+//   BW(s) = 1 / (m0^2 - s - i m0 Gamma(s)).
+// The caller owns the physical model used to obtain Gamma(s). This single
+// function therefore serves fixed, analytic-running and tabulated widths.
+__host__ __device__ inline DeviceComplex BW_from_width(
+    double s,
+    double resonance_mass,
+    double width_at_s)
+{
+    return 1.0 / DeviceComplex(
+        resonance_mass * resonance_mass - s,
+        -resonance_mass * width_at_s);
+}
+
 // Relativistic running width for R -> b c:
 // Gamma(s) = Gamma0 * mR/sqrt(s) * (Q/Q0)^(2L+1)
 //            * [B_L(Q;R)/B_L(Q0;R)]^2.
@@ -63,9 +77,7 @@ __host__ __device__ inline DeviceComplex BWR(
     const double gamma_s = running_width(
         s, resonance_mass, pole_width, L, s_b, s_c, radius_fm);
 
-    return 1.0 / DeviceComplex(
-        resonance_mass * resonance_mass - s,
-        -resonance_mass * gamma_s);
+    return BW_from_width(s, resonance_mass, gamma_s);
 }
 
 // Constant-width relativistic Breit-Wigner. This remains a separate option
@@ -76,9 +88,7 @@ __host__ __device__ inline DeviceComplex BW_fixed_width(
     double resonance_mass,
     double pole_width)
 {
-    return 1.0 / DeviceComplex(
-        resonance_mass * resonance_mass - s,
-        -resonance_mass * pole_width);
+    return BW_from_width(s, resonance_mass, pole_width);
 }
 
 // Analytic two-body S-wave phase-space factor for two equal-mass daughters,
@@ -207,9 +217,7 @@ __host__ __device__ inline DeviceComplex BWR_scalar_sd(
         sd_ratio,
         daughter_mass,
         radius_fm);
-    return 1.0 / DeviceComplex(
-        resonance_mass * resonance_mass - s,
-        -resonance_mass * gamma_s);
+    return BW_from_width(s, resonance_mass, gamma_s);
 }
 
 __host__ __device__ inline DeviceComplex BWR_two_body_nominal(
@@ -228,9 +236,7 @@ __host__ __device__ inline DeviceComplex BWR_two_body_nominal(
         daughter_mass1,
         daughter_mass2,
         radius_fm);
-    return 1.0 / DeviceComplex(
-        resonance_mass * resonance_mass - s,
-        -resonance_mass * gamma_s);
+    return BW_from_width(s, resonance_mass, gamma_s);
 }
 
 } // namespace ctpwa

@@ -2,8 +2,6 @@
 // running-width lookup table.
 #include "process/OmegaWidthTable.h"
 
-#include "framework/dynamics/Propagators.cuh"
-
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -13,36 +11,9 @@
 
 namespace {
 
-constexpr double MASS_PIP = 0.13957039;
-constexpr double MASS_PIM = 0.13957039;
-constexpr double MASS_PI0 = 0.1349768;
-
 double kallen(double x, double y, double z)
 {
     return x * x + y * y + z * z - 2.0 * (x * y + x * z + y * z);
-}
-
-DeviceComplex rho_factor(
-    double s_parent,
-    double s_pair,
-    double bachelor_mass2,
-    double first_mass2,
-    double second_mass2)
-{
-    const double q_parent = ctpwa::two_body_Q(
-        s_parent, s_pair, bachelor_mass2);
-    const double q_pair = ctpwa::two_body_Q(
-        s_pair, first_mass2, second_mass2);
-    const double b_parent = ctpwa::blatt_weisskopf(q_parent, 1);
-    const double b_pair = ctpwa::blatt_weisskopf(q_pair, 1);
-    const DeviceComplex rho = ctpwa::BWR(
-        s_pair,
-        GVV_RHO_MASS,
-        GVV_RHO_WIDTH,
-        1,
-        first_mass2,
-        second_mass2);
-    return b_parent * rho * b_pair;
 }
 
 // The common constants in dPhi_3 cancel in the pole normalization.  We retain
@@ -51,16 +22,19 @@ DeviceComplex rho_factor(
 double omega_phase_integral(double s, int bins)
 {
     const double parent_mass = std::sqrt(std::max(s, 0.0));
-    if (parent_mass <= MASS_PIP + MASS_PIM + MASS_PI0 || bins <= 0) {
+    if (parent_mass <= GVV_PIP_MASS + GVV_PIM_MASS + GVV_PI0_MASS
+        || bins <= 0) {
         return 0.0;
     }
 
-    const double m0_sq = MASS_PI0 * MASS_PI0;
-    const double m1_sq = MASS_PIP * MASS_PIP;
-    const double m2_sq = MASS_PIM * MASS_PIM;
-    const double s12_min = (MASS_PIP + MASS_PIM) * (MASS_PIP + MASS_PIM);
-    const double s12_max = (parent_mass - MASS_PI0)
-                           * (parent_mass - MASS_PI0);
+    const double m0_sq = GVV_PI0_MASS * GVV_PI0_MASS;
+    const double m1_sq = GVV_PIP_MASS * GVV_PIP_MASS;
+    const double m2_sq = GVV_PIM_MASS * GVV_PIM_MASS;
+    const double s12_min =
+        (GVV_PIP_MASS + GVV_PIM_MASS)
+        * (GVV_PIP_MASS + GVV_PIM_MASS);
+    const double s12_max = (parent_mass - GVV_PI0_MASS)
+                           * (parent_mass - GVV_PI0_MASS);
     const double ds12 = (s12_max - s12_min) / bins;
     double integral = 0.0;
 
@@ -91,13 +65,8 @@ double omega_phase_integral(double s, int bins)
                 p1_sq * p2_sq - dot3 * dot3, 0.0);
             const double geometry_sq = s * cross_sq;
 
-            const DeviceComplex f12 = rho_factor(
-                s, s12, m0_sq, m1_sq, m2_sq);
-            const DeviceComplex f10 = rho_factor(
-                s, s10, m2_sq, m1_sq, m0_sq);
-            const DeviceComplex f20 = rho_factor(
-                s, s20, m1_sq, m2_sq, m0_sq);
-            const DeviceComplex coherent_rho = f12 + f10 + f20;
+            const DeviceComplex coherent_rho = coherent_omega_rho_factor(
+                s, s12, s10, s20, m0_sq, m1_sq, m2_sq);
 
             integral += geometry_sq * coherent_rho.rho2() * ds12 * ds10;
         }
@@ -182,21 +151,21 @@ void OmegaWidthTable::Upload()
 
 double OmegaWidthTable::Width(double s) const
 {
-    return HostView().interpolate(s);
+    return HostView().interpolate_clamped(s);
 }
 
-GVVWidthTableView OmegaWidthTable::HostView() const
+ctpwa::TabulatedFunctionView OmegaWidthTable::HostView() const
 {
-    return GVVWidthTableView(
+    return ctpwa::TabulatedFunctionView(
         values_.empty() ? nullptr : values_.data(),
         static_cast<int>(values_.size()),
         s_min_,
         s_step_);
 }
 
-GVVWidthTableView OmegaWidthTable::DeviceView() const
+ctpwa::TabulatedFunctionView OmegaWidthTable::DeviceView() const
 {
-    return GVVWidthTableView(
+    return ctpwa::TabulatedFunctionView(
         device_values_,
         static_cast<int>(values_.size()),
         s_min_,
