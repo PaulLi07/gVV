@@ -6,7 +6,8 @@ combines them into active Terms. No generated source file and no hard-coded
 model size is involved.
 
 This document describes the contract implemented by
-`framework/model/Model.cpp`, `process/WaveRegistry.cu`, and
+`framework/model/Model.cpp`, `process/ModelCompiler.cu`,
+`process/PropagatorCompiler.cu`, and
 `process/ParameterMapping.cu`. `config/model.schema.json` is useful for editor
 completion and basic JSON validation, but the C++ loaders remain authoritative
 for process-specific rules that JSON Schema does not express.
@@ -38,6 +39,9 @@ subchannel uses the reusable two-body P-wave BWR, while the omega uses the
 shared Breit-Wigner denominator with a process-built tabulated three-pion
 running width. Their common `omega -> rho pi -> 3pi` implementation belongs to
 the process decay model rather than the configurable X Resonance catalogue.
+The rho charge channel selects nominal daughter and bachelor pion masses;
+event-by-event reconstructed single-pion virtual masses are not line-shape
+inputs.
 
 This separation has two practical consequences:
 
@@ -132,7 +136,10 @@ rejected when the Resonance is needed by an active Term.
 | `scalar_sd_running_bw` | `mass`, `width`, `sd_ratio` | Mass/width fixed; positive log ratio fixed or free |
 | `subtracted_effective_flatte` | `mass`, `width`, `omegaomega_ratio` | Mass/width fixed; positive log ratio fixed or free |
 
-Mass must be positive and width must be non-negative.
+Mass and width must both be positive for every resonant model. A
+pole-normalized running-width model must also have its pole above the nominal
+omega-omega threshold; use a physically appropriate sub-threshold line shape
+rather than allowing a silently vanishing pole width.
 
 ### `nonresonant`
 
@@ -207,6 +214,10 @@ Do not choose `orbital_l` from a filename alone. Derive it from the physical
 partial-width hypothesis. A pole below the nominal omega-omega threshold
 requires a different line-shape treatment.
 
+The compiled descriptor stores both nominal daughter masses and the barrier
+radius. Fit, Projection, and Post therefore call the same descriptor-only
+dispatch and cannot substitute event-dependent daughter masses.
+
 ### `scalar_sd_running_bw`
 
 This denominator models a scalar total width containing S- and D-wave
@@ -273,6 +284,30 @@ spectral functions is not part of this effective propagator.
 `omegaomega_ratio` must be positive and log-transformed. If the exact
 zero-coupling limit is required, use `fixed_width_bw`; a log parameter cannot
 represent zero exactly.
+
+## Adding a new propagator
+
+Adding a new line shape is intentionally independent of Wave registration:
+
+1. Implement the identity-free host/device formula in
+   `framework/dynamics/Propagators.cuh`.
+2. Add only the numerical enum/fields and dispatch needed by that formula in
+   `framework/dynamics/PropagatorRegistry.cuh`.
+3. Add one exact JSON compiler branch in `process/PropagatorCompiler.cu`.
+   Compile nominal daughter masses, barrier radius, and every other channel
+   constant into the descriptor at this boundary.
+4. Emit human-readable parameter metadata and, for each supported free
+   parameter, a generic binding containing its Minuit name, coordinate,
+   bounds, transform, Resonance index, and target field.
+5. Add formula tests, compiler valid/invalid tests, inactive-only pruning, and
+   parameter-order/application tests.
+6. Document the required JSON fields, units, physical domain, threshold
+   policy, and whether a parameter may float.
+
+No propagator-specific edit should be needed in `WaveRegistry`,
+`ParameterMapping`, `FitLikelihood`, `ProjectionWriter`, or Post Calculation.
+Do not infer denominator orbital momentum from a Wave ID: the Resonance total
+width hypothesis remains an explicit propagator contract.
 
 ## Term objects
 
@@ -631,11 +666,14 @@ Validation is intentionally split at ownership boundaries:
 2. `framework/model/Model.cpp` checks strict JSON structure, IDs, parameter
    syntax, coupling modes, nonzero global reference, and the global reference
    count.
-3. `process/WaveRegistry.cu` checks the process ID, active dynamics, Wave
-   registration, Resonance references, exact propagator fields, supported
-   \(L\), and one reference per active coherence class.
-4. `process/ParameterMapping.cu` creates the runtime-sized Minuit layout.
-5. GPU tests check the numerical equivalence of the Term and Wave intensity
+3. `process/ModelCompiler.cu` checks the process ID, active dynamics, Wave
+   registration, Resonance references, pruning, and one reference per active
+   coherence class.
+4. `process/PropagatorCompiler.cu` checks exact propagator fields, positive
+   width, pole threshold, transforms, and supported \(L\).
+5. `process/ParameterMapping.cu` creates the runtime-sized Minuit layout from
+   coupling bindings and compiler-produced propagator bindings.
+6. GPU tests check the numerical equivalence of the Term and Wave intensity
    paths and the registered Wave physics invariants.
 
 Typical diagnostics have direct meanings:

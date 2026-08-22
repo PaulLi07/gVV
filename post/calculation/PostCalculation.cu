@@ -2,6 +2,7 @@
 // components over truth/selected MC, and propagate the fit covariance.
 #include "framework/fit/FitState.h"
 #include "post/calculation/ComponentEvaluator.h"
+#include "process/ModelCompiler.h"
 
 #include "TFile.h"
 #include "TMatrixDSym.h"

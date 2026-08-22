@@ -7,9 +7,9 @@
 #include "framework/fit/FitOutput.h"
 #include "framework/fit/FitState.h"
 #include "process/FitLikelihood.h"
+#include "process/ModelCompiler.h"
 #include "process/ParameterMapping.h"
 #include "process/ProjectionWriter.h"
-#include "process/WaveRegistry.cuh"
 
 #include <filesystem>
 #include <iomanip>

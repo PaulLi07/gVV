@@ -124,9 +124,9 @@ fit sample paths, minimizer policy, output tag, or hard-coded runtime count.
 The JSON Schema documents the generic version-1 surface: legal top-level
 fields, stable-ID syntax, parameter fields, coupling modes, reference values,
 and Term structure. The C++ loader remains authoritative because it also
-enforces cross-field rules, exact process propagator contracts, active
-reference counts, and process-specific dynamics semantics that a compact
-schema does not express.
+enforces generic cross-field rules. `ModelCompiler` and `PropagatorCompiler`
+then enforce active reference counts, process dynamics, and exact GVV
+propagator contracts that a compact schema does not express.
 
 ### `config/fit.json` — Fit run description
 
@@ -252,7 +252,10 @@ physical meaning to its sampled values.
 Defines the compact device enum, `PropagatorParameters`, and
 `evaluate_propagator` dispatch used in kernels. It is a numerical registry,
 not the user-configuration compiler. Mapping JSON strings and deciding which
-fields may float are left to the active process in `WaveRegistry.cu`.
+fields may float are left to `process/PropagatorCompiler.cu`. Each compiled
+descriptor carries the nominal daughter masses and barrier radius required by
+its denominator, so Fit, Projection, and Post cannot supply inconsistent
+channel arguments.
 
 ### 5.4 Generic amplitude and likelihood algebra
 
@@ -387,6 +390,8 @@ and omega-width integration:
 
 - nominal omega, rho, and pion masses and widths;
 - `RhoBWRParameters` for the rho and two vertex radii;
+- the explicit rho0/rho+/rho- charge-channel mapping to nominal daughter and
+  bachelor pion masses;
 - `omega_rho_isobar_factor`, which calls the reusable two-body P-wave `BWR`
   and applies the two vertex barrier factors;
 - `coherent_omega_rho_factor`, the one host/device implementation of the three
@@ -441,40 +446,47 @@ the production and decay `L=1` barriers.
 All three Wave functions are pure device numerator functions. Resonance
 propagators, couplings, Term indices, and sample storage are absent by design.
 
-### 6.3 Wave catalogue and model compiler
+### 6.3 Wave catalogue and process-model compilation
 
 ### `process/WaveRegistry.cuh` — Shared Fit/Calculation
 
-This header has three related but distinct responsibilities:
+This header has two responsibilities:
 
 1. the device enum for registered complete GVV Waves;
-2. the single `gvv_wave_tensor` device dispatch into `process/waves/`;
-3. the dense process runtime/metadata structures shared by host code and
-   kernels (`TermSpec`, `GVVCompiledModel`, and metadata records).
+2. the single `gvv_wave_tensor` device dispatch into `process/waves/` plus the
+   small host metadata catalogue declaration.
 
 It does not implement the common photon projection/contraction; that belongs
 to `ProcessAmplitude.cuh`.
 
 ### `process/WaveRegistry.cu` — Shared Fit/Calculation
 
-This is the host-side GVV compiler and the only host Wave registration table.
-Its major blocks are:
+This is only the host registration table: stable Wave ID, JPC, LaTeX label,
+coherence class, and device type. Adding a Resonance on an existing Wave must
+not change this file. Adding a new Wave requires exactly one host record here
+and a matching device dispatch entry in the header.
 
-- exact per-propagator parameter contracts;
-- conversion from JSON propagator names to reusable device descriptors;
-- GVV policies for fixed mass/width, fitted positive ratios, and supported
-  `orbital_l=0,1,2`;
-- the stable Wave registry record: ID, JPC, LaTeX label, coherence class, and
-  device type;
-- active-Term dynamics parsing and validation of
-  `gvv_x_to_omega_omega`;
-- pruning Resonances that are not referenced by an active Term;
-- dense Resonance and Wave-slot assignment;
-- coupling-policy conversion and per-coherence-class reference validation.
+### `process/ProcessModel.h` — Shared Fit/Calculation
 
-Adding a Resonance on an existing Wave must not change this file. Adding a new
-Wave requires exactly one host registry record here and a matching device
-dispatch entry in the header.
+Defines dense `TermSpec`, coupling policy codes, compiled Resonance/Term
+metadata, generic propagator parameter bindings, and `GVVCompiledModel`.
+Keeping these records outside the registries prevents Wave code from owning
+propagator or model-compilation policy.
+
+### `process/PropagatorCompiler.h/.cu` — Shared Fit/Calculation
+
+Owns the exact GVV Resonance contract. It maps one propagator string and its
+named JSON parameters to a self-contained framework descriptor, validates
+positive widths, running-width pole thresholds, transforms, and supported
+orbital momentum, and emits both report metadata and generic fit bindings.
+This is the only process file that needs a propagator-specific compiler branch.
+
+### `process/ModelCompiler.h/.cu` — Shared Fit/Calculation
+
+Owns complete active-model assembly: process ID, active Term dynamics,
+inactive-only Resonance pruning, independent Resonance compilation, Wave-slot
+assignment, coupling policies, and one reference per coherence class. It
+contains neither Wave formulae nor propagator formulae.
 
 ### 6.4 Common process contraction
 
@@ -507,9 +519,9 @@ Numerically integrates the coherent three-pion rho-isobar model over a Dalitz
 grid, normalizes it at the omega pole, builds an invariant-mass-squared lookup
 table, and uploads it to managed device memory. It calls the same
 `coherent_omega_rho_factor` as the event current rather than maintaining a
-second rho-isobar expression. The current default table range, resolution, and
-Dalitz binning live in `Build()` and are process support parameters rather than
-model.json fields.
+second rho-isobar expression. The named `OmegaWidthTableConfig` centralizes the
+table range, resolution, Dalitz binning, and explicit clamped extrapolation
+policy. These remain process support parameters rather than model.json fields.
 
 ### 6.6 CUDA evaluation
 
@@ -576,8 +588,8 @@ and a dense Term or Resonance index.
 
 The implementation has three responsibilities:
 
-- build deterministic coupling and supported propagator-ratio bindings from
-  the active compiled model;
+- build deterministic coupling bindings and append the generic propagator
+  bindings already emitted by `PropagatorCompiler`;
 - apply flat values, exponentiating positive physical quantities stored in log
   coordinates;
 - write active Waves, Terms, couplings, Resonances, and fixed/free physical
@@ -761,9 +773,10 @@ two GPU runtime tests are separate because an IHEP login node may provide
 
 | File | What it guards |
 |---|---|
-| `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy barrier normalization, shared BW denominator, running-width pole normalization, threshold continuation, Flatte subtraction, shared rho-isobar equivalence, and compilation of the omega device path |
+| `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy barrier normalization, unified running-width equivalence, shared BW denominator, threshold continuation, Flatte subtraction, nominal-mass rho-isobar equivalence, and compilation of the omega device path |
 | `tests/test_gvv_amplitude.cu` | compile-time integration of registered Waves with the common GVV amplitude contraction |
-| `tests/test_propagator_registry.cu` | propagator device dispatch, nominal line-shape contracts, host omega-width interpolation/build behavior, and the omega wrapper's use of the shared BW denominator |
+| `tests/test_propagator_registry.cu` | propagator device dispatch, nominal line-shape contracts, host omega-width interpolation/configuration/convergence, and the omega wrapper's use of the shared BW denominator |
+| `tests/test_propagator_compiler.cu` | all supported GVV propagator JSON contracts, self-contained omega-omega channel context, generic free-ratio bindings, and invalid width/threshold/field rejection |
 | `tests/test_fit_parameters.cu` | deterministic GVV free-parameter layout, coupling/reference parameterizations, log-ratio bindings, and state application |
 | `tests/test_fit_config.cpp` | strict `fit.json` parsing and tag-derived output naming |
 | `tests/test_fit_output.cpp` | presence of the required sections in the complete human Fit report |
@@ -796,7 +809,7 @@ numerical basis.
 | Change run samples, sideband prescription, starts, or output tag | `config/fit.json` | model and amplitude code |
 | Add a complete GVV Wave | new `process/waves/*.cuh`, `WaveRegistry.cuh/.cu`, tests | generic model, Fit engine, likelihood, parameter counts, plotting maps |
 | Add a reusable tensor primitive | `framework/tensors/`, focused tests | process compiler unless the Wave uses it |
-| Add a reusable propagator formula | `framework/dynamics/`, `WaveRegistry.cu`, possibly `ParameterMapping.cu`, tests | Wave numerator files |
+| Add a reusable propagator formula | `framework/dynamics/`, `PropagatorCompiler.*`, tests, model documentation | Wave registry, `ParameterMapping`, Fit likelihood, Projection, Post |
 | Change the GVV ROOT input schema | `SampleLoader.*`, application branch contract, relevant scripts/docs/tests | generic framework |
 | Change process-wide photon/polarization contraction | `ProcessAmplitude.cuh`, GPU physics tests | individual Resonance definitions |
 | Change Fit minimizer policy | `FitConfig.*`, `FitEngine.*`, `fit.json`, tests | process tensors and Post plotting |

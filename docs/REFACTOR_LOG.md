@@ -353,3 +353,43 @@ and CUDA 12 on the fixed `lxlogin005` node:
 
 Fit, Post Calculation, and the GPU regression executables were not run, and no
 Slurm job was submitted during this architecture-only verification.
+
+## Propagator compiler boundary and nominal pion-mass policy (2026-08-22)
+
+Working branch: `refactor/propagator-compiler`.
+
+- Reduced `WaveRegistry` to the complete-Wave catalogue and device dispatch.
+- Added `ProcessModel` for compiled runtime records, `PropagatorCompiler` for
+  exact Resonance JSON/channel compilation, and `ModelCompiler` for active
+  Term dependency resolution and dense model assembly.
+- Made every top-level propagator descriptor self-contained with its nominal
+  daughter masses and barrier radius. Fit, Projection, and Post now call
+  `evaluate_propagator(s, descriptor)` without rebuilding channel context.
+- Replaced propagator-specific flags and cases in `ParameterMapping` and the
+  Fit model summary with compiler-produced generic parameter/report metadata.
+- Unified the analytic two-body running width on one nominal-daughter-mass
+  implementation shared by the rho and configurable Resonance paths.
+- Made rho0/rho+/rho- particle identities select nominal daughter masses and
+  the nominal bachelor pion. Event `s_omega` and `s_pipi` remain dynamic, but
+  reconstructed single-pion `p_i^2` values no longer enter scalar isobar
+  dynamics.
+- Added necessary compiler validation for positive resonant widths and open
+  pole-normalized omega-omega thresholds.
+- Centralized omega table resolution, range, Dalitz binning, and clamped
+  extrapolation in `OmegaWidthTableConfig`.
+- Added a dedicated propagator-compiler regression and extended dynamics,
+  table-stability, active-model, and parameter-binding coverage.
+
+Compiler separation, binding generation, and the common running-width formula
+are algebraically equivalent for the nominal model. The nominal pion-mass
+policy is an intentional physics-definition correction and may cause small
+event-level differences if an input pion four-vector has non-nominal
+reconstructed `p_i^2`; it makes event evaluation identical to the mass policy
+already used by the omega-width integration.
+
+Verification on the fixed `lxlogin005` node:
+
+- Fit, Post Calculation, all 12 login-node tests, and both GPU runtime test
+  executables compiled and linked with CUDA 12 and ROOT 6.32.02;
+- `make check` passed all 12 login-node-safe tests;
+- no Fit, Post Calculation, GPU executable, or Slurm job was run.

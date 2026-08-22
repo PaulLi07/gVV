@@ -4,7 +4,7 @@
 #define CTPWA_PROCESS_PARAMETER_MAPPING_H
 
 #include "framework/fit/FitEngine.h"
-#include "process/WaveRegistry.cuh"
+#include "process/PropagatorCompiler.h"
 
 #include <iosfwd>
 #include <vector>
@@ -13,14 +13,16 @@ enum class GVVFitParameterTarget {
     CouplingReal,
     CouplingImaginary,
     CouplingLogMagnitude,
-    ResonanceLogSDRatio,
-    ResonanceLogFlatteRatio
+    PropagatorParameter
 };
 
 struct GVVFitParameterBinding {
     ctpwa::FitParameterSpec fit;
     GVVFitParameterTarget target = GVVFitParameterTarget::CouplingReal;
     int target_index = -1;
+    GVVPropagatorParameterTarget propagator_target =
+        GVVPropagatorParameterTarget::Mass;
+    GVVFitTransform transform = GVVFitTransform::Identity;
 };
 
 // This is the single translation layer between generic Minuit ordering and

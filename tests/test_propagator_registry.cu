@@ -22,19 +22,27 @@ bool close_relative(double value, double reference, double tolerance)
 __global__ void compile_gvv_propagators(double* output)
 {
     const ctpwa::PropagatorParameters scalar(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.723, 0.149, 0);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.723,
+        0.149,
+        0,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     const ctpwa::PropagatorParameters pseudoscalar(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.751, 0.240, 1);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.751,
+        0.240,
+        1,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     output[0] = ctpwa::evaluate_propagator(
-        scalar.mass * scalar.mass,
-        scalar,
-        GVV_OMEGA_MASS,
-        GVV_OMEGA_MASS).rho2();
+        scalar.mass * scalar.mass, scalar).rho2();
     output[1] = ctpwa::evaluate_propagator(
-        pseudoscalar.mass * pseudoscalar.mass,
-        pseudoscalar,
-        GVV_OMEGA_MASS,
-        GVV_OMEGA_MASS).rho2();
+        pseudoscalar.mass * pseudoscalar.mass, pseudoscalar).rho2();
 }
 
 int main()
@@ -45,23 +53,29 @@ int main()
         0.108,
         0,
         0.0,
-        1.0);
+        1.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     if (f1500.propagator_model != ctpwa::PROP_SUBTRACTED_FLATTE
         || !close_relative(f1500.flatte_ratio, 1.0, 1.0e-12)) {
         std::cerr << "subtracted Flatte device descriptor is wrong\n";
         return 1;
     }
     if (!(ctpwa::evaluate_propagator(
-              f1500.mass * f1500.mass,
-              f1500,
-              GVV_OMEGA_MASS,
-              GVV_OMEGA_MASS).rho2() > 0.0)) {
+              f1500.mass * f1500.mass, f1500).rho2() > 0.0)) {
         std::cerr << "subtracted Flatte mass point is not finite\n";
         return 2;
     }
 
     const ctpwa::PropagatorParameters f1710(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.723, 0.149, 0);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.723,
+        0.149,
+        0,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     const double scalar_pole_width = f1710.pole_width
         * ctpwa::two_body_width_shape(
             f1710.mass * f1710.mass,
@@ -75,7 +89,14 @@ int main()
     }
 
     const ctpwa::PropagatorParameters eta1760(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.751, 0.240, 1);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.751,
+        0.240,
+        1,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     const double p_wave_width = eta1760.pole_width
         * ctpwa::two_body_width_shape(
             eta1760.mass * eta1760.mass,
@@ -89,7 +110,14 @@ int main()
     }
 
     const ctpwa::PropagatorParameters d_wave(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 2.1, 0.2, 2);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        2.1,
+        0.2,
+        2,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     const double d_wave_width = d_wave.pole_width
         * ctpwa::two_body_width_shape(
             d_wave.mass * d_wave.mass,
@@ -104,14 +132,17 @@ int main()
 
     const ctpwa::PropagatorParameters nonresonant;
     const DeviceComplex nr = ctpwa::evaluate_propagator(
-        4.0, nonresonant, GVV_OMEGA_MASS, GVV_OMEGA_MASS);
+        4.0, nonresonant);
     if (nr.real != 1.0 || nr.imag != 0.0) {
         std::cerr << "nonresonant propagator is not unity\n";
         return 6;
     }
 
     OmegaWidthTable omega_table;
-    omega_table.Build(96, 24, 0.40, 1.20);
+    OmegaWidthTableConfig omega_config;
+    omega_config.table_size = 96;
+    omega_config.dalitz_bins = 24;
+    omega_table.Build(omega_config);
     const double omega_width_at_pole = omega_table.Width(
         GVV_OMEGA_MASS * GVV_OMEGA_MASS);
     if (!close_relative(omega_width_at_pole, GVV_OMEGA_WIDTH, 0.02)) {
@@ -136,6 +167,28 @@ int main()
             omega_propagator.imag, shared_denominator.imag, 1.0e-12)) {
         std::cerr << "omega line shape bypasses the shared BW denominator\n";
         return 9;
+    }
+
+    OmegaWidthTableConfig refined_config = omega_config;
+    refined_config.table_size = 160;
+    refined_config.dalitz_bins = 36;
+    OmegaWidthTable refined_table;
+    refined_table.Build(refined_config);
+    for (double mass : {0.74, 0.81, 0.90}) {
+        const double s = mass * mass;
+        if (!close_relative(
+                omega_table.Width(s), refined_table.Width(s), 0.05)) {
+            std::cerr << "omega width table is not stable at "
+                      << mass << " GeV\n";
+            return 10;
+        }
+    }
+    if (omega_table.Config().table_size != 96
+        || omega_table.Config().dalitz_bins != 24
+        || omega_table.Config().extrapolation
+            != OmegaWidthExtrapolation::Clamp) {
+        std::cerr << "omega width table did not retain its named config\n";
+        return 11;
     }
 
     std::cout << "GVV model and propagator tests passed\n";

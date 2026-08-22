@@ -1,11 +1,8 @@
-// gVV Wave registration boundary: device enum/dispatch plus the compiled
-// process-model data structures shared with kernels.
+// Complete GVV Wave registration boundary: device enum/dispatch and the small
+// host catalogue. Resonance and Term compilation live in ModelCompiler.
 #ifndef CTPWA_PROCESS_WAVE_REGISTRY_CUH
 #define CTPWA_PROCESS_WAVE_REGISTRY_CUH
 
-#include "framework/math/DeviceComplex.cuh"
-#include "framework/dynamics/PropagatorRegistry.cuh"
-#include "framework/model/Model.h"
 #include "process/waves/Pseudoscalar11.cuh"
 #include "process/waves/Scalar00.cuh"
 #include "process/waves/Scalar22.cuh"
@@ -18,20 +15,6 @@ enum GVVWaveType {
     GVV_SCALAR_22 = 1,
     GVV_PSEUDOSCALAR_11 = 2,
     GVV_NBASIS = 3
-};
-
-// Dense process runtime objects. Stable user-facing ids remain in the host
-// metadata below; kernels need only integer slots and coupling policy codes.
-enum CouplingParameterization {
-    COUPLING_COMPLEX = 0,
-    COUPLING_FIXED_SCALE_AND_PHASE = 1,
-    COUPLING_POSITIVE_REAL = 2
-};
-
-struct TermSpec {
-    int resonance_index = 0;
-    int wave_slot = 0;
-    int registered_wave_type = 0;
 };
 
 // This is the only device dispatch point for complete process Waves.
@@ -60,47 +43,7 @@ struct GVVWaveMetadata {
     int wave_type = -1;
 };
 
-struct GVVResonanceMetadata {
-    std::string id;
-    std::string label;
-    std::string propagator_id;
-    bool fit_sd_ratio = false;
-    bool fit_flatte_ratio = false;
-};
-
-struct GVVTermMetadata {
-    std::string id;
-    std::string label;
-    std::string wave_id;
-    std::string jpc;
-    std::string wave_latex;
-    std::string coherence_class;
-    int registered_wave_type = -1;
-    int coupling_parameterization = COUPLING_COMPLEX;
-    ctpwa::CouplingReference reference = ctpwa::CouplingReference::None;
-};
-
-// Host-side process model compiled from the generic JSON definition.  Numeric
-// indices are dense, runtime-only device layout; stable ids live in metadata.
-struct GVVCompiledModel {
-    ctpwa::ModelDefinition definition;
-    std::vector<ctpwa::PropagatorParameters> resonances;
-    std::vector<TermSpec> terms;
-    std::vector<DeviceComplex> initial_couplings;
-    std::vector<int> active_wave_types;
-    std::vector<GVVResonanceMetadata> resonance_metadata;
-    std::vector<GVVTermMetadata> term_metadata;
-
-    int find_resonance(const std::string& id) const;
-    int find_term(const std::string& id) const;
-};
-
 const std::vector<GVVWaveMetadata>& gvv_wave_registry();
 const GVVWaveMetadata& gvv_registered_wave(const std::string& id);
-
-GVVCompiledModel gvv_compile_model(
-    const ctpwa::ModelDefinition& definition);
-
-GVVCompiledModel gvv_load_compiled_model(const std::string& file_name);
 
 #endif // CTPWA_PROCESS_WAVE_REGISTRY_CUH

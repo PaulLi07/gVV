@@ -24,62 +24,6 @@ __host__ __device__ inline DeviceComplex BW_from_width(
         -resonance_mass * width_at_s);
 }
 
-// Relativistic running width for R -> b c:
-// Gamma(s) = Gamma0 * mR/sqrt(s) * (Q/Q0)^(2L+1)
-//            * [B_L(Q;R)/B_L(Q0;R)]^2.
-__host__ __device__ inline double running_width(
-    double s,
-    double resonance_mass,
-    double pole_width,
-    int L,
-    double s_b,
-    double s_c,
-    double radius_fm = DEFAULT_BARRIER_RADIUS_FM)
-{
-    if (s <= 0.0 || resonance_mass <= 0.0 || pole_width < 0.0 || L < 0) {
-        return 0.0;
-    }
-
-    const double q = two_body_Q(s, s_b, s_c);
-    const double q0 = two_body_Q(
-        resonance_mass * resonance_mass, s_b, s_c);
-
-    if (q0 <= 0.0) {
-        return 0.0;
-    }
-
-    const double barrier = blatt_weisskopf(q, L, radius_fm);
-    const double barrier0 = blatt_weisskopf(q0, L, radius_fm);
-    if (barrier0 == 0.0) {
-        return 0.0;
-    }
-
-    const double q_ratio = q / q0;
-    const double barrier_ratio = barrier / barrier0;
-
-    return pole_width * resonance_mass / sqrt(s)
-           * pow(q_ratio, 2 * L + 1)
-           * barrier_ratio * barrier_ratio;
-}
-
-// Generic relativistic Breit-Wigner with a running width.  The sign convention
-// matches the original CTPWA convention:
-//   f(s) = 1 / (m0^2 - s - i m0 Gamma(s)).
-__host__ __device__ inline DeviceComplex BWR(
-    double s,
-    double resonance_mass,
-    double pole_width,
-    int L,
-    double s_b,
-    double s_c,
-    double radius_fm = DEFAULT_BARRIER_RADIUS_FM)
-{
-    const double gamma_s = running_width(
-        s, resonance_mass, pole_width, L, s_b, s_c, radius_fm);
-
-    return BW_from_width(s, resonance_mass, gamma_s);
-}
-
 // Constant-width relativistic Breit-Wigner. This remains a separate option
 // for a sub-threshold state whose nominal two-body breakup momentum is not
 // real at the Breit-Wigner mass.
@@ -184,6 +128,57 @@ __host__ __device__ inline double two_body_width_shape(
            * barrier_ratio * barrier_ratio;
 }
 
+// Relativistic running width for R -> b c. Daughter arguments are nominal
+// masses, not event-by-event reconstructed mass squares:
+//   Gamma(s) = Gamma0 * Phi_L(s).
+// Keeping one daughter-mass convention and one Phi_L implementation prevents
+// the rho-isobar and top-level Resonance paths from drifting apart.
+__host__ __device__ inline double running_width(
+    double s,
+    double resonance_mass,
+    double pole_width,
+    int L,
+    double daughter_mass1,
+    double daughter_mass2,
+    double radius_fm = DEFAULT_BARRIER_RADIUS_FM)
+{
+    if (pole_width < 0.0) {
+        return 0.0;
+    }
+    return pole_width * two_body_width_shape(
+        s,
+        resonance_mass,
+        L,
+        daughter_mass1,
+        daughter_mass2,
+        radius_fm);
+}
+
+// Generic relativistic Breit-Wigner with a running width. The sign convention
+// matches the original CTPWA convention:
+//   f(s) = 1 / (m0^2 - s - i m0 Gamma(s)).
+__host__ __device__ inline DeviceComplex BWR(
+    double s,
+    double resonance_mass,
+    double pole_width,
+    int L,
+    double daughter_mass1,
+    double daughter_mass2,
+    double radius_fm = DEFAULT_BARRIER_RADIUS_FM)
+{
+    return BW_from_width(
+        s,
+        resonance_mass,
+        running_width(
+            s,
+            resonance_mass,
+            pole_width,
+            L,
+            daughter_mass1,
+            daughter_mass2,
+            radius_fm));
+}
+
 // Total scalar width made from S- and D-wave equal-mass partial widths.
 // sd_ratio is Gamma_D/Gamma_S at s=m0^2.  Since Phi_0=Phi_2=1 at the pole,
 // division by (1+r) guarantees Gamma(m0^2)=Gamma0 for every r>=0.
@@ -229,14 +224,14 @@ __host__ __device__ inline DeviceComplex BWR_two_body_nominal(
     double daughter_mass2,
     double radius_fm = DEFAULT_BARRIER_RADIUS_FM)
 {
-    const double gamma_s = pole_width * two_body_width_shape(
+    return BWR(
         s,
         resonance_mass,
+        pole_width,
         L,
         daughter_mass1,
         daughter_mass2,
         radius_fm);
-    return BW_from_width(s, resonance_mass, gamma_s);
 }
 
 } // namespace ctpwa

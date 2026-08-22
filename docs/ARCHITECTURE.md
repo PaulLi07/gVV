@@ -82,7 +82,10 @@ gVV/
 │   ├── OmegaDecayModel.cuh     shared omega -> rho pi -> 3pi dynamics
 │   ├── ProcessKinematics.cuh   omega currents from event four-vectors
 │   ├── ProcessAmplitude.cuh    common GVV polarization contraction
-│   ├── WaveRegistry.*          Wave catalogue and GVV model compiler
+│   ├── ProcessModel.h          compiled process records and bindings
+│   ├── WaveRegistry.*          Wave catalogue and device dispatch
+│   ├── PropagatorCompiler.*    Resonance JSON and channel compilation
+│   ├── ModelCompiler.*         active Term and dense runtime assembly
 │   ├── TermEvaluator.*         CUDA F, coefficient, intensity, component path
 │   ├── SampleLoader.*          ROOT-to-device sample boundary
 │   ├── OmegaWidthTable.*       omega three-body running-width table
@@ -160,7 +163,9 @@ config/fit.json -> FitEngine objective <----------------+
 | Concern | Owner | Must not own |
 |---|---|---|
 | JSON model syntax | `framework/model` | GVV Wave dispatch or propagator string policy |
-| GVV model semantics | `process/WaveRegistry` | Minuit implementation |
+| GVV Wave semantics | `process/WaveRegistry` | Resonance JSON policy |
+| GVV propagator semantics | `process/PropagatorCompiler` | Wave registration or Minuit implementation |
+| Active model assembly | `process/ModelCompiler` | propagator formulae or sample loading |
 | Flat parameter order | `process/ParameterMapping` | sample loading or output schemas |
 | Event/Wave numerical evaluation | `process/TermEvaluator` | model-string parsing |
 | Probability arithmetic | `framework/likelihood` | ROOT I/O or GVV kinematics |
@@ -210,6 +215,13 @@ current process and GPU kernels:
 - a unique list of registered Wave types used by the active Terms;
 - host metadata that preserves stable IDs, labels, JPC, coherence class,
   propagator names, and coupling policies.
+
+The work is deliberately split. `ModelCompiler` resolves active dependencies,
+dense slots, Term dynamics, and reference conventions. It delegates each
+needed Resonance to `PropagatorCompiler`, which validates the exact JSON
+contract and emits a self-contained numerical descriptor, report metadata,
+and generic free-parameter bindings. `WaveRegistry` is not part of either
+compiler; it only supplies registered complete Wave identities and dispatch.
 
 Inactive Terms are skipped before dependencies are compiled. Consequently, a
 Resonance referenced only by inactive Terms is absent from GPU arrays, Minuit
@@ -311,6 +323,11 @@ coherent rho-isobar factor. Both event-current construction and the numerical
 omega-width integration call it, so the numerator and the width table cannot
 silently drift to different rho masses, widths, barriers, or line shapes. The
 rho itself calls the process-independent two-body `ctpwa::BWR` function.
+
+The scalar isobar dynamics use nominal pion masses throughout. The rho charge
+channel selects the nominal daughter pair and the nominal bachelor pion. Event
+four-vectors provide `s_omega` and `s_pipi`, but reconstructed single-pion
+virtual masses do not enter the rho running width or either barrier factor.
 
 ### 6.3 Complete Waves
 
@@ -780,11 +797,16 @@ accepted JSON name and parameter policy remain a process-compiler concern.
 1. Implement the identity-free numerical formula in
    `framework/dynamics/Propagators.cuh`.
 2. Extend `PropagatorModel`, `PropagatorParameters`, and
-   `evaluate_propagator` only with the numerical fields the formula needs.
+   `evaluate_propagator` only with the numerical fields the formula needs. A
+   compiled descriptor must contain its nominal daughter masses and barrier
+   radius so callers do not reconstruct channel context.
 3. Define the exact GVV JSON parameter contract and validation in
-   `WaveRegistry.cu`.
-4. If a parameter is fitted, add its process binding in `ParameterMapping`.
-5. Add formula, compiler, inactive-Term, and fit-state-order tests.
+   `PropagatorCompiler.cu`.
+4. Emit parameter/report metadata and any generic fit binding from that same
+   compiler. `ParameterMapping` consumes the binding without a new
+   propagator-specific branch.
+5. Add formula, compiler, inactive-Term, parameter-order, and device-dispatch
+   tests.
 
 Do not bind a generic propagator to a Wave ID. Physical quantities such as
 orbital angular momentum must be explicit propagator parameters when they

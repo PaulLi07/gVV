@@ -5,7 +5,7 @@
 
 #include "process/SampleLoader.h"
 #include "process/OmegaWidthTable.h"
-#include "process/WaveRegistry.cuh"
+#include "process/ProcessModel.h"
 
 #include <cstddef>
 #include <memory>

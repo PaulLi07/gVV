@@ -26,6 +26,9 @@ struct PropagatorParameters {
     double pole_width;
     double sd_ratio;
     double flatte_ratio;
+    double daughter_mass1;
+    double daughter_mass2;
+    double barrier_radius_fm;
 
     __host__ __device__ PropagatorParameters(
         int model = PROP_NONRESONANT,
@@ -33,23 +36,26 @@ struct PropagatorParameters {
         double width = 0.0,
         int l = 0,
         double ratio = 0.0,
-        double effective_channel_ratio = 0.0)
+        double effective_channel_ratio = 0.0,
+        double first_daughter_mass = 0.0,
+        double second_daughter_mass = 0.0,
+        double radius_fm = ctpwa::DEFAULT_BARRIER_RADIUS_FM)
         : propagator_model(model),
           orbital_l(l),
           mass(m),
           pole_width(width),
           sd_ratio(ratio),
-          flatte_ratio(effective_channel_ratio)
+          flatte_ratio(effective_channel_ratio),
+          daughter_mass1(first_daughter_mass),
+          daughter_mass2(second_daughter_mass),
+          barrier_radius_fm(radius_fm)
     {
     }
 };
 
 __host__ __device__ inline DeviceComplex evaluate_propagator(
     double s,
-    const PropagatorParameters& resonance,
-    double daughter_mass1,
-    double daughter_mass2,
-    double radius_fm = ctpwa::DEFAULT_BARRIER_RADIUS_FM)
+    const PropagatorParameters& resonance)
 {
     if (resonance.propagator_model == PROP_NONRESONANT) {
         return DeviceComplex(1.0, 0.0);
@@ -64,7 +70,7 @@ __host__ __device__ inline DeviceComplex evaluate_propagator(
             resonance.mass,
             resonance.pole_width,
             resonance.flatte_ratio,
-            daughter_mass1);
+            resonance.daughter_mass1);
     }
     if (resonance.propagator_model == PROP_SCALAR_SD_BWR) {
         return ctpwa::BWR_scalar_sd(
@@ -72,8 +78,8 @@ __host__ __device__ inline DeviceComplex evaluate_propagator(
             resonance.mass,
             resonance.pole_width,
             resonance.sd_ratio,
-            daughter_mass1,
-            radius_fm);
+            resonance.daughter_mass1,
+            resonance.barrier_radius_fm);
     }
     if (resonance.propagator_model == PROP_TWO_BODY_RUNNING_BW) {
         return ctpwa::BWR_two_body_nominal(
@@ -81,9 +87,9 @@ __host__ __device__ inline DeviceComplex evaluate_propagator(
             resonance.mass,
             resonance.pole_width,
             resonance.orbital_l,
-            daughter_mass1,
-            daughter_mass2,
-            radius_fm);
+            resonance.daughter_mass1,
+            resonance.daughter_mass2,
+            resonance.barrier_radius_fm);
     }
     return DeviceComplex(0.0, 0.0);
 }

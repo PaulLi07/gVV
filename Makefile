@@ -34,6 +34,8 @@ FRAMEWORK_OBJECTS = \
 	$(OBJ_DIR)/FitState.o
 PROCESS_OBJECTS = \
 	$(OBJ_DIR)/WaveRegistry.o \
+	$(OBJ_DIR)/PropagatorCompiler.o \
+	$(OBJ_DIR)/ModelCompiler.o \
 	$(OBJ_DIR)/TermEvaluator.o \
 	$(OBJ_DIR)/OmegaWidthTable.o \
 	$(OBJ_DIR)/SampleLoader.o \
@@ -45,6 +47,8 @@ POST_OBJECTS = \
 	$(OBJ_DIR)/Model.o \
 	$(OBJ_DIR)/FitState.o \
 	$(OBJ_DIR)/WaveRegistry.o \
+	$(OBJ_DIR)/PropagatorCompiler.o \
+	$(OBJ_DIR)/ModelCompiler.o \
 	$(OBJ_DIR)/TermEvaluator.o \
 	$(OBJ_DIR)/OmegaWidthTable.o \
 	$(OBJ_DIR)/SampleLoader.o \
@@ -57,6 +61,7 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_dynamics.exe \
 	$(TEST_BIN_DIR)/test_gvv_amplitude.exe \
 	$(TEST_BIN_DIR)/test_propagator_registry.exe \
+	$(TEST_BIN_DIR)/test_propagator_compiler.exe \
 	$(TEST_BIN_DIR)/test_fit_parameters.exe \
 	$(TEST_BIN_DIR)/test_fit_config.exe \
 	$(TEST_BIN_DIR)/test_fit_output.exe \
@@ -106,6 +111,12 @@ $(OBJ_DIR)/FitState.o: framework/fit/FitState.cpp framework/fit/FitState.h frame
 $(OBJ_DIR)/WaveRegistry.o: process/WaveRegistry.cu process/WaveRegistry.cuh | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
+$(OBJ_DIR)/PropagatorCompiler.o: process/PropagatorCompiler.cu process/PropagatorCompiler.h process/ProcessModel.h | $(OBJ_DIR)
+	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(OBJ_DIR)/ModelCompiler.o: process/ModelCompiler.cu process/ModelCompiler.h process/ProcessModel.h process/PropagatorCompiler.h process/WaveRegistry.cuh | $(OBJ_DIR)
+	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
 $(OBJ_DIR)/TermEvaluator.o: process/TermEvaluator.cu process/TermEvaluator.cuh process/ProcessAmplitude.cuh | $(OBJ_DIR)
 	$(NVCC) $(ROOT_INCLUDES) -c $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
@@ -150,8 +161,13 @@ $(TEST_BIN_DIR)/test_gvv_amplitude.exe: tests/test_gvv_amplitude.cu process/Proc
 $(TEST_BIN_DIR)/test_propagator_registry.exe: tests/test_propagator_registry.cu $(OBJ_DIR)/OmegaWidthTable.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/OmegaWidthTable.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
-$(TEST_BIN_DIR)/test_fit_parameters.exe: tests/test_fit_parameters.cu $(OBJ_DIR)/ParameterMapping.o $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
-	$(NVCC) $< $(OBJ_DIR)/ParameterMapping.o $(OBJ_DIR)/WaveRegistry.o \
+$(TEST_BIN_DIR)/test_propagator_compiler.exe: tests/test_propagator_compiler.cu $(OBJ_DIR)/PropagatorCompiler.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/PropagatorCompiler.o \
+		$(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_fit_parameters.exe: tests/test_fit_parameters.cu $(OBJ_DIR)/ParameterMapping.o $(OBJ_DIR)/ModelCompiler.o $(OBJ_DIR)/PropagatorCompiler.o $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/ParameterMapping.o $(OBJ_DIR)/ModelCompiler.o \
+		$(OBJ_DIR)/PropagatorCompiler.o $(OBJ_DIR)/WaveRegistry.o \
 		$(OBJ_DIR)/Model.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_fit_config.exe: tests/test_fit_config.cpp $(OBJ_DIR)/FitConfig.o | $(TEST_BIN_DIR)
@@ -170,8 +186,9 @@ $(TEST_BIN_DIR)/test_fit_engine.exe: tests/test_fit_engine.cpp $(OBJ_DIR)/FitEng
 $(TEST_BIN_DIR)/test_model.exe: tests/test_model.cpp $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/Model.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
-$(TEST_BIN_DIR)/test_wave_registry.exe: tests/test_wave_registry.cu $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
-	$(NVCC) $< $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o \
+$(TEST_BIN_DIR)/test_wave_registry.exe: tests/test_wave_registry.cu $(OBJ_DIR)/ModelCompiler.o $(OBJ_DIR)/PropagatorCompiler.o $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/ModelCompiler.o $(OBJ_DIR)/PropagatorCompiler.o \
+		$(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o \
 		$(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_likelihood.exe: tests/test_likelihood.cpp | $(TEST_BIN_DIR)

@@ -68,19 +68,50 @@ int main()
     const double rho_mass = 0.77526;
     const double rho_width = 0.1474;
     const double charged_pion_mass = 0.13957039;
-    const double pion_mass2 = charged_pion_mass * charged_pion_mass;
     const double gamma_at_pole = ctpwa::running_width(
         rho_mass * rho_mass,
         rho_mass,
         rho_width,
         1,
-        pion_mass2,
-        pion_mass2,
+        charged_pion_mass,
+        charged_pion_mass,
         0.59);
 
     if (!close_to(gamma_at_pole, rho_width)) {
         std::cerr << "running width is not normalized at the rho pole\n";
         return 4;
+    }
+
+    // The public running-width path now accepts nominal daughter masses and
+    // delegates to the single two_body_width_shape implementation. Verify
+    // exact equivalence to the former explicit formula away from the pole.
+    const double running_probe_s = 0.82 * 0.82;
+    const double q_probe = ctpwa::two_body_Q(
+        running_probe_s,
+        charged_pion_mass * charged_pion_mass,
+        charged_pion_mass * charged_pion_mass);
+    const double q_pole = ctpwa::two_body_Q(
+        rho_mass * rho_mass,
+        charged_pion_mass * charged_pion_mass,
+        charged_pion_mass * charged_pion_mass);
+    const double b_probe = ctpwa::blatt_weisskopf(q_probe, 1, 0.59);
+    const double b_pole = ctpwa::blatt_weisskopf(q_pole, 1, 0.59);
+    const double explicit_running_width = rho_width * rho_mass
+        / std::sqrt(running_probe_s)
+        * std::pow(q_probe / q_pole, 3)
+        * std::pow(b_probe / b_pole, 2);
+    if (!close_to(
+            ctpwa::running_width(
+                running_probe_s,
+                rho_mass,
+                rho_width,
+                1,
+                charged_pion_mass,
+                charged_pion_mass,
+                0.59),
+            explicit_running_width)) {
+        std::cerr << "unified running-width core changed the analytic formula\n";
+        return 5;
     }
 
     const double omega_mass = 0.78266;
@@ -96,7 +127,7 @@ int main()
           && rho_at_threshold.imag == 0.0
           && rho_above.real > 0.0 && rho_above.imag == 0.0)) {
         std::cerr << "two-body rho analytic continuation is wrong\n";
-        return 5;
+        return 6;
     }
 
     const double f0_mass = 1.522;
@@ -111,12 +142,12 @@ int main()
     if (!close_to(shared_bw.real, fixed_bw.real)
         || !close_to(shared_bw.imag, fixed_bw.imag)) {
         std::cerr << "fixed-width BW bypasses the shared denominator\n";
-        return 6;
+        return 7;
     }
     if (!close_to(flatte_zero.real, fixed_bw.real)
         || !close_to(flatte_zero.imag, fixed_bw.imag)) {
         std::cerr << "R_omegaomega=0 does not recover the fixed-width BW\n";
-        return 7;
+        return 8;
     }
 
     const DeviceComplex flatte_at_mass = ctpwa::Flatte_subtracted_effective(
@@ -126,12 +157,12 @@ int main()
     if (!close_to(flatte_at_mass.real, bw_at_mass.real)
         || !close_to(flatte_at_mass.imag, bw_at_mass.imag)) {
         std::cerr << "subtraction does not preserve the fixed mass point\n";
-        return 8;
+        return 9;
     }
 
-    // The event current and omega-width integration must use the same
-    // coherent rho-isobar function. Reconstruct the former local expression
-    // here as an independent regression reference.
+    // The event current and omega-width integration use the same coherent
+    // rho-isobar function. Reconstruct it from the nominal pion-mass policy as
+    // an independent regression reference.
     const double s_omega = GVV_OMEGA_MASS * GVV_OMEGA_MASS;
     const double s0 = GVV_PI0_MASS * GVV_PI0_MASS;
     const double s1 = GVV_PIP_MASS * GVV_PIP_MASS;
@@ -140,14 +171,15 @@ int main()
     const double s10 = 0.225;
     const double s20 = s_omega + s0 + s1 + s2 - s12 - s10;
     const RhoBWRParameters rho;
-    const auto old_isobar = [&](double s_pair,
-                                double s_bachelor,
-                                double s_first,
-                                double s_second) {
+    const auto nominal_isobar = [&](double s_pair,
+                                    RhoChargeChannel channel) {
+        const RhoIsobarMasses masses = rho_isobar_nominal_masses(channel);
         const double q_parent = ctpwa::two_body_Q(
-            s_omega, s_pair, s_bachelor);
+            s_omega, s_pair, masses.bachelor * masses.bachelor);
         const double q_pair = ctpwa::two_body_Q(
-            s_pair, s_first, s_second);
+            s_pair,
+            masses.first_daughter * masses.first_daughter,
+            masses.second_daughter * masses.second_daughter);
         return ctpwa::blatt_weisskopf(
                    q_parent, 1, rho.omega_vertex_radius_fm)
                * ctpwa::BWR(
@@ -155,22 +187,25 @@ int main()
                    rho.mass,
                    rho.width,
                    1,
-                   s_first,
-                   s_second,
+                   masses.first_daughter,
+                   masses.second_daughter,
                    rho.rho_vertex_radius_fm)
                * ctpwa::blatt_weisskopf(
                    q_pair, 1, rho.rho_vertex_radius_fm);
     };
-    const DeviceComplex old_coherent_rho =
-        old_isobar(s12, s0, s1, s2)
-        + old_isobar(s10, s2, s1, s0)
-        + old_isobar(s20, s1, s2, s0);
+    const DeviceComplex nominal_coherent_rho =
+        nominal_isobar(
+            s12, RhoChargeChannel::Rho0ToPiPlusPiMinus)
+        + nominal_isobar(
+            s10, RhoChargeChannel::RhoPlusToPiPlusPi0)
+        + nominal_isobar(
+            s20, RhoChargeChannel::RhoMinusToPiMinusPi0);
     const DeviceComplex shared_coherent_rho = coherent_omega_rho_factor(
-        s_omega, s12, s10, s20, s0, s1, s2, rho);
-    if (!close_to(shared_coherent_rho.real, old_coherent_rho.real)
-        || !close_to(shared_coherent_rho.imag, old_coherent_rho.imag)) {
-        std::cerr << "shared omega rho-isobar factor changed the decay model\n";
-        return 9;
+        s_omega, s12, s10, s20, rho);
+    if (!close_to(shared_coherent_rho.real, nominal_coherent_rho.real)
+        || !close_to(shared_coherent_rho.imag, nominal_coherent_rho.imag)) {
+        std::cerr << "rho-isobar factor violates the nominal pion-mass policy\n";
+        return 10;
     }
 
     std::cout << "Dynamics tests passed\n";

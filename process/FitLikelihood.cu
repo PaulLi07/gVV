@@ -1,6 +1,7 @@
 // GVV sample orchestration and normalized signed likelihood evaluation.
 #include "process/FitLikelihood.h"
 #include "framework/likelihood/Likelihood.h"
+#include "process/PropagatorCompiler.h"
 
 #include <cuda_runtime.h>
 
@@ -168,7 +169,13 @@ void FitLikelihood::Prepare()
             model_.active_wave_types, number_terms);
     }
     prepared_ = true;
-    std::cout << "GVV samples, F matrices, and omega width table prepared\n";
+    const OmegaWidthTableConfig& width_config = omega_width_table_.Config();
+    std::cout << "GVV samples, F matrices, and omega width table prepared"
+              << " (" << width_config.table_size << " mass points, "
+              << width_config.dalitz_bins << "x"
+              << width_config.dalitz_bins << " Dalitz midpoint grid, "
+              << width_config.minimum_mass << "-"
+              << width_config.maximum_mass << " GeV, clamped outside)\n";
 }
 
 double FitLikelihood::EvaluateSample(
@@ -410,30 +417,27 @@ void FitLikelihood::PrintModelSummary() const
               << model_.active_wave_types.size() << " active Waves\n";
     for (int index = 0; index < NumberResonances(); ++index) {
         const ctpwa::PropagatorParameters& resonance = model_.resonances[index];
+        const GVVResonanceMetadata& metadata =
+            model_.resonance_metadata[index];
         std::cout << "  " << std::setw(10)
-                  << model_.resonance_metadata[index].id
-                  << "  m=" << resonance.mass
+                  << metadata.id
                   << "  model=" << ctpwa::propagator_name(
                          resonance.propagator_model);
-        if (resonance.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
-            std::cout << "  Gamma_rest=" << resonance.pole_width;
-        } else {
-            std::cout << "  Gamma=" << resonance.pole_width;
-        }
-        if (model_.resonance_metadata[index].fit_sd_ratio) {
-            std::cout << "  fit r_D/S=" << resonance.sd_ratio;
-        }
-        if (resonance.propagator_model == ctpwa::PROP_SUBTRACTED_FLATTE) {
-            std::cout << "  R_omegaomega=" << resonance.flatte_ratio;
-            if (model_.resonance_metadata[index].fit_flatte_ratio) {
-                std::cout << " (fitted as log R)";
-            } else {
-                std::cout << " (fixed)";
+        for (const GVVPropagatorParameterMetadata& parameter :
+             metadata.parameters) {
+            const double value = gvv_propagator_parameter_value(
+                resonance, parameter.target);
+            std::cout << "  " << parameter.display_name << '=' << value;
+            if (!parameter.unit.empty()) {
+                std::cout << ' ' << parameter.unit;
             }
-        }
-        if (resonance.propagator_model
-            == ctpwa::PROP_TWO_BODY_RUNNING_BW) {
-            std::cout << "  L=" << resonance.orbital_l;
+            for (const GVVPropagatorFitBinding& fit :
+                 model_.propagator_fit_bindings) {
+                if (fit.resonance_index == index
+                    && fit.target == parameter.target) {
+                    std::cout << " (fitted as " << fit.fit_name << ')';
+                }
+            }
         }
         std::cout << '\n';
     }

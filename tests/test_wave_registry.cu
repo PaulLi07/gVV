@@ -1,5 +1,7 @@
 // Process-compiler regression: validates nominal migration, dynamic model
 // sizing, and strict rejection of misspelled process fields.
+#include "process/ModelCompiler.h"
+#include "process/OmegaDecayModel.cuh"
 #include "process/WaveRegistry.cuh"
 
 #include <cmath>
@@ -103,6 +105,15 @@ int main(int argc, char* argv[])
                     "mass migration mismatch");
             require(close(model.resonances[index].pole_width, widths[index]),
                     "width migration mismatch");
+            if (propagators[index] != ctpwa::PROP_NONRESONANT) {
+                require(close(
+                            model.resonances[index].daughter_mass1,
+                            GVV_OMEGA_MASS)
+                            && close(
+                                model.resonances[index].daughter_mass2,
+                                GVV_OMEGA_MASS),
+                        "compiled omega-omega channel masses mismatch");
+            }
         }
         for (std::size_t index = 0; index < term_ids.size(); ++index) {
             require(model.term_metadata[index].id == term_ids[index],
@@ -187,6 +198,14 @@ int main(int argc, char* argv[])
         ctpwa::ModelDefinition unsupported_l = model.definition;
         unsupported_l.resonances[1].parameters.at("orbital_l").value = 3.0;
         require_compile_invalid(unsupported_l, "supported range");
+
+        ctpwa::ModelDefinition zero_width = model.definition;
+        zero_width.resonances[1].parameters.at("width").value = 0.0;
+        require_compile_invalid(zero_width, "positive mass and pole width");
+
+        ctpwa::ModelDefinition closed_pole = model.definition;
+        closed_pole.resonances[1].parameters.at("mass").value = 1.50;
+        require_compile_invalid(closed_pole, "above the nominal omega-omega");
 
         ctpwa::ModelDefinition bad_dynamics = model.definition;
         bad_dynamics.terms[0].dynamics_json =

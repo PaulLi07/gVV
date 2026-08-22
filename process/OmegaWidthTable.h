@@ -9,6 +9,19 @@
 
 #include <vector>
 
+enum class OmegaWidthExtrapolation {
+    Clamp
+};
+
+struct OmegaWidthTableConfig {
+    int table_size = 512;
+    int dalitz_bins = 48;
+    double minimum_mass = 0.40;
+    double maximum_mass = 1.20;
+    OmegaWidthExtrapolation extrapolation =
+        OmegaWidthExtrapolation::Clamp;
+};
+
 __host__ __device__ inline DeviceComplex gvv_omega_propagator(
     double s,
     const ctpwa::TabulatedFunctionView& width_table)
@@ -29,19 +42,17 @@ public:
     OmegaWidthTable(const OmegaWidthTable&) = delete;
     OmegaWidthTable& operator=(const OmegaWidthTable&) = delete;
 
-    void Build(
-        int table_size = 512,
-        int dalitz_bins = 48,
-        double minimum_mass = 0.40,
-        double maximum_mass = 1.20);
+    void Build(const OmegaWidthTableConfig& config = OmegaWidthTableConfig());
     void Upload();
 
     double Width(double s) const;
     ctpwa::TabulatedFunctionView HostView() const;
     ctpwa::TabulatedFunctionView DeviceView() const;
+    const OmegaWidthTableConfig& Config() const;
 
 private:
     std::vector<double> values_;
+    OmegaWidthTableConfig config_;
     double s_min_;
     double s_step_;
     double* device_values_;

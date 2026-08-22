@@ -7,7 +7,7 @@
 #include "framework/dynamics/PropagatorRegistry.cuh"
 #include "process/OmegaWidthTable.h"
 #include "process/ProcessEvent.cuh"
-#include "process/WaveRegistry.cuh"
+#include "process/ProcessModel.h"
 
 // F is compact and model-dependent: [event][active wave][active wave].
 // active_wave_types maps each dense slot back to the registered GVV wave.

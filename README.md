@@ -49,6 +49,13 @@ Breit-Wigner denominator used by the other line shapes. One shared host/device
 rho-isobar implementation is used by both the event current and the omega-width
 integration.
 
+All pion masses used by the scalar rho-isobar dynamics are nominal particle
+masses. For `rho0`, `rho+`, and `rho-`, the shared decay helper selects the
+corresponding nominal daughter pair and nominal bachelor pion. Only `s_omega`
+and the appropriate event `s_pipi` remain event dependent; reconstructed
+single-pion `p_i^2` values do not enter the rho line shape or either isobar
+barrier factor.
+
 ### Resonance, Wave, and Term
 
 The model separates three concepts that change at different rates:
@@ -200,7 +207,10 @@ gVV/
 │   ├── model/
 │   └── tensors/
 ├── process/                 GVV-specific event and amplitude implementation
-│   └── waves/               Complete registered GVV Waves
+│   ├── waves/               Complete registered GVV Waves
+│   ├── WaveRegistry.*       Wave catalogue and device dispatch only
+│   ├── PropagatorCompiler.* Resonance JSON and channel compilation
+│   └── ModelCompiler.*      Active Term and dense runtime assembly
 ├── post/
 │   ├── calculation/         Fit fractions, efficiencies, and covariance
 │   └── plotting/            Projection and angular-moment figures
@@ -307,7 +317,7 @@ make check
 | `make` or `make fit` | Build `bin/Fit.exe` |
 | `make post` | Build `bin/Post.exe` separately |
 | `make tests` | Build the ordinary test executables |
-| `make check` | Run the 11 login-node-safe tests |
+| `make check` | Run the 12 login-node-safe tests |
 | `make gpu-tests` | Compile the two explicit GPU runtime regressions |
 | `make check-gpu` | Execute those regressions on an allocated CUDA device |
 | `make clean` | Remove generated objects, executables, and dependency files |
@@ -500,12 +510,29 @@ Do not put a Resonance denominator or model-wide Term logic into a Wave. See
 [Wave development](docs/WAVE_DEVELOPMENT.md) for physics invariants, code
 templates, registration details, and the required validation matrix.
 
+### Add a new propagator
+
+A new line shape normally touches only three focused boundaries:
+
+1. implement its identity-free formula and device fields under
+   `framework/dynamics/`;
+2. add its exact GVV JSON contract, channel context, metadata, and any generic
+   fit binding in `process/PropagatorCompiler.*`;
+3. add formula/compiler tests and document the JSON parameters.
+
+`WaveRegistry`, `ParameterMapping`, `FitLikelihood`, Projection, and Post do
+not require propagator-specific branches. The compiled descriptor already
+contains its nominal daughter masses and barrier radius, so every numerical
+consumer calls the same `evaluate_propagator(s, descriptor)` interface. See
+[Model configuration](docs/MODEL_CONFIGURATION.md#adding-a-new-propagator) for
+the complete checklist.
+
 ## Adapting the framework to another final state
 
 The intended reuse boundary is not a multi-channel runtime switch. A new
 decay-channel project should retain the process-neutral `framework/` libraries
 and replace the channel-specific event representation, kinematics/currents,
-complete Waves, Wave/model compiler, Term evaluator, ROOT sample mapping,
+complete Waves, Wave registry, process compilers, Term evaluator, ROOT sample mapping,
 likelihood wrapper, and projection writer. It may reuse the generic Fit engine,
 model concepts, propagator library, tensor building blocks, likelihood
 arithmetic, report/state infrastructure, and output philosophy. The current

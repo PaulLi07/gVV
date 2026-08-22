@@ -133,10 +133,7 @@ __device__ DeviceComplex gvv_term_coefficient(
 {
     return coupling
            * ctpwa::evaluate_propagator(
-               s_x,
-               resonances[term.resonance_index],
-               GVV_OMEGA_MASS,
-               GVV_OMEGA_MASS)
+               s_x, resonances[term.resonance_index])
            * common_omega;
 }
 

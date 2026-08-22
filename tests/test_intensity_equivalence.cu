@@ -87,10 +87,7 @@ __global__ void term_reference_intensity(
     for (int term = 0; term < number_terms; ++term) {
         coefficients[term] = couplings[term]
             * ctpwa::evaluate_propagator(
-                s_x,
-                resonances[terms[term].resonance_index],
-                GVV_OMEGA_MASS,
-                GVV_OMEGA_MASS)
+                s_x, resonances[terms[term].resonance_index])
             * common_omega;
     }
     output[event_index] = ctpwa::coherent_intensity_from_terms(
@@ -199,9 +196,23 @@ void prepare_model(ManagedBuffers& buffers)
     buffers.resonances[1] = ctpwa::PropagatorParameters(
         ctpwa::PROP_FIXED_BW, 1.72, 0.14, 0);
     buffers.resonances[2] = ctpwa::PropagatorParameters(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.78, 0.18, 0);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.78,
+        0.18,
+        0,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
     buffers.resonances[3] = ctpwa::PropagatorParameters(
-        ctpwa::PROP_TWO_BODY_RUNNING_BW, 1.84, 0.20, 1);
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.84,
+        0.20,
+        1,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
 
     check_cuda(cudaMallocManaged(
         &buffers.terms, kMaximumTerms * sizeof(TermSpec)),

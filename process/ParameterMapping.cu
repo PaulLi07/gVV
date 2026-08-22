@@ -1,6 +1,7 @@
 // Complete translation layer between compiled gVV model state and the flat
 // Minuit vector: layout construction, state application, and TXT details.
 #include "process/ParameterMapping.h"
+#include "process/WaveRegistry.cuh"
 
 #include <algorithm>
 #include <cmath>
@@ -21,14 +22,35 @@ ctpwa::FitParameterSpec make_fit_spec(
     return result;
 }
 
-double positive_from_log(double value, const char* name)
+double physical_value(
+    double coordinate,
+    GVVFitTransform transform,
+    const std::string& name)
 {
-    const double physical = std::exp(value);
+    if (transform == GVVFitTransform::Identity) {
+        return coordinate;
+    }
+    const double physical = std::exp(coordinate);
     if (!(physical > 0.0) || !std::isfinite(physical)) {
         throw std::invalid_argument(
-            std::string(name) + " is outside the numerical range");
+            name + " is outside the numerical range");
     }
     return physical;
+}
+
+int find_propagator_layout_index(
+    const std::vector<GVVFitParameterBinding>& layout,
+    int resonance_index,
+    GVVPropagatorParameterTarget target)
+{
+    for (std::size_t index = 0; index < layout.size(); ++index) {
+        if (layout[index].target == GVVFitParameterTarget::PropagatorParameter
+            && layout[index].target_index == resonance_index
+            && layout[index].propagator_target == target) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
 }
 
 } // namespace
@@ -77,51 +99,20 @@ std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
         layout.push_back(imaginary);
     }
 
-    for (std::size_t resonance = 0;
-         resonance < model.resonances.size();
-         ++resonance) {
-        const ctpwa::PropagatorParameters& values = model.resonances[resonance];
-        const GVVResonanceMetadata& metadata =
-            model.resonance_metadata[resonance];
-        const ctpwa::ResonanceDefinition& definition =
-            model.definition.resonance(metadata.id);
-
-        auto append_log_parameter = [&](const std::string& source_name,
-                                        const std::string& fit_name,
-                                        GVVFitParameterTarget target,
-                                        double physical_value) {
-            // WaveRegistry has already validated the process contract and
-            // marked only free log-transformed parameters as fitted.
-            const ctpwa::ParameterDefinition& source =
-                definition.parameters.at(source_name);
-            GVVFitParameterBinding parameter;
-            parameter.fit = make_fit_spec(
-                fit_name + metadata.id,
-                std::log(physical_value),
-                source.step);
-            parameter.fit.has_lower_bound = source.has_lower_bound;
-            parameter.fit.has_upper_bound = source.has_upper_bound;
-            parameter.fit.lower_bound = source.lower_bound;
-            parameter.fit.upper_bound = source.upper_bound;
-            parameter.target = target;
-            parameter.target_index = static_cast<int>(resonance);
-            layout.push_back(parameter);
-        };
-
-        if (metadata.fit_sd_ratio) {
-            append_log_parameter(
-                "sd_ratio",
-                "log_rDS_",
-                GVVFitParameterTarget::ResonanceLogSDRatio,
-                values.sd_ratio);
-        }
-        if (metadata.fit_flatte_ratio) {
-            append_log_parameter(
-                "omegaomega_ratio",
-                "log_Romega_",
-                GVVFitParameterTarget::ResonanceLogFlatteRatio,
-                values.flatte_ratio);
-        }
+    for (const GVVPropagatorFitBinding& source :
+         model.propagator_fit_bindings) {
+        GVVFitParameterBinding parameter;
+        parameter.fit = make_fit_spec(
+            source.fit_name, source.initial_coordinate, source.step);
+        parameter.fit.has_lower_bound = source.has_lower_bound;
+        parameter.fit.has_upper_bound = source.has_upper_bound;
+        parameter.fit.lower_bound = source.lower_bound;
+        parameter.fit.upper_bound = source.upper_bound;
+        parameter.target = GVVFitParameterTarget::PropagatorParameter;
+        parameter.target_index = source.resonance_index;
+        parameter.propagator_target = source.target;
+        parameter.transform = source.transform;
+        layout.push_back(parameter);
     }
     return layout;
 }
@@ -157,16 +148,19 @@ void gvv_apply_fit_parameters(
         } else if (
             parameter.target == GVVFitParameterTarget::CouplingLogMagnitude) {
             model.initial_couplings[parameter.target_index] = DeviceComplex(
-                positive_from_log(values[cursor], "log coupling magnitude"),
+                physical_value(
+                    values[cursor],
+                    GVVFitTransform::LogPositive,
+                    "log coupling magnitude"),
                 0.0);
-        } else if (
-            parameter.target == GVVFitParameterTarget::ResonanceLogSDRatio) {
-            model.resonances[parameter.target_index].sd_ratio =
-                positive_from_log(values[cursor], "log S/D ratio");
         } else {
-            model.resonances[parameter.target_index].flatte_ratio =
-                positive_from_log(
-                    values[cursor], "log Flatte omega-omega ratio");
+            gvv_set_propagator_parameter(
+                model.resonances[parameter.target_index],
+                parameter.propagator_target,
+                physical_value(
+                    values[cursor],
+                    parameter.transform,
+                    parameter.fit.name));
         }
     }
 }
@@ -258,38 +252,39 @@ void gvv_write_fit_details(
                << ctpwa::propagator_name(state.propagator_model) << "\"\n";
         const ctpwa::ResonanceDefinition& definition =
             model.definition.resonance(metadata.id);
-        std::vector<std::string> names;
-        names.reserve(definition.parameters.size());
-        for (const auto& item : definition.parameters) names.push_back(item.first);
-        std::sort(names.begin(), names.end());
-        for (const std::string& name : names) {
+        for (const GVVPropagatorParameterMetadata& parameter_metadata :
+             metadata.parameters) {
+            const std::string& name = parameter_metadata.source_name;
             const ctpwa::ParameterDefinition& source =
                 definition.parameters.at(name);
-            double value = source.value;
-            if (name == "mass") value = state.mass;
-            else if (name == "width") value = state.pole_width;
-            else if (name == "sd_ratio") value = state.sd_ratio;
-            else if (name == "omegaomega_ratio") value = state.flatte_ratio;
+            const double value = gvv_propagator_parameter_value(
+                state, parameter_metadata.target);
             output << "  parameter " << name << " value=" << value
                    << " status=" << (source.fixed ? "fixed" : "free")
                    << " transform=" << source.transform;
-            if (source.has_lower_bound) {
-                output << " bounds=[" << source.lower_bound << ','
-                       << source.upper_bound << ']';
+            if (!parameter_metadata.unit.empty()) {
+                output << " unit=" << parameter_metadata.unit;
+            }
+            if (source.has_lower_bound || source.has_upper_bound) {
+                output << " bounds=[";
+                output << (source.has_lower_bound
+                    ? std::to_string(source.lower_bound) : "-inf");
+                output << ',';
+                output << (source.has_upper_bound
+                    ? std::to_string(source.upper_bound) : "+inf");
+                output << ']';
             }
             output << '\n';
-        }
-        if (metadata.fit_sd_ratio) {
-            output << "  fitted_parameter " << layout.at(parameter).fit.name
-                   << " value=" << best.values.at(parameter)
-                   << " error=" << best.errors.at(parameter) << '\n';
-            ++parameter;
-        }
-        if (metadata.fit_flatte_ratio) {
-            output << "  fitted_parameter " << layout.at(parameter).fit.name
-                   << " value=" << best.values.at(parameter)
-                   << " error=" << best.errors.at(parameter) << '\n';
-            ++parameter;
+            const int fitted_index = find_propagator_layout_index(
+                layout,
+                static_cast<int>(resonance),
+                parameter_metadata.target);
+            if (fitted_index >= 0) {
+                output << "  fitted_parameter "
+                       << layout[fitted_index].fit.name
+                       << " value=" << best.values[fitted_index]
+                       << " error=" << best.errors[fitted_index] << '\n';
+            }
         }
     }
 }

@@ -66,7 +66,7 @@ double omega_phase_integral(double s, int bins)
             const double geometry_sq = s * cross_sq;
 
             const DeviceComplex coherent_rho = coherent_omega_rho_factor(
-                s, s12, s10, s20, m0_sq, m1_sq, m2_sq);
+                s, s12, s10, s20);
 
             integral += geometry_sq * coherent_rho.rho2() * ds12 * ds10;
         }
@@ -96,31 +96,31 @@ OmegaWidthTable::~OmegaWidthTable()
     }
 }
 
-void OmegaWidthTable::Build(
-    int table_size,
-    int dalitz_bins,
-    double minimum_mass,
-    double maximum_mass)
+void OmegaWidthTable::Build(const OmegaWidthTableConfig& config)
 {
-    if (table_size < 2 || dalitz_bins < 2 || minimum_mass <= 0.0
-        || maximum_mass <= minimum_mass) {
+    if (config.table_size < 2 || config.dalitz_bins < 2
+        || config.minimum_mass <= 0.0
+        || config.maximum_mass <= config.minimum_mass
+        || config.extrapolation != OmegaWidthExtrapolation::Clamp) {
         throw std::invalid_argument("invalid omega width table configuration");
     }
 
-    s_min_ = minimum_mass * minimum_mass;
-    const double s_max = maximum_mass * maximum_mass;
-    s_step_ = (s_max - s_min_) / (table_size - 1);
-    values_.assign(table_size, 0.0);
+    config_ = config;
+    s_min_ = config.minimum_mass * config.minimum_mass;
+    const double s_max = config.maximum_mass * config.maximum_mass;
+    s_step_ = (s_max - s_min_) / (config.table_size - 1);
+    values_.assign(config.table_size, 0.0);
 
     const double pole_s = GVV_OMEGA_MASS * GVV_OMEGA_MASS;
-    const double pole_integral = omega_phase_integral(pole_s, dalitz_bins);
+    const double pole_integral = omega_phase_integral(
+        pole_s, config.dalitz_bins);
     if (!(pole_integral > 0.0)) {
         throw std::runtime_error("omega pole phase-space integral is zero");
     }
 
-    for (int i = 0; i < table_size; ++i) {
+    for (int i = 0; i < config.table_size; ++i) {
         const double s = s_min_ + i * s_step_;
-        const double integral = omega_phase_integral(s, dalitz_bins);
+        const double integral = omega_phase_integral(s, config.dalitz_bins);
         if (integral > 0.0) {
             values_[i] = GVV_OMEGA_WIDTH * GVV_OMEGA_MASS / std::sqrt(s)
                          * integral / pole_integral;
@@ -170,4 +170,9 @@ ctpwa::TabulatedFunctionView OmegaWidthTable::DeviceView() const
         static_cast<int>(values_.size()),
         s_min_,
         s_step_);
+}
+
+const OmegaWidthTableConfig& OmegaWidthTable::Config() const
+{
+    return config_;
 }

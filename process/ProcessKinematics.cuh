@@ -73,9 +73,6 @@ __device__ inline OmegaDecayCurrent build_omega_decay_current(
     const FV p20 = p2 + p0;
 
     const double s_omega = p_omega * p_omega;
-    const double s0 = p0 * p0;
-    const double s1 = p1 * p1;
-    const double s2 = p2 * p2;
     const double s12 = p12 * p12;
     const double s10 = p10 * p10;
     const double s20 = p20 * p20;
@@ -83,7 +80,7 @@ __device__ inline OmegaDecayCurrent build_omega_decay_current(
     return OmegaDecayCurrent(
         omega_geometric_current(p0, p1, p2),
         coherent_omega_rho_factor(
-            s_omega, s12, s10, s20, s0, s1, s2, rho));
+            s_omega, s12, s10, s20, rho));
 }
 
 #endif // CTPWA_PROCESS_KINEMATICS_CUH
