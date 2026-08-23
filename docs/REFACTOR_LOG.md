@@ -544,9 +544,11 @@ No Fit, numerical Post Calculation, GPU runtime test, or Slurm job was run.
   coherent JPC group.
 - Replaced order-dependent Term-component appearance with deterministic,
   distinct color/line-style combinations derived from the component metadata.
-  The component figure keeps six `3 x 2` physics panels and places its dynamic
-  legend in a full-height column at the far right; spline smoothing remains
-  excluded for diagonal `|A_i|^2` histograms.
+  Its individual curves use thin width-1 lines. The component figure enlarges
+  the six-panel `3 x 2` physics area and places a compact centered two-column
+  legend block in the external right margin, following the conventional
+  projection-plot layout; spline smoothing remains excluded for diagonal
+  `|A_i|^2` histograms.
 - Rebuilt the polarization figure as three horizontal panels. Every
   non-component shared legend is inside the first subplot, and only that panel
   receives the additional vertical headroom needed to avoid overlap. Frame,
@@ -573,9 +575,9 @@ Verification was performed on the fixed `lxlogin005` node with ROOT 6.32.02:
   existing `results/projection-initial.root` and regenerated all six PDF/EPS
   pairs without changing the printed projection chi-square diagnostics;
 - all six PDFs were rendered through their CropBox and inspected at normal
-  reading size; final legend consolidation keeps the component legend at the
-  far right and every other shared legend inside the first subplot with local
-  headroom;
+  reading size; final legend consolidation keeps the compact two-column
+  component legend in the external right margin and every other shared legend
+  inside the first subplot with local headroom;
 - the obsolete `projection_detailed-initial.pdf/.eps` files were removed after
   confirming that no supported macro or driver produces them.
 

@@ -17,7 +17,7 @@ The following styles have fixed meanings throughout the plotting system.
 | Background | Gray histogram with diagonal fill style `3004` | The histogram may be signed. Its negative bins must remain visible. |
 | Total fit | Solid `kBlue + 1` line, width 2 | This style is reserved. No group or component may reuse this color. |
 | Coherent JPC group | Line style 2 (dashed), common width, one distinct color per group | Legend entries use `coherent <JPC>`, for example `coherent 2++`; they never use `<JPC> coherence class`. |
-| Term component | Unique and stable color/line-style combination | A component style is derived from model metadata, not its current list position. Related waves of one resonance may use related colors, but no two active Terms may be visually identical. |
+| Term component | Thin width-1 line with a unique and stable color/line-style combination | A component style is derived from model metadata, not its current list position. Related waves of one resonance may use related colors, but no two active Terms may be visually identical. |
 | Zero reference | Thin gray dotted line | Draw for signed nonzero angular moments. It is a reference, not a fitted curve. |
 
 The coherent-group palette must exclude black, gray, and the Total-fit blue.
@@ -28,17 +28,21 @@ legends must be generated dynamically from the projection metadata.
 
 - The main projection and omega-decay check figures use a `3 x 2` layout.
 - The polarization figure uses three horizontal panels.
-- The component figure uses six `3 x 2` physics panels plus a full-height
-  legend column at the far right. A large component list must never force the
-  physics panels to shrink into a narrow `4 x 2` grid.
+- The component figure enlarges its six-panel `3 x 2` physics area and reserves
+  only a narrow external margin at the right. A compact, centered two-column
+  legend block occupies that margin, following the conventional
+  projection-plot legend layout; it is not stretched over the full canvas
+  height.
 - Even angular moments use `2 x 2`; the ordered-omega odd diagnostic uses
   `3 x 1`.
-- Except for the component figure's dedicated right-hand column, every shared
-  legend is drawn inside the first subplot. That first subplot alone receives
-  additional vertical headroom; the remaining panels keep their normal scale.
+- Except for the component figure's external right-margin legend block, every
+  shared legend is drawn inside the first subplot. That first subplot alone
+  receives additional vertical headroom; the remaining panels keep their
+  normal scale.
 - A legend must not obscure data, errors, peaks, or fitted curves.
-- The number of legend columns is chosen from the number and length of entries.
-  Labels must remain readable at the final PDF size.
+- The component legend uses two columns. Any other legend column count follows
+  the number and length of its entries. Labels must remain readable at the
+  final PDF size.
 - `projection_detailed-<tag>` is obsolete and is not part of the supported
   plotting output set.
 
@@ -171,8 +175,9 @@ Before accepting a plotting change:
    are unchanged by a presentation-only edit.
 3. Check that Background is gray, Total fit retains its reserved style, and all
    coherent JPC groups are dashed and labelled `coherent <JPC>`.
-4. Check that no class or component uses the Total-fit blue and no two active
-   Terms have an identical final appearance.
+4. Check that no class or component uses the Total-fit blue, no two active
+   Terms have an identical final appearance, and every component curve uses
+   the thin width-1 line contract.
 5. Inspect the rendered PDFs at normal reading size for clipped labels, clipped
    errors, legend overlap, weak contrast, and empty layout cells.
 6. Check every axis for the correct frame, candidate convention, bin-width unit,

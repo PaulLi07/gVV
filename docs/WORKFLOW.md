@@ -663,7 +663,7 @@ The visual, layout, frame-naming, and review contract is documented in
 | Macro | Output prefix | Purpose |
 |---|---|---|
 | `Draw_projection.cxx` | `projection-TAG` | Main exchange-symmetric 3x2 kinematic projection |
-| `Draw_projection_components.cxx` | `projection_components-TAG` | Six 3x2 kinematic panels and a full-height right-hand legend for diagonal `|A_i|^2` components; interference is intentionally omitted |
+| `Draw_projection_components.cxx` | `projection_components-TAG` | Enlarged 3x2 kinematic area and a compact centered two-column legend in the external right margin for thin diagonal `|A_i|^2` curves; interference is intentionally omitted |
 | `Draw_polarization.cxx` | `polarization-TAG` | Three horizontal omega decay-plane-normal projections with the shared legend inside the first subplot |
 | `Draw_omega_decay_checks.cxx` | `omega_decay_checks-TAG` | Six candidate-combined pion-angle and pion-pair-mass checks |
 | `draw_angular_moments.cxx` | `angular_moments-TAG` | Exchange-symmetrized even Legendre moments `P0`, `P2`, `P4`, and `P6` |
@@ -695,9 +695,11 @@ signal plus signed background. Data are black markers, Background is a gray
 hatched histogram, Total fit keeps its reserved solid blue appearance, and
 every coherent JPC-group curve uses the same dashed line style with a distinct
 color and the legend wording `coherent <JPC>`. Diagonal component styles are
-deterministic and distinct under model reordering. Their legend occupies a
-full-height column at the far right; every other shared legend is inside the
-first subplot, whose extra headroom is applied only to that panel. The
+deterministic and distinct under model reordering, and each curve uses a thin
+width-1 line. The component figure enlarges its `3 x 2` physics area and puts a
+compact centered two-column legend block in the external right margin, modeled
+on a conventional projection-plot legend. Every other shared legend is inside
+the first subplot, whose extra headroom is applied only to that panel. The
 automatic vertical envelope covers data errors and every drawn histogram. The
 diagonal-component plot is not expected to sum to the coherent total because
 it omits Term interference.

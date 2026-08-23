@@ -53,13 +53,13 @@ const std::vector<gvvplot::VariableSpec> kVariables = {
 
 constexpr const char* kCanvasName = "gvv_projection_components";
 constexpr const char* kCanvasTitle = "GVV component projections";
-constexpr int kCanvasWidth = 1800;
-constexpr int kCanvasHeight = 900;
+constexpr int kCanvasWidth = 1500;
+constexpr int kCanvasHeight = 800;
 constexpr int kCanvasColumns = 3;
 constexpr int kCanvasRows = 2;
 constexpr double kPadGap = 0.002;
-constexpr double kPlotRegionXMax = 0.78;
-constexpr double kLegendRegionXMin = 0.78;
+constexpr double kPlotRegionXMax = 0.79;
+constexpr double kLegendRegionXMin = 0.79;
 constexpr const char* kPlotPadName = "gvv_component_plot_pad";
 constexpr const char* kLegendPadName = "gvv_component_legend_pad";
 
@@ -73,7 +73,7 @@ constexpr int kBackgroundFillColor = kGray + 1;
 constexpr int kBackgroundLineColor = kGray + 2;
 constexpr int kTotalColor = kBlue + 1;
 constexpr int kTotalLineWidth = 2;
-constexpr int kComponentLineWidth = 2;
+constexpr int kComponentLineWidth = 1;
 constexpr int kComponentMarkerStyle = 0;
 constexpr double kComponentMarkerSize = 0.0;
 constexpr int kComponentFillStyle = 0;
@@ -114,24 +114,23 @@ constexpr const char* kTotalDrawOption = "HIST SAME";
 constexpr const char* kDataRedrawOption = "E1 SAME";
 
 // Legend box and text.
-constexpr double kLegendX1 = 0.04;
-constexpr double kLegendY1 = 0.03;
+constexpr double kLegendX1 = 0.02;
+constexpr double kLegendY1 = 0.31;
 constexpr double kLegendX2 = 0.98;
-constexpr double kLegendY2 = 0.88;
-constexpr int kLegendColumns = 1;
-constexpr int kLegendFont = 22;
-constexpr double kLegendTextSize = 0.035;
+constexpr double kLegendY2 = 0.70;
+constexpr int kLegendColumns = 2;
+constexpr int kLegendFont = 42;
+constexpr double kLegendTextSize = 0.038;
+constexpr double kLegendMargin = 0.14;
+constexpr double kLegendColumnSeparation = 0.03;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
-constexpr int kLegendNoteFont = 22;
-constexpr double kLegendNoteSize = 0.042;
+constexpr int kLegendNoteFont = 42;
+constexpr double kLegendNoteSize = 0.032;
 constexpr double kLegendNoteX = 0.50;
-constexpr double kLegendNoteLine1Y = 0.965;
-constexpr double kLegendNoteLine2Y = 0.920;
-constexpr const char* kLegendNoteLine1 =
-    "Diagonal |A_{i}|^{2} components";
-constexpr const char* kLegendNoteLine2 =
-    "Interference terms are omitted";
+constexpr double kLegendNoteY = 0.75;
+constexpr const char* kLegendNote =
+    "Diagonal |A_{i}|^{2}; interference omitted";
 constexpr const char* kDataLegendLabel = "Data";
 constexpr const char* kBackgroundLegendLabel = "Background";
 constexpr const char* kTotalLegendLabel = "Total fit";
@@ -355,8 +354,8 @@ void Draw_projection_components(
         projection_components::kCanvasWidth,
         projection_components::kCanvasHeight);
 
-    // Keep a 3 x 2 physics grid on the left and reserve a full-height strip on
-    // the right for the model-dependent component legend.
+    // Keep a 3 x 2 physics grid on the left and a compact external legend in
+    // the right margin, following the conventional projection-plot layout.
     TPad* plot_pad = new TPad(
         projection_components::kPlotPadName,
         "",
@@ -411,12 +410,8 @@ void Draw_projection_components(
     legend_note.SetTextSize(projection_components::kLegendNoteSize);
     legend_note.DrawLatex(
         projection_components::kLegendNoteX,
-        projection_components::kLegendNoteLine1Y,
-        projection_components::kLegendNoteLine1);
-    legend_note.DrawLatex(
-        projection_components::kLegendNoteX,
-        projection_components::kLegendNoteLine2Y,
-        projection_components::kLegendNoteLine2);
+        projection_components::kLegendNoteY,
+        projection_components::kLegendNote);
 
     TLegend* legend = new TLegend(
         projection_components::kLegendX1,
@@ -428,6 +423,9 @@ void Draw_projection_components(
     legend->SetTextFont(projection_components::kLegendFont);
     legend->SetTextSize(projection_components::kLegendTextSize);
     legend->SetNColumns(projection_components::kLegendColumns);
+    legend->SetMargin(projection_components::kLegendMargin);
+    legend->SetColumnSeparation(
+        projection_components::kLegendColumnSeparation);
     legend->AddEntry(
         panels[0].data,
         projection_components::kDataLegendLabel,

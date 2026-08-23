@@ -61,9 +61,11 @@
   contents: gray hatched Background, reserved original Total-fit style,
   uniformly dashed coherent JPC groups labelled `coherent <JPC>`, deterministic
   distinct metadata-based Term styles, complete vertical envelopes, accurate
-  frame/candidate labels, three horizontal polarization panels, and a
-  full-height component legend at the far right. Every other shared legend is
-  inside the first subplot with first-panel-only vertical headroom.
+  frame/candidate labels, three horizontal polarization panels, and thin
+  width-1 component curves in an enlarged `3 x 2` physics area. Their external
+  right legend is now a compact centered two-column block modeled on the
+  conventional projection-plot layout. Every other shared legend is inside the
+  first subplot with first-panel-only vertical headroom.
   Angular moments now identify their inputs, show unnormalized binwise sums
   with computed mass-bin widths, and include zero references where signed.
   Added `post/plotting/PLOTTING_STYLE.md`; `draw.sh` now accepts either no

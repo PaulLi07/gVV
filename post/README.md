@@ -395,9 +395,11 @@ is reserved, all coherent JPC groups use line style 2 with distinct colors and
 the legend wording `coherent <JPC>`, and Term-component styles are
 deterministic functions of the component metadata. The vertical envelope
 includes data errors, signed Background, Total fit, and every group or
-component curve actually drawn. The component legend is a full-height column
-at the far right; every other shared legend is inside the first subplot, which
-alone receives extra vertical headroom.
+component curve actually drawn. Individual Term components use thin width-1
+lines. Their enlarged `3 x 2` physics area leaves a narrow external right
+margin for a compact centered two-column legend block, following the
+conventional projection-plot layout. Every other shared legend is inside the
+first subplot, which alone receives extra vertical headroom.
 
 ### Projection contract consumed
 
@@ -430,7 +432,7 @@ visual convention.
 | Entry point | Interpretation | Output basename |
 |---|---|---|
 | `Draw_projection.cxx` | Main 3x2 exchange-symmetric projection | `projection-<tag>` |
-| `Draw_projection_components.cxx` | Six `3x2` kinematic panels plus a full-height right-hand legend for per-Term diagonal components | `projection_components-<tag>` |
+| `Draw_projection_components.cxx` | Enlarged `3x2` kinematic area plus a compact centered two-column legend in the external right margin for thin per-Term diagonal curves | `projection_components-<tag>` |
 | `Draw_polarization.cxx` | Three horizontal omega decay-plane-normal projections with the shared legend inside the first subplot | `polarization-<tag>` |
 | `Draw_omega_decay_checks.cxx` | Pion-angle and pion-pair-mass checks | `omega_decay_checks-<tag>` |
 | `draw_angular_moments.cxx` | Symmetrized even `P0/P2/P4/P6` moments | `angular_moments-<tag>` |
@@ -464,7 +466,8 @@ The component diagnostic draws only diagonal `|A_i|^2` entries. It cannot and
 should not close to the total coherent curve when interference is present.
 It assigns every active Term a stable, distinct color/line-style combination
 from its Resonance, Wave, and Term metadata rather than its current list
-position.
+position. Each component is deliberately a thinner width-1 line so the many
+curves remain legible without competing with the width-2 Total fit.
 The coherent JPC-group curves include only pairs internal to each group;
 cross-group interference remains in the total model.
 

@@ -498,9 +498,11 @@ style is reserved, all coherent JPC groups use the same dashed line style with
 distinct colors and the legend wording `coherent <JPC>`, and Term components
 receive deterministic distinct styles from their Projection metadata.
 Automatic vertical ranges include data errors and every drawn curve. The
-component legend occupies a full-height column at the far right; every other
-shared legend stays inside the first subplot, whose extra headroom prevents
-overlap without compressing the other panels. See the
+component plot enlarges its `3 x 2` physics area, draws individual Term curves
+with thin width-1 lines, and places a compact centered two-column legend in the
+external right margin, following a conventional projection-plot layout. Every
+other shared legend stays inside the first subplot, whose extra headroom
+prevents overlap without compressing the other panels. See the
 [plotting style guide](post/plotting/PLOTTING_STYLE.md) for the frame,
 candidate-combination, layout, labeling, and review conventions.
 
