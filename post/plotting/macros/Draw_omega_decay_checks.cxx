@@ -115,7 +115,7 @@ constexpr const char* kTotalLegendLabel = "Total fit";
 constexpr const char* kDataLegendOption = "lep";
 constexpr const char* kBackgroundLegendOption = "f";
 constexpr const char* kLineLegendOption = "l";
-constexpr const char* kGroupLegendSuffix = " coherence class";
+constexpr const char* kGroupLegendPrefix = "coherent ";
 
 // ============================================================================
 // Implementation below. Normal figure changes should only require the block
@@ -259,8 +259,8 @@ void Draw_omega_decay_checks(
         omega_decay_checks::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            input.groups[group].label
-            + omega_decay_checks::kGroupLegendSuffix;
+            omega_decay_checks::kGroupLegendPrefix
+            + input.groups[group].label;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),

@@ -59,9 +59,11 @@
   one-command driver.
 - Unified the supported plot presentation without changing projection
   contents: gray hatched Background, reserved original Total-fit style,
-  uniformly dashed coherence classes, deterministic distinct metadata-based
-  Term styles, complete vertical envelopes, accurate frame/candidate labels,
-  three horizontal polarization panels, and a full-width component legend.
+  uniformly dashed coherent JPC groups labelled `coherent <JPC>`, deterministic
+  distinct metadata-based Term styles, complete vertical envelopes, accurate
+  frame/candidate labels, three horizontal polarization panels, and a
+  full-height component legend at the far right. Every other shared legend is
+  inside the first subplot with first-panel-only vertical headroom.
   Angular moments now identify their inputs, show unnormalized binwise sums
   with computed mass-bin widths, and include zero references where signed.
   Added `post/plotting/PLOTTING_STYLE.md`; `draw.sh` now accepts either no

@@ -802,11 +802,14 @@ label-independent observable of two identical omegas.
 
 The standard presentation contract is explicit rather than implicit in ROOT
 defaults. Data use black markers, Background is a gray hatched histogram, the
-original solid-blue Total-fit style is reserved, every coherence class uses
-the same dashed line style with a distinct color, and diagonal Term styles are
-deterministic and distinct under model reordering. The polarization figure is
-three horizontal panels with a shared legend; the component figure keeps six
-`3 x 2` physics panels and gives their dynamic legend a full-width strip.
+original solid-blue Total-fit style is reserved, every coherent JPC group uses
+the same dashed line style with a distinct color and the label
+`coherent <JPC>`, and diagonal Term styles are deterministic and distinct under
+model reordering. The component figure keeps six `3 x 2` physics panels and
+gives their dynamic legend a full-height column at the far right. Every other
+shared legend is inside the first subplot, and only that subplot receives
+legend-specific vertical headroom. The polarization figure remains three
+horizontal panels.
 Angular-moment panels identify `Data - signed background` and fitted signal MC,
 show unnormalized binwise Legendre sums with computed mass-bin widths, and draw
 a gray zero reference for signed nonzero moments. Frame and candidate labels

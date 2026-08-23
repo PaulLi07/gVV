@@ -4,7 +4,6 @@
 #include "TLatex.h"
 #include "TLegend.h"
 #include "TLine.h"
-#include "TPad.h"
 
 #include <algorithm>
 #include <string>
@@ -41,14 +40,10 @@ constexpr bool kOddDiagnostic = true;
 constexpr const char* kCanvasName = "gvv_odd_moments";
 constexpr const char* kCanvasTitle = "GVV odd angular-moment diagnostic";
 constexpr int kCanvasWidth = 1500;
-constexpr int kCanvasHeight = 560;
+constexpr int kCanvasHeight = 500;
 constexpr int kCanvasColumns = 3;
 constexpr int kCanvasRows = 1;
 constexpr double kPadGap = 0.002;
-constexpr double kPlotPadY1 = 0.00;
-constexpr double kPlotPadY2 = 0.86;
-constexpr double kLegendPadY1 = 0.86;
-constexpr double kLegendPadY2 = 1.00;
 
 // Axes and automatic vertical range.
 constexpr const char* kXAxisTitle =
@@ -60,6 +55,10 @@ constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.35;
 constexpr double kPositiveRangeScale = 1.35;
+// The first panel contains the shared legend and diagnostic note. Its larger
+// headroom keeps the complete histogram envelope in the lower 58% of its
+// numerical y range, including when the moment has sizable negative content.
+constexpr double kLegendPanelEnvelopeFraction = 0.58;
 
 // Data and fitted-model appearance.
 constexpr int kDataMarkerStyle = 8;
@@ -69,14 +68,14 @@ constexpr int kDataLineWidth = 1;
 constexpr int kModelColor = kBlue + 1;
 constexpr int kModelLineWidth = 2;
 
-// One top strip holds the diagnostic statement and shared two-entry legend.
-constexpr double kLegendX1 = 0.40;
-constexpr double kLegendY1 = 0.05;
-constexpr double kLegendX2 = 0.98;
-constexpr double kLegendY2 = 0.95;
-constexpr int kLegendColumns = 2;
+// One compact legend in the first panel applies to all three moment orders.
+constexpr double kLegendX1 = 0.37;
+constexpr double kLegendY1 = 0.70;
+constexpr double kLegendX2 = 0.94;
+constexpr double kLegendY2 = 0.82;
+constexpr int kLegendColumns = 1;
 constexpr int kLegendFont = 22;
-constexpr double kLegendTextSize = 0.27;
+constexpr double kLegendTextSize = 0.030;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
 constexpr const char* kDataLegendLabel = "Data - signed background";
@@ -92,11 +91,12 @@ constexpr int kAnnotationFont = 22;
 constexpr double kAnnotationSize = 0.050;
 constexpr double kAnnotationX = 0.18;
 constexpr double kAnnotationY = 0.84;
+constexpr double kLegendPanelAnnotationY = 0.87;
 constexpr const char* kAnnotationFormat =
     "P_{%d}: #chi^{2}/N_{bin}=%.1f/%d";
-constexpr double kDiagnosticSize = 0.27;
-constexpr double kDiagnosticX = 0.03;
-constexpr double kDiagnosticY = 0.50;
+constexpr double kDiagnosticSize = 0.034;
+constexpr double kDiagnosticX = 0.18;
+constexpr double kDiagnosticY = 0.67;
 constexpr const char* kDiagnosticText =
     "ordered #omega_{1}; not exchange symmetric";
 
@@ -112,7 +112,8 @@ constexpr const char* kDataRedrawOption = "E1 SAME";
 
 void FormatPanel(
     gvvplot::MomentHistograms& histograms,
-    int order)
+    int order,
+    std::size_t panel_index)
 {
     histograms.data->SetMarkerStyle(kDataMarkerStyle);
     histograms.data->SetMarkerSize(kDataMarkerSize);
@@ -131,16 +132,25 @@ void FormatPanel(
     const std::vector<const TH1D*> curves = {histograms.model};
     const gvvplot::VerticalRange range =
         gvvplot::FindVerticalRange(histograms.data, curves);
-    histograms.data->GetYaxis()->SetRangeUser(
-        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
-        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0);
+    const double lower =
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0;
+    double upper =
+        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0;
+    if (panel_index == 0 && range.maximum > 0.0) {
+        upper = std::max(
+            upper,
+            lower + (range.maximum - lower)
+                        / kLegendPanelEnvelopeFraction);
+    }
+    histograms.data->GetYaxis()->SetRangeUser(lower, upper);
 }
 
 void DrawPanel(
     gvvplot::MomentHistograms& histograms,
-    int order)
+    int order,
+    std::size_t panel_index)
 {
-    FormatPanel(histograms, order);
+    FormatPanel(histograms, order, panel_index);
     histograms.data->Draw(kDataDrawOption);
     histograms.model->Draw(kModelDrawOption);
     TLine* zero = new TLine(kMassLower, 0.0, kMassUpper, 0.0);
@@ -158,7 +168,7 @@ void DrawPanel(
     label.SetTextSize(kAnnotationSize);
     label.DrawLatex(
         kAnnotationX,
-        kAnnotationY,
+        panel_index == 0 ? kLegendPanelAnnotationY : kAnnotationY,
         Form(kAnnotationFormat,
              order,
              chi_square.first,
@@ -183,30 +193,16 @@ void draw_angular_moments_odd(
         odd_moments::kCanvasTitle,
         odd_moments::kCanvasWidth,
         odd_moments::kCanvasHeight);
-    TPad* plot_pad = new TPad(
-        "gvv_odd_moment_plots", "", 0.0, odd_moments::kPlotPadY1,
-        1.0, odd_moments::kPlotPadY2);
-    plot_pad->SetFillStyle(0);
-    plot_pad->Draw();
-    plot_pad->Divide(
+    canvas->Divide(
         odd_moments::kCanvasColumns,
         odd_moments::kCanvasRows,
         odd_moments::kPadGap,
         odd_moments::kPadGap);
 
-    canvas->cd();
-    TPad* legend_pad = new TPad(
-        "gvv_odd_moment_legend", "", 0.0, odd_moments::kLegendPadY1,
-        1.0, odd_moments::kLegendPadY2);
-    legend_pad->SetFillStyle(0);
-    legend_pad->SetMargin(0.0, 0.0, 0.0, 0.0);
-    legend_pad->Draw();
-
-    gvvplot::MomentHistograms legend_histograms;
     for (std::size_t panel = 0;
          panel < odd_moments::kOrders.size();
          ++panel) {
-        plot_pad->cd(static_cast<int>(panel) + 1);
+        canvas->cd(static_cast<int>(panel) + 1);
         const int order = odd_moments::kOrders[panel];
         gvvplot::MomentHistograms histograms =
             gvvplot::BuildMomentHistograms(
@@ -217,39 +213,39 @@ void draw_angular_moments_odd(
                 odd_moments::kMassLower,
                 odd_moments::kMassUpper,
                 "gvv_odd_moment");
-        odd_moments::DrawPanel(histograms, order);
-        if (panel == 0) legend_histograms = histograms;
+        odd_moments::DrawPanel(histograms, order, panel);
+
+        if (panel == 0) {
+            TLatex diagnostic;
+            diagnostic.SetNDC();
+            diagnostic.SetTextFont(odd_moments::kAnnotationFont);
+            diagnostic.SetTextSize(odd_moments::kDiagnosticSize);
+            diagnostic.DrawLatex(
+                odd_moments::kDiagnosticX,
+                odd_moments::kDiagnosticY,
+                odd_moments::kDiagnosticText);
+
+            TLegend* legend = new TLegend(
+                odd_moments::kLegendX1,
+                odd_moments::kLegendY1,
+                odd_moments::kLegendX2,
+                odd_moments::kLegendY2);
+            legend->SetBorderSize(odd_moments::kLegendBorderSize);
+            legend->SetFillStyle(odd_moments::kLegendFillStyle);
+            legend->SetTextFont(odd_moments::kLegendFont);
+            legend->SetTextSize(odd_moments::kLegendTextSize);
+            legend->SetNColumns(odd_moments::kLegendColumns);
+            legend->AddEntry(
+                histograms.data,
+                odd_moments::kDataLegendLabel,
+                "lep");
+            legend->AddEntry(
+                histograms.model,
+                odd_moments::kModelLegendLabel,
+                "l");
+            legend->Draw();
+        }
     }
-
-    legend_pad->cd();
-    TLatex diagnostic;
-    diagnostic.SetNDC();
-    diagnostic.SetTextFont(odd_moments::kAnnotationFont);
-    diagnostic.SetTextSize(odd_moments::kDiagnosticSize);
-    diagnostic.DrawLatex(
-        odd_moments::kDiagnosticX,
-        odd_moments::kDiagnosticY,
-        odd_moments::kDiagnosticText);
-
-    TLegend* legend = new TLegend(
-        odd_moments::kLegendX1,
-        odd_moments::kLegendY1,
-        odd_moments::kLegendX2,
-        odd_moments::kLegendY2);
-    legend->SetBorderSize(odd_moments::kLegendBorderSize);
-    legend->SetFillStyle(odd_moments::kLegendFillStyle);
-    legend->SetTextFont(odd_moments::kLegendFont);
-    legend->SetTextSize(odd_moments::kLegendTextSize);
-    legend->SetNColumns(odd_moments::kLegendColumns);
-    legend->AddEntry(
-        legend_histograms.data,
-        odd_moments::kDataLegendLabel,
-        "lep");
-    legend->AddEntry(
-        legend_histograms.model,
-        odd_moments::kModelLegendLabel,
-        "l");
-    legend->Draw();
 
     gvvplot::EnsureOutputDirectory(output_path);
     canvas->Print((output_path + ".pdf").c_str());

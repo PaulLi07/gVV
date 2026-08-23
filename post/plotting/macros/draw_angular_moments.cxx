@@ -43,6 +43,7 @@ constexpr int kCanvasHeight = 900;
 constexpr int kCanvasColumns = 2;
 constexpr int kCanvasRows = 2;
 constexpr double kPadGap = 0.002;
+constexpr int kLegendPad = 1;
 
 // Axes and automatic vertical range.
 constexpr const char* kXAxisTitle =
@@ -54,6 +55,8 @@ constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.35;
 constexpr double kPositiveRangeScale = 1.35;
+// The shared legend remains inside the first subplot. Its panel alone gets
+// extra vertical headroom so the other moment scales are not compressed.
 constexpr double kLegendPanelPositiveRangeScale = 1.55;
 
 // Data and fitted-model appearance.
@@ -122,8 +125,9 @@ void FormatPanel(
     const gvvplot::VerticalRange range =
         gvvplot::FindVerticalRange(histograms.data, curves);
     const double positive_scale =
-        panel_index == 0 ? kLegendPanelPositiveRangeScale
-                         : kPositiveRangeScale;
+        panel_index + 1 == static_cast<std::size_t>(kLegendPad)
+            ? kLegendPanelPositiveRangeScale
+            : kPositiveRangeScale;
     histograms.data->GetYaxis()->SetRangeUser(
         range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
         range.maximum > 0.0 ? positive_scale * range.maximum : 1.0);
@@ -201,7 +205,7 @@ void draw_angular_moments(
                 "gvv_even_moment");
         even_moments::DrawPanel(histograms, order, panel);
 
-        if (panel == 0) {
+        if (panel + 1 == static_cast<std::size_t>(even_moments::kLegendPad)) {
             TLegend* legend = new TLegend(
                 even_moments::kLegendX1,
                 even_moments::kLegendY1,

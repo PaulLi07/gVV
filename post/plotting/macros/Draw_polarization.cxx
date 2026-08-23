@@ -4,7 +4,6 @@
 #include "TLatex.h"
 #include "TLegend.h"
 #include "TMath.h"
-#include "TPad.h"
 
 #include <algorithm>
 #include <iostream>
@@ -47,14 +46,10 @@ const std::vector<gvvplot::VariableSpec> kVariables = {
 constexpr const char* kCanvasName = "gvv_polarization";
 constexpr const char* kCanvasTitle = "GVV polarization observables";
 constexpr int kCanvasWidth = 1500;
-constexpr int kCanvasHeight = 560;
+constexpr int kCanvasHeight = 500;
 constexpr int kCanvasColumns = 3;
 constexpr int kCanvasRows = 1;
 constexpr double kPadGap = 0.002;
-constexpr double kPlotPadY1 = 0.00;
-constexpr double kPlotPadY2 = 0.86;
-constexpr double kLegendPadY1 = 0.86;
-constexpr double kLegendPadY2 = 1.00;
 
 // Data, background, total-fit, and coherent-group appearance.
 constexpr int kDataMarkerStyle = 8;
@@ -80,6 +75,9 @@ constexpr const char* kAzimuthYAxisFormat = "Events / (%.3g rad)";
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
 constexpr double kPositiveRangeScale = 1.45;
+// The first panel holds the one shared legend. Its larger headroom keeps every
+// plotted curve and data error in the lower 48% of its numerical y range.
+constexpr double kLegendPanelEnvelopeFraction = 0.48;
 
 // Per-panel chi-square annotation.
 constexpr int kAnnotationFont = 22;
@@ -97,13 +95,13 @@ constexpr const char* kTotalDrawOption = "HIST SAME";
 constexpr const char* kDataRedrawOption = "E1 SAME";
 
 // Legend box and text.
-constexpr double kLegendX1 = 0.03;
-constexpr double kLegendY1 = 0.05;
-constexpr double kLegendX2 = 0.97;
-constexpr double kLegendY2 = 0.95;
-constexpr int kLegendColumns = 3;
+constexpr double kLegendX1 = 0.54;
+constexpr double kLegendY1 = 0.54;
+constexpr double kLegendX2 = 0.94;
+constexpr double kLegendY2 = 0.89;
+constexpr int kLegendColumns = 1;
 constexpr int kLegendFont = 22;
-constexpr double kLegendTextSize = 0.28;
+constexpr double kLegendTextSize = 0.038;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
 constexpr const char* kDataLegendLabel = "Data";
@@ -112,7 +110,7 @@ constexpr const char* kTotalLegendLabel = "Total fit";
 constexpr const char* kDataLegendOption = "lep";
 constexpr const char* kBackgroundLegendOption = "f";
 constexpr const char* kLineLegendOption = "l";
-constexpr const char* kGroupLegendSuffix = " coherence class";
+constexpr const char* kGroupLegendPrefix = "coherent ";
 
 // ============================================================================
 // Implementation below. Normal figure changes should only require the block
@@ -121,7 +119,8 @@ constexpr const char* kGroupLegendSuffix = " coherence class";
 
 void FormatPanel(
     gvvplot::PanelHistograms& panel,
-    const gvvplot::VariableSpec& variable)
+    const gvvplot::VariableSpec& variable,
+    std::size_t panel_index)
 {
     panel.background->SetFillStyle(kBackgroundFillStyle);
     panel.background->SetFillColor(kBackgroundColor);
@@ -157,9 +156,17 @@ void FormatPanel(
     curves.insert(curves.end(), panel.groups.begin(), panel.groups.end());
     const gvvplot::VerticalRange range =
         gvvplot::FindVerticalRange(panel.data, curves);
-    panel.data->GetYaxis()->SetRangeUser(
-        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
-        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0);
+    const double lower =
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0;
+    double upper =
+        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0;
+    if (panel_index == 0 && range.maximum > 0.0) {
+        upper = std::max(
+            upper,
+            lower + (range.maximum - lower)
+                        / kLegendPanelEnvelopeFraction);
+    }
+    panel.data->GetYaxis()->SetRangeUser(lower, upper);
 }
 
 void DrawPanel(
@@ -167,7 +174,7 @@ void DrawPanel(
     const gvvplot::VariableSpec& variable,
     std::size_t panel_index)
 {
-    FormatPanel(panel, variable);
+    FormatPanel(panel, variable, panel_index);
     panel.data->Draw(kDataDrawOption);
     panel.background->Draw(kBackgroundDrawOption);
     for (TH1D* group : panel.groups) group->Draw(kGroupDrawOption);
@@ -209,30 +216,17 @@ void Draw_polarization(
         polarization::kCanvasTitle,
         polarization::kCanvasWidth,
         polarization::kCanvasHeight);
-    TPad* plot_pad = new TPad(
-        "gvv_polarization_plots", "", 0.0, polarization::kPlotPadY1,
-        1.0, polarization::kPlotPadY2);
-    plot_pad->SetFillStyle(0);
-    plot_pad->Draw();
-    plot_pad->Divide(
+    canvas->Divide(
         polarization::kCanvasColumns,
         polarization::kCanvasRows,
         polarization::kPadGap,
         polarization::kPadGap);
 
-    canvas->cd();
-    TPad* legend_pad = new TPad(
-        "gvv_polarization_legend", "", 0.0,
-        polarization::kLegendPadY1, 1.0, polarization::kLegendPadY2);
-    legend_pad->SetFillStyle(0);
-    legend_pad->SetMargin(0.0, 0.0, 0.0, 0.0);
-    legend_pad->Draw();
-
     std::vector<gvvplot::PanelHistograms> panels;
     for (std::size_t index = 0;
          index < polarization::kVariables.size();
          ++index) {
-        plot_pad->cd(static_cast<int>(index) + 1);
+        canvas->cd(static_cast<int>(index) + 1);
         panels.push_back(gvvplot::BuildPanel(
             input,
             polarization::kVariables[index],
@@ -242,7 +236,7 @@ void Draw_polarization(
             panels.back(), polarization::kVariables[index], index);
     }
 
-    legend_pad->cd();
+    canvas->cd(1);
     TLegend* legend = new TLegend(
         polarization::kLegendX1,
         polarization::kLegendY1,
@@ -267,7 +261,7 @@ void Draw_polarization(
         polarization::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            input.groups[group].label + polarization::kGroupLegendSuffix;
+            polarization::kGroupLegendPrefix + input.groups[group].label;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),

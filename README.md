@@ -494,10 +494,13 @@ list.
 
 All standard plots follow one visual contract: data are black points,
 Background is a gray hatched histogram, the original solid blue Total-fit
-style is reserved, all coherence classes use the same dashed line style with
-distinct colors, and Term components receive deterministic distinct styles
-from their Projection metadata. Automatic vertical ranges include data errors
-and every drawn curve. See the
+style is reserved, all coherent JPC groups use the same dashed line style with
+distinct colors and the legend wording `coherent <JPC>`, and Term components
+receive deterministic distinct styles from their Projection metadata.
+Automatic vertical ranges include data errors and every drawn curve. The
+component legend occupies a full-height column at the far right; every other
+shared legend stays inside the first subplot, whose extra headroom prevents
+overlap without compressing the other panels. See the
 [plotting style guide](post/plotting/PLOTTING_STYLE.md) for the frame,
 candidate-combination, layout, labeling, and review conventions.
 

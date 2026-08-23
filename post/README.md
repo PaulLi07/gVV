@@ -391,10 +391,13 @@ The [plotting style guide](plotting/PLOTTING_STYLE.md) is the authoritative
 human-readable contract for visual roles, layout, frame and candidate naming,
 automatic ranges, and review. In particular, data use black markers,
 Background uses a gray hatched histogram, the solid blue Total-fit appearance
-is reserved, all coherence classes use line style 2 with distinct colors, and
-Term-component styles are deterministic functions of the component metadata.
-The vertical envelope includes data errors, signed Background, Total fit, and
-every group or component curve actually drawn.
+is reserved, all coherent JPC groups use line style 2 with distinct colors and
+the legend wording `coherent <JPC>`, and Term-component styles are
+deterministic functions of the component metadata. The vertical envelope
+includes data errors, signed Background, Total fit, and every group or
+component curve actually drawn. The component legend is a full-height column
+at the far right; every other shared legend is inside the first subplot, which
+alone receives extra vertical headroom.
 
 ### Projection contract consumed
 
@@ -427,8 +430,8 @@ visual convention.
 | Entry point | Interpretation | Output basename |
 |---|---|---|
 | `Draw_projection.cxx` | Main 3x2 exchange-symmetric projection | `projection-<tag>` |
-| `Draw_projection_components.cxx` | Six `3x2` kinematic panels plus a full-width legend for per-Term diagonal components | `projection_components-<tag>` |
-| `Draw_polarization.cxx` | Three horizontal omega decay-plane-normal projections with one shared legend | `polarization-<tag>` |
+| `Draw_projection_components.cxx` | Six `3x2` kinematic panels plus a full-height right-hand legend for per-Term diagonal components | `projection_components-<tag>` |
+| `Draw_polarization.cxx` | Three horizontal omega decay-plane-normal projections with the shared legend inside the first subplot | `polarization-<tag>` |
 | `Draw_omega_decay_checks.cxx` | Pion-angle and pion-pair-mass checks | `omega_decay_checks-<tag>` |
 | `draw_angular_moments.cxx` | Symmetrized even `P0/P2/P4/P6` moments | `angular_moments-<tag>` |
 | `draw_angular_moments_odd.cxx` | Ordered-omega `P1/P3/P5` diagnostic | `angular_moments_odd_diagnostic-<tag>` |
@@ -448,8 +451,8 @@ The polarization figure combines both candidates for
 `cos(theta_n_omega)` and `phi_n_omega` of the oriented
 `n_i = unit[p(pi+_i) cross p(pi-_i)]` analyzer in each omega helicity frame,
 and symmetrizes the signed, wrapped `Delta phi(n_1,n_2)`. Its three panels are
-horizontal and use one shared legend strip. The omega-decay check figure
-combines both candidates with
+horizontal and keep the shared legend inside the first subplot with dedicated
+headroom. The omega-decay check figure combines both candidates with
 half weight each for `cos_theta_pip_omega`, `cos_theta_pim_omega`,
 `cos_theta_pi0_omega`, `M(pi+ pi-)`, `M(pi+ pi0)`, and `M(pi- pi0)`. The pion
 cosines are not additionally reflected because each is already defined in its
@@ -482,7 +485,8 @@ MC.
 3. verify the legends contain the intended dynamic Terms and JPC groups, and
    that no two Terms have the same final appearance;
 4. verify Background is gray and hatched, Total fit retains its reserved
-   style, and every coherence class uses the common dashed style;
+   style, and every coherent JPC group uses the common dashed style and the
+   label `coherent <JPC>`;
 5. inspect signed-background behavior and any bins with a non-positive total
    expectation;
 6. confirm the complete vertical envelope includes data errors and every drawn

@@ -810,8 +810,8 @@ configuration and presentation:
 | File | Figure |
 |---|---|
 | `post/plotting/macros/Draw_projection.cxx` | main `3 x 2` exchange-symmetric kinematic projections with dynamic coherent JPC groups |
-| `post/plotting/macros/Draw_projection_components.cxx` | six `3 x 2` kinematic panels plus a full-width dynamic legend for diagonal Term components, intentionally excluding interference curves |
-| `post/plotting/macros/Draw_polarization.cxx` | three horizontal candidate-combined decay-plane-normal projections with one shared legend |
+| `post/plotting/macros/Draw_projection_components.cxx` | six `3 x 2` kinematic panels plus a full-height dynamic legend at the far right for diagonal Term components, intentionally excluding interference curves |
+| `post/plotting/macros/Draw_polarization.cxx` | three horizontal candidate-combined decay-plane-normal projections with the shared legend inside the first subplot |
 | `post/plotting/macros/Draw_omega_decay_checks.cxx` | candidate-combined pion helicity cosines and pion-pair invariant-mass checks |
 | `post/plotting/macros/draw_angular_moments.cxx` | physical even `P0/P2/P4/P6` omega-angle moments |
 | `post/plotting/macros/draw_angular_moments_odd.cxx` | ordered-omega odd `P1/P3/P5` diagnostic |
@@ -821,16 +821,21 @@ options, legend, or annotations in that preamble. Relative runtime paths are
 interpreted from the project root; absolute paths are preserved. Change a
 shared header only for a genuinely common Projection contract,
 histogram-building rule, moment formula, path rule, or base style.
+Except for the component figure's dedicated right-hand legend column, shared
+legends are drawn inside the first subplot, and only that subplot receives
+legend-specific vertical headroom. Coherent-group legend entries use
+`coherent <JPC>`.
 
 ### `post/plotting/PLOTTING_STYLE.md` — Plotting documentation
 
 Defines the common presentation contract without acting as a runtime input.
 It reserves the original solid-blue Total-fit style, assigns gray hatching to
-Background, requires one common dashed style for every coherence class, and
-requires deterministic distinct metadata-based Term styles. It also documents
-complete vertical envelopes, figure layouts, frame and candidate naming,
-unnormalized angular-moment sums, zero references, and the plot-review
-checklist.
+Background, requires one common dashed style and `coherent <JPC>` labels for
+every coherent JPC group, and requires deterministic distinct metadata-based
+Term styles. It also documents complete vertical envelopes, the full-height
+right-hand component legend, first-subplot shared legends, figure layouts,
+frame and candidate naming, unnormalized angular-moment sums, zero references,
+and the plot-review checklist.
 
 ### `post/README.md` — Calculation and Plotting user contract
 

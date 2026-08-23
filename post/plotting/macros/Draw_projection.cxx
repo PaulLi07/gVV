@@ -85,6 +85,9 @@ constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
 constexpr double kPositiveRangeScale = 1.45;
+// The shared legend stays inside the first subplot. Only that panel receives
+// extra headroom, so the remaining five projections keep their normal scale.
+constexpr double kLegendPanelPositiveRangeScale = 1.95;
 
 // Per-panel chi-square annotation.
 constexpr int kAnnotationFont = 22;
@@ -116,7 +119,7 @@ constexpr const char* kTotalLegendLabel = "Total fit";
 constexpr const char* kDataLegendOption = "lep";
 constexpr const char* kBackgroundLegendOption = "f";
 constexpr const char* kLineLegendOption = "l";
-constexpr const char* kGroupLegendSuffix = " coherence class";
+constexpr const char* kGroupLegendPrefix = "coherent ";
 
 // ============================================================================
 // Implementation below. Normal figure changes should only require the block
@@ -125,7 +128,8 @@ constexpr const char* kGroupLegendSuffix = " coherence class";
 
 void FormatPanel(
     gvvplot::PanelHistograms& panel,
-    const gvvplot::VariableSpec& variable)
+    const gvvplot::VariableSpec& variable,
+    std::size_t panel_index)
 {
     panel.background->SetFillStyle(kBackgroundFillStyle);
     panel.background->SetFillColor(kBackgroundColor);
@@ -167,9 +171,13 @@ void FormatPanel(
         range_curves.end(), panel.groups.begin(), panel.groups.end());
     const gvvplot::VerticalRange range =
         gvvplot::FindVerticalRange(panel.data, range_curves);
+    const double positive_scale =
+        panel_index + 1 == static_cast<std::size_t>(kLegendPad)
+            ? kLegendPanelPositiveRangeScale
+            : kPositiveRangeScale;
     panel.data->GetYaxis()->SetRangeUser(
         range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
-        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0);
+        range.maximum > 0.0 ? positive_scale * range.maximum : 1.0);
 }
 
 void DrawPanel(
@@ -177,7 +185,7 @@ void DrawPanel(
     const gvvplot::VariableSpec& variable,
     std::size_t panel_index)
 {
-    FormatPanel(panel, variable);
+    FormatPanel(panel, variable, panel_index);
     panel.data->Draw(kDataDrawOption);
     panel.background->Draw(kBackgroundDrawOption);
     for (TH1D* group : panel.groups) group->Draw(kGroupDrawOption);
@@ -264,7 +272,7 @@ void Draw_projection(
         projection_main::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            input.groups[group].label + projection_main::kGroupLegendSuffix;
+            projection_main::kGroupLegendPrefix + input.groups[group].label;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),

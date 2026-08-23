@@ -663,8 +663,8 @@ The visual, layout, frame-naming, and review contract is documented in
 | Macro | Output prefix | Purpose |
 |---|---|---|
 | `Draw_projection.cxx` | `projection-TAG` | Main exchange-symmetric 3x2 kinematic projection |
-| `Draw_projection_components.cxx` | `projection_components-TAG` | Six 3x2 kinematic panels and a full-width legend for diagonal `|A_i|^2` components; interference is intentionally omitted |
-| `Draw_polarization.cxx` | `polarization-TAG` | Three horizontal omega decay-plane-normal projections with a shared legend |
+| `Draw_projection_components.cxx` | `projection_components-TAG` | Six 3x2 kinematic panels and a full-height right-hand legend for diagonal `|A_i|^2` components; interference is intentionally omitted |
+| `Draw_polarization.cxx` | `polarization-TAG` | Three horizontal omega decay-plane-normal projections with the shared legend inside the first subplot |
 | `Draw_omega_decay_checks.cxx` | `omega_decay_checks-TAG` | Six candidate-combined pion-angle and pion-pair-mass checks |
 | `draw_angular_moments.cxx` | `angular_moments-TAG` | Exchange-symmetrized even Legendre moments `P0`, `P2`, `P4`, and `P6` |
 | `draw_angular_moments_odd.cxx` | `angular_moments_odd_diagnostic-TAG` | Ordered-omega odd moments `P1`, `P3`, and `P5` for pairing/order-bias diagnosis |
@@ -693,11 +693,14 @@ Terms, JPC groups, and background samples dynamically from `component_map`,
 `group_map`, and `background_map`. The main plots compare data with fitted
 signal plus signed background. Data are black markers, Background is a gray
 hatched histogram, Total fit keeps its reserved solid blue appearance, and
-every coherence-class curve uses the same dashed line style with a distinct
-color. Diagonal component styles are deterministic and distinct under model
-reordering. The automatic vertical envelope covers data errors and every
-drawn histogram. The diagonal-component plot is not expected to sum to the
-coherent total because it omits Term interference.
+every coherent JPC-group curve uses the same dashed line style with a distinct
+color and the legend wording `coherent <JPC>`. Diagonal component styles are
+deterministic and distinct under model reordering. Their legend occupies a
+full-height column at the far right; every other shared legend is inside the
+first subplot, whose extra headroom is applied only to that panel. The
+automatic vertical envelope covers data errors and every drawn histogram. The
+diagonal-component plot is not expected to sum to the coherent total because
+it omits Term interference.
 
 Angular-moment panels show unnormalized binwise Legendre sums. Their mass-bin
 width labels are derived from the configured range and bin count, and every
