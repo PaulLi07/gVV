@@ -3,7 +3,7 @@
   "process": "psi2s_to_gamma_omega_omega",
   "metadata": {
     "name": "nominal",
-    "description": "gVV nominal seven-term amplitude model"
+    "description": "gVV nominal scalar, pseudoscalar, and LS=02 tensor amplitude model"
   },
   "resonances": [
     {
@@ -77,6 +77,32 @@
       "label": "nonresonant 0-+",
       "propagator": "nonresonant",
       "parameters": {}
+    },
+    {
+      "id": "f2_1565",
+      "label": "f2(1565)",
+      "propagator": "subtracted_effective_flatte",
+      "parameters": {
+        "mass": {"value": 1.571, "fixed": true},
+        "width": {"value": 0.132, "fixed": true},
+        "omegaomega_ratio": {
+          "value": 1.0,
+          "fixed": false,
+          "transform": "log",
+          "step": 0.1,
+          "bounds": [-6.0, 3.0]
+        }
+      }
+    },
+    {
+      "id": "f2_1810",
+      "label": "f2(1810)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 1.815, "fixed": true},
+        "width": {"value": 0.197, "fixed": true},
+        "orbital_l": {"value": 0, "fixed": true}
+      }
     }
   ],
   "terms": [
@@ -151,6 +177,7 @@
       "id": "X_2370_11",
       "label": "X(2370)",
       "wave": "gvv.pseudoscalar_11",
+      "active": false,
       "coupling": {
         "mode": "complex_cartesian",
         "initial": [0.1, 0.0]
@@ -171,6 +198,84 @@
       "dynamics": {
         "type": "gvv_x_to_omega_omega",
         "resonance": "NR_0mp"
+      }
+    },
+    {
+      "id": "f2_1565_02_u1",
+      "label": "f_{2}(1565)~U^{(1)}_{02}",
+      "wave": "gvv.tensor_02_u1",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f2_1565"
+      }
+    },
+    {
+      "id": "f2_1565_02_u2",
+      "label": "f_{2}(1565)~U^{(2)}_{02}",
+      "wave": "gvv.tensor_02_u2",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f2_1565"
+      }
+    },
+    {
+      "id": "f2_1565_02_u3",
+      "label": "f_{2}(1565)~U^{(3)}_{02}",
+      "wave": "gvv.tensor_02_u3",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f2_1565"
+      }
+    },
+    {
+      "id": "f2_1810_02_u1",
+      "label": "f_{2}(1810)~U^{(1)}_{02}",
+      "wave": "gvv.tensor_02_u1",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f2_1810"
+      }
+    },
+    {
+      "id": "f2_1810_02_u2",
+      "label": "f_{2}(1810)~U^{(2)}_{02}",
+      "wave": "gvv.tensor_02_u2",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f2_1810"
+      }
+    },
+    {
+      "id": "f2_1810_02_u3",
+      "label": "f_{2}(1810)~U^{(3)}_{02}",
+      "wave": "gvv.tensor_02_u3",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f2_1810"
       }
     }
   ]

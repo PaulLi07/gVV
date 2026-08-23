@@ -115,8 +115,8 @@ The complete target contract is:
 | `make post` | Build `bin/Post.exe` |
 | `make tests` | Build the ordinary test executables |
 | `make check` | Build and run the ordinary test suite |
-| `make gpu-tests` | Build the two explicit CUDA runtime test executables without running them |
-| `make check-gpu` | Build and run the complete-Wave and intensity-equivalence GPU tests; use only in a Slurm GPU job |
+| `make gpu-tests` | Build the three explicit CUDA runtime test executables without running them |
+| `make check-gpu` | Build and run the tensor-building-block, complete-Wave, and intensity-equivalence GPU tests; use only in a Slurm GPU job |
 | `make clean` | Remove generated objects, dependency files, binaries, and test executables |
 
 The Makefile keeps generic framework objects separate from GVV process

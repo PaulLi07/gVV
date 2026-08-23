@@ -461,7 +461,15 @@ Levi-Civita production tensor, the X-decay P-wave orbital vector, the
 omega-spin-one Levi-Civita tensor, and their scalar decay contraction, with
 the production and decay `L=1` barriers.
 
-All three Wave functions are pure device numerator functions. Resonance
+### `process/waves/Tensor{02,20,22,42}U{1,2,3}.cuh` — Shared Fit/Calculation
+
+These twelve files implement the complete `2++` numerator catalogue. Each decay
+coupling `LS=02,20,22,42` is combined with the three independent radiative
+production covariants `U1,U2,U3`. The files apply the normalized-CG convention
+and their own required production/decay barriers. The nominal model selects only
+the three `Tensor02` Waves for `f2(1565)` and `f2(1810)`.
+
+All complete Wave functions are pure device numerator functions. Resonance
 propagators, couplings, Term indices, and sample storage are absent by design.
 
 ### 6.3 Wave catalogue and process-model compilation

@@ -4,8 +4,10 @@
 #include "process/OmegaDecayModel.cuh"
 #include "process/WaveRegistry.cuh"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -46,35 +48,68 @@ int main(int argc, char* argv[])
             argc > 1 ? argv[1] : "config/model.json";
         const GVVCompiledModel model = gvv_load_compiled_model(file_name);
 
+        const std::vector<GVVWaveMetadata>& registry = gvv_wave_registry();
+        require(registry.size() == GVV_NBASIS,
+                "Wave registry size does not match GVV_NBASIS");
+        std::set<std::string> registered_ids;
+        std::vector<bool> registered_types(GVV_NBASIS, false);
+        for (const GVVWaveMetadata& wave : registry) {
+            require(registered_ids.insert(wave.id).second,
+                    "duplicate Wave id in registry");
+            require(wave.wave_type >= 0 && wave.wave_type < GVV_NBASIS,
+                    "registered Wave type is outside the enum range");
+            require(!registered_types[wave.wave_type],
+                    "duplicate Wave enum in registry");
+            registered_types[wave.wave_type] = true;
+        }
+        require(
+            gvv_registered_wave("gvv.tensor_02_u1").wave_type
+                    == GVV_TENSOR_02_U1
+                && gvv_registered_wave("gvv.tensor_02_u2").wave_type
+                    == GVV_TENSOR_02_U2
+                && gvv_registered_wave("gvv.tensor_02_u3").wave_type
+                    == GVV_TENSOR_02_U3,
+            "LS=02 tensor Wave registration mismatch");
+
         const std::vector<std::string> resonance_ids = {
             "f0_1500", "f0_1710", "eta_1760", "eta_c_1S",
-            "X_1835", "X_2370", "NR_0mp"};
+            "X_1835", "NR_0mp", "f2_1565", "f2_1810"};
         const std::vector<int> propagators = {
             ctpwa::PROP_SUBTRACTED_FLATTE,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
-            ctpwa::PROP_TWO_BODY_RUNNING_BW,
-            ctpwa::PROP_NONRESONANT};
-        const std::vector<int> orbital_l = {0, 0, 1, 1, 1, 1, 0};
+            ctpwa::PROP_NONRESONANT,
+            ctpwa::PROP_SUBTRACTED_FLATTE,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW};
+        const std::vector<int> orbital_l = {0, 0, 1, 1, 1, 0, 0, 0};
         const std::vector<double> masses = {
-            1.522, 1.723, 1.751, 2.98409, 1.8340, 2.377, 0.0};
+            1.522, 1.723, 1.751, 2.98409, 1.8340, 0.0, 1.571, 1.815};
         const std::vector<double> widths = {
-            0.108, 0.149, 0.240, 0.0300, 0.130, 0.148, 0.0};
+            0.108, 0.149, 0.240, 0.0300, 0.130, 0.0, 0.132, 0.197};
         const std::vector<std::string> term_ids = {
             "f0_1500_00", "f0_1710_00", "eta_1760_11", "eta_c_11",
-            "X_1835_11", "X_2370_11", "NR_0mp_11"};
-        const std::vector<int> term_resonances = {0, 1, 2, 3, 4, 5, 6};
+            "X_1835_11", "NR_0mp_11",
+            "f2_1565_02_u1", "f2_1565_02_u2", "f2_1565_02_u3",
+            "f2_1810_02_u1", "f2_1810_02_u2", "f2_1810_02_u3"};
+        const std::vector<int> term_resonances = {
+            0, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 7};
         const std::vector<int> term_waves = {
             GVV_SCALAR_00, GVV_SCALAR_00,
             GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
             GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
-            GVV_PSEUDOSCALAR_11};
+            GVV_TENSOR_02_U1, GVV_TENSOR_02_U2, GVV_TENSOR_02_U3,
+            GVV_TENSOR_02_U1, GVV_TENSOR_02_U2, GVV_TENSOR_02_U3};
         const std::vector<int> coupling_policies = {
             COUPLING_COMPLEX,
             COUPLING_POSITIVE_REAL,
             COUPLING_FIXED_SCALE_AND_PHASE,
+            COUPLING_COMPLEX,
+            COUPLING_COMPLEX,
+            COUPLING_COMPLEX,
+            COUPLING_COMPLEX,
+            COUPLING_COMPLEX,
             COUPLING_COMPLEX,
             COUPLING_COMPLEX,
             COUPLING_COMPLEX,
@@ -86,12 +121,16 @@ int main(int argc, char* argv[])
                 "compiled Term count mismatch");
         require(model.initial_couplings.size() == term_ids.size(),
                 "coupling count mismatch");
-        require(model.active_wave_types.size() == 2,
+        require(model.active_wave_types.size() == 5,
                 "active Wave count mismatch");
+        require(model.find_resonance("X_2370") == -1,
+                "inactive X(2370) Resonance entered the compiled model");
         require(model.find_resonance("f0_1710") == 1,
                 "resonance lookup mismatch");
         require(model.find_term("eta_1760_11") == 2,
                 "Term lookup mismatch");
+        require(model.find_term("f2_1810_02_u3") == 11,
+                "tensor Term lookup mismatch");
 
         for (std::size_t index = 0; index < resonance_ids.size(); ++index) {
             require(model.resonance_metadata[index].id == resonance_ids[index],
@@ -147,11 +186,11 @@ int main(int argc, char* argv[])
             "ignored_for_inactive_term";
         const GVVCompiledModel reduced =
             gvv_compile_model(reduced_definition);
-        require(reduced.resonances.size() == 6,
+        require(reduced.resonances.size() == 7,
                 "inactive-only Resonance was not removed");
-        require(reduced.terms.size() == 6,
+        require(reduced.terms.size() == 11,
                 "disabled Term was not removed from runtime layout");
-        require(reduced.active_wave_types.size() == 2,
+        require(reduced.active_wave_types.size() == 5,
                 "reduced active Wave layout mismatch");
         require(reduced.find_resonance("f0_1500") == -1,
                 "inactive-only Resonance remained addressable");
@@ -163,12 +202,27 @@ int main(int argc, char* argv[])
         // Likewise, a model larger than the nominal fixture compiles without
         // source-level count changes when it uses registered physics pieces.
         ctpwa::ModelDefinition expanded_definition = model.definition;
-        ctpwa::ResonanceDefinition extra_resonance =
-            expanded_definition.resonances.back();
+        const auto nr_resonance = std::find_if(
+            expanded_definition.resonances.begin(),
+            expanded_definition.resonances.end(),
+            [](const ctpwa::ResonanceDefinition& resonance) {
+                return resonance.id == "NR_0mp";
+            });
+        require(nr_resonance != expanded_definition.resonances.end(),
+                "nonresonant fixture is missing");
+        ctpwa::ResonanceDefinition extra_resonance = *nr_resonance;
         extra_resonance.id = "NR_extra";
         extra_resonance.label = "extra nonresonant test component";
         expanded_definition.resonances.push_back(extra_resonance);
-        ctpwa::TermDefinition extra_term = expanded_definition.terms.back();
+        const auto nr_term = std::find_if(
+            expanded_definition.terms.begin(),
+            expanded_definition.terms.end(),
+            [](const ctpwa::TermDefinition& term) {
+                return term.id == "NR_0mp_11";
+            });
+        require(nr_term != expanded_definition.terms.end(),
+                "nonresonant Term fixture is missing");
+        ctpwa::TermDefinition extra_term = *nr_term;
         extra_term.id = "NR_extra_11";
         extra_term.label = "extra test Term";
         extra_term.dynamics_json =
@@ -176,11 +230,11 @@ int main(int argc, char* argv[])
         expanded_definition.terms.push_back(extra_term);
         const GVVCompiledModel expanded =
             gvv_compile_model(expanded_definition);
-        require(expanded.resonances.size() == 8,
+        require(expanded.resonances.size() == 9,
                 "expanded resonance layout mismatch");
-        require(expanded.terms.size() == 8,
+        require(expanded.terms.size() == 13,
                 "expanded Term layout mismatch");
-        require(expanded.find_term("NR_extra_11") == 7,
+        require(expanded.find_term("NR_extra_11") == 12,
                 "expanded stable Term id mismatch");
 
         ctpwa::ModelDefinition bad_parameter = model.definition;

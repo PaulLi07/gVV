@@ -67,6 +67,56 @@ int main()
         return 2;
     }
 
+    // f2(1565) uses the same analytically continued S-wave threshold
+    // prescription. Check both sides of the nominal omega-omega threshold.
+    const ctpwa::PropagatorParameters f2_1565(
+        ctpwa::PROP_SUBTRACTED_FLATTE,
+        1.571,
+        0.132,
+        0,
+        0.0,
+        1.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
+    const double omega_omega_threshold =
+        4.0 * GVV_OMEGA_MASS * GVV_OMEGA_MASS;
+    for (const double s : {
+             0.99 * omega_omega_threshold,
+             omega_omega_threshold,
+             1.01 * omega_omega_threshold}) {
+        const DeviceComplex amplitude =
+            ctpwa::evaluate_propagator(s, f2_1565);
+        if (!std::isfinite(amplitude.real)
+            || !std::isfinite(amplitude.imag)
+            || !(amplitude.rho2() > 0.0)) {
+            std::cerr << "f2(1565) threshold propagator is not finite\n";
+            return 12;
+        }
+    }
+
+    const ctpwa::PropagatorParameters f2_1810(
+        ctpwa::PROP_TWO_BODY_RUNNING_BW,
+        1.815,
+        0.197,
+        0,
+        0.0,
+        0.0,
+        GVV_OMEGA_MASS,
+        GVV_OMEGA_MASS);
+    const double f2_1810_pole_width = f2_1810.pole_width
+        * ctpwa::two_body_width_shape(
+            f2_1810.mass * f2_1810.mass,
+            f2_1810.mass,
+            f2_1810.orbital_l,
+            GVV_OMEGA_MASS,
+            GVV_OMEGA_MASS);
+    if (f2_1810.orbital_l != 0
+        || !close_relative(
+            f2_1810_pole_width, f2_1810.pole_width, 1.0e-12)) {
+        std::cerr << "f2(1810) S-wave running width is wrong\n";
+        return 13;
+    }
+
     const ctpwa::PropagatorParameters f1710(
         ctpwa::PROP_TWO_BODY_RUNNING_BW,
         1.723,

@@ -111,9 +111,24 @@ cross-Wave entries remain in the sum. It reduces the contraction cost from
 | `gvv.scalar_00` | `0++`, `L=S=0` | `process/waves/Scalar00.cuh` |
 | `gvv.scalar_22` | `0++`, `L=S=2` | `process/waves/Scalar22.cuh` |
 | `gvv.pseudoscalar_11` | `0-+`, `L=S=1` | `process/waves/Pseudoscalar11.cuh` |
+| `gvv.tensor_02_u1` | `2++`, `LS=02`, production covariant 1 | `process/waves/Tensor02U1.cuh` |
+| `gvv.tensor_02_u2` | `2++`, `LS=02`, production covariant 2 | `process/waves/Tensor02U2.cuh` |
+| `gvv.tensor_02_u3` | `2++`, `LS=02`, production covariant 3 | `process/waves/Tensor02U3.cuh` |
+| `gvv.tensor_20_u1` | `2++`, `LS=20`, production covariant 1 | `process/waves/Tensor20U1.cuh` |
+| `gvv.tensor_20_u2` | `2++`, `LS=20`, production covariant 2 | `process/waves/Tensor20U2.cuh` |
+| `gvv.tensor_20_u3` | `2++`, `LS=20`, production covariant 3 | `process/waves/Tensor20U3.cuh` |
+| `gvv.tensor_22_u1` | `2++`, `LS=22`, production covariant 1 | `process/waves/Tensor22U1.cuh` |
+| `gvv.tensor_22_u2` | `2++`, `LS=22`, production covariant 2 | `process/waves/Tensor22U2.cuh` |
+| `gvv.tensor_22_u3` | `2++`, `LS=22`, production covariant 3 | `process/waves/Tensor22U3.cuh` |
+| `gvv.tensor_42_u1` | `2++`, `LS=42`, production covariant 1 | `process/waves/Tensor42U1.cuh` |
+| `gvv.tensor_42_u2` | `2++`, `LS=42`, production covariant 2 | `process/waves/Tensor42U2.cuh` |
+| `gvv.tensor_42_u3` | `2++`, `LS=42`, production covariant 3 | `process/waves/Tensor42U3.cuh` |
 
-`gvv.scalar_22` is the existing scalar `0++(22)` basis. It is **not** a
-`2++` Wave. No `2++` basis is implemented by the current model.
+`gvv.scalar_22` remains the scalar `0++(22)` basis; it is not a spin-two
+Wave. The nominal model currently activates only the three `LS=02` tensor
+covariants, for `f2(1565)` and `f2(1810)`. The higher-orbital tensor Waves are
+registered for explicit future model tests but do not enter a Fit until selected
+by an active Term in `config/model.json`.
 
 ### Accepted-MC normalization and signed likelihood
 

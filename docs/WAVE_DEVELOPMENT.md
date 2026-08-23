@@ -4,10 +4,11 @@ This guide covers a source-level extension of the existing
 \(\psi(2S)\to\gamma\omega\omega\) process. It explains how to add one new,
 complete covariant numerator basis after its physics formula has been derived.
 
-It does **not** implement a \(2^{++}\) Wave. In particular,
-`gvv.scalar_22` and `process/waves/Scalar22.cuh` are the existing scalar
-\(0^{++}\) basis with \(L=S=2\). The `22` label describes the orbital and
-coupled-spin quantum numbers; it does not mean spin two.
+The current catalogue includes twelve \(2^{++}\) Waves: four decay couplings
+(`02`, `20`, `22`, and `42`) times three independent production covariants.
+The nominal model uses only `gvv.tensor_02_u1/u2/u3`. In contrast,
+`gvv.scalar_22` and `process/waves/Scalar22.cuh` are the scalar \(0^{++}\)
+basis with \(L=S=2\); the `22` label alone does not mean spin two.
 
 ## What a registered Wave represents
 
@@ -318,9 +319,10 @@ evaluates the complete active Wave Gram matrix. Therefore:
 - prove every claimed zero cross block numerically on several physical
   events, not only after phase-space integration.
 
-The current scalar and pseudoscalar blocks are numerically checked to be
-orthogonal. `gvv.scalar_00` and `gvv.scalar_22` share the `scalar` class and
-can interfere.
+The current positive- and negative-parity blocks are numerically checked to be
+orthogonal. `gvv.scalar_00`, `gvv.scalar_22`, and all registered `2++` Waves
+share the historical `scalar` coherence token and can interfere. The token is a
+phase-reference block name, not a statement that every Wave has spin zero.
 
 Every active coherence class must have exactly one reference Term. A new Wave
 in an existing class normally uses an ordinary `complex_cartesian` coupling.

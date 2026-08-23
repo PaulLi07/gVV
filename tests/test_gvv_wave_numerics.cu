@@ -29,6 +29,7 @@ struct WaveNumerics {
     double F[GVV_NBASIS * GVV_NBASIS];
     double rotation_error;
     double bose_error;
+    double dispatch_error;
     double omega_current_transversality;
     double projector_transversality;
     double p_wave_transversality;
@@ -258,6 +259,7 @@ __global__ void evaluate_wave_numerics(WaveNumerics* output)
     output->all_finite = 1;
     output->rotation_error = 0.0;
     output->bose_error = 0.0;
+    output->dispatch_error = 0.0;
     for (int first = 0; first < GVV_NBASIS; ++first) {
         const tensor wave = gvv_wave_tensor(event, first);
         const tensor swapped_wave = gvv_wave_tensor(swapped, first);
@@ -280,6 +282,23 @@ __global__ void evaluate_wave_numerics(WaveNumerics* output)
             output->all_finite = 0;
         }
     }
+
+    const GVVBarrierParameters barrier;
+    output->dispatch_error = fmax(
+        output->dispatch_error,
+        relative_tensor_difference(
+            gvv_wave_tensor(event, GVV_TENSOR_02_U1),
+            gvv_tensor_02_u1_tensor(event)));
+    output->dispatch_error = fmax(
+        output->dispatch_error,
+        relative_tensor_difference(
+            gvv_wave_tensor(event, GVV_TENSOR_02_U2, barrier),
+            gvv_tensor_02_u2_tensor(event, barrier)));
+    output->dispatch_error = fmax(
+        output->dispatch_error,
+        relative_tensor_difference(
+            gvv_wave_tensor(event, GVV_TENSOR_02_U3, barrier),
+            gvv_tensor_02_u3_tensor(event, barrier)));
 
     const double current1_scale = fmax(
         1.0,
@@ -348,6 +367,8 @@ int main()
                 "Wave Gram matrix is not invariant under a z rotation");
         require(values->bose_error < tolerance,
                 "complete Wave tensor violates omega Bose symmetry");
+        require(values->dispatch_error < tolerance,
+                "LS=02 registry dispatch differs from its Wave implementation");
         require(values->omega_current_transversality < tolerance,
                 "omega geometric current is not transverse");
         require(values->projector_transversality < tolerance,
@@ -401,11 +422,22 @@ int main()
                     "Wave Gram matrix has a negative second-order principal minor");
             }
         }
-        const double* F = values->F;
+        const auto matrix = [&](int row, int column) {
+            return values->F[row * GVV_NBASIS + column];
+        };
+        const int first = GVV_SCALAR_00;
+        const int second = GVV_SCALAR_22;
+        const int third = GVV_PSEUDOSCALAR_11;
         const double determinant =
-            F[0] * (F[4] * F[8] - F[5] * F[7])
-            - F[1] * (F[3] * F[8] - F[5] * F[6])
-            + F[2] * (F[3] * F[7] - F[4] * F[6]);
+            matrix(first, first)
+                * (matrix(second, second) * matrix(third, third)
+                   - matrix(second, third) * matrix(third, second))
+            - matrix(first, second)
+                * (matrix(second, first) * matrix(third, third)
+                   - matrix(second, third) * matrix(third, first))
+            + matrix(first, third)
+                * (matrix(second, first) * matrix(third, second)
+                   - matrix(second, second) * matrix(third, first));
         require(
             determinant >=
                 -tolerance * matrix_scale * matrix_scale * matrix_scale,
@@ -418,6 +450,14 @@ int main()
                     scalar * GVV_NBASIS + GVV_PSEUDOSCALAR_11])
                     <= tolerance * matrix_scale,
                 "scalar and pseudoscalar coherence classes are not orthogonal");
+        }
+        for (int tensor_wave = GVV_TENSOR_02_U1;
+             tensor_wave <= GVV_TENSOR_42_U3;
+             ++tensor_wave) {
+            require(
+                std::fabs(matrix(tensor_wave, GVV_PSEUDOSCALAR_11))
+                    <= tolerance * matrix_scale,
+                "tensor and pseudoscalar coherence classes are not orthogonal");
         }
 
         check_cuda(cudaFree(values), "free Wave numerical output");

@@ -41,8 +41,8 @@ int main(int argc, char* argv[])
         require(
             model.process == "psi2s_to_gamma_omega_omega",
             "process id mismatch");
-        require(model.resonances.size() == 7, "nominal resonance count mismatch");
-        require(model.terms.size() == 7, "nominal term count mismatch");
+        require(model.resonances.size() == 9, "nominal resonance count mismatch");
+        require(model.terms.size() == 13, "nominal term count mismatch");
         require(
             model.resonance("f0_1710").propagator
                 == "two_body_running_bw",
@@ -55,6 +55,25 @@ int main(int argc, char* argv[])
             model.term("eta_1760_11").coupling.reference
                 == ctpwa::CouplingReference::ScaleAndPhase,
             "global reference coupling mismatch");
+        require(
+            model.resonance("f2_1565").propagator
+                == "subtracted_effective_flatte",
+            "f2(1565) propagator mismatch");
+        require(
+            model.resonance("f2_1810").propagator
+                == "two_body_running_bw",
+            "f2(1810) propagator mismatch");
+        require(
+            model.term("f2_1565_02_u1").wave == "gvv.tensor_02_u1"
+                && model.term("f2_1565_02_u2").wave == "gvv.tensor_02_u2"
+                && model.term("f2_1565_02_u3").wave == "gvv.tensor_02_u3",
+            "f2(1565) LS=02 wave assignment mismatch");
+        require(
+            model.term("f2_1810_02_u1").wave == "gvv.tensor_02_u1"
+                && model.term("f2_1810_02_u2").wave == "gvv.tensor_02_u2"
+                && model.term("f2_1810_02_u3").wave == "gvv.tensor_02_u3",
+            "f2(1810) LS=02 wave assignment mismatch");
+        require(!model.term("X_2370_11").active, "inactive term mismatch");
         require(!model.canonical_json.empty(), "canonical JSON is empty");
 
         require_invalid(

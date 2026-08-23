@@ -2,11 +2,17 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Registered the twelve normalized `2++` complete Waves spanning
+  `LS=02,20,22,42` and production covariants `U1,U2,U3`. The nominal model now
+  activates only the `LS=02` triplet for `f2(1565)` and `f2(1810)`, with one
+  shared Resonance propagator and three independent complex couplings per state.
+  Added model-layout, parameter-sharing, threshold-propagator, registry-dispatch,
+  and complete-Wave numerical regressions for the extension.
 - Completed the process-neutral high-spin tensor toolkit with named Lorentz
   contractions, direct spin-two projection, a reduced bare G-wave
   contraction, consecutive Blatt-Weisskopf factors through `L=4`, focused
   CUDA/host regressions, and an explicit Condon-Shortley/Racah normalization
-  contract; no `2++` Wave or model Term was registered.
+  contract consumed by the complete spin-two Waves.
 - Unified all ordinary Breit-Wigner denominators behind one reusable
   `BW_from_width` function, moved uniform table interpolation into the generic
   dynamics library, and made the event current and omega-width integration
@@ -80,8 +86,9 @@
   the only run/output configuration.
 - Added a process-neutral multistart fit engine, strict configuration loader,
   output writer, propagator/tensor libraries, and likelihood arithmetic.
-- Split the three existing complete GVV waves into independently registered
-  files under `process/waves/`; no new `2++` wave was introduced.
+- Split the original three complete GVV Waves into independently registered
+  files under `process/waves/`, then extended the same one-file-per-Wave pattern
+  to the twelve spin-two numerators.
 - Removed legacy fit-result reading compatibility and configuration snapshots.
 - Replaced the old submission script set with dedicated root-level Fit and
   Post Calculation submission entry points.

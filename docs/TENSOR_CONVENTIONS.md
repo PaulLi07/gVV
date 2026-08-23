@@ -216,7 +216,7 @@ S_{00}^{\rm norm}=\frac{\Omega_1\mathbin{\cdot}\Omega_2}{\sqrt3}
 \qquad \text{for the project }(+---)\text{ metric}.
 \]
 
-For the four planned $X(2^{++})\to\omega\omega$ decay tensors, the
+For the four implemented $X(2^{++})\to\omega\omega$ decay tensors, the
 normalization is factored as follows. The last column is the total coefficient
 that would multiply a formula written directly with the framework bare STF
 objects.
@@ -234,9 +234,9 @@ multiplication would introduce the wrong sign. These constants normalize the
 $X\to VV$ $LS$ tensors only. They do not normalize the independent
 \(\psi\to\gamma X\) production covariants.
 
-When the spin-two Waves are implemented, their process helper should keep the
-orbital, spin, and coupling factors visibly separate rather than hiding the
-last-column number in a generic framework projector.
+The standalone spin-two Wave files keep the orbital, spin, and coupling factors
+visibly separate rather than hiding the last-column number in a generic
+framework projector.
 
 ## 6. Verification contract
 
@@ -255,7 +255,8 @@ polynomials and their normalization. The tensor regression is a CUDA runtime
 test and is therefore executed only through the project's GPU-test Slurm
 workflow, never directly on a login node.
 
-The complete spherical-basis normalized-CG regression is intentionally
-deferred until the process-level spin-two decay helper actually applies these
-coefficients. The process-neutral test must not duplicate constants that no
-framework production API consumes.
+`tests/test_gvv_wave_numerics.cu` evaluates every registered complete Wave,
+checks finite nonzero Gram-matrix diagonals, Bose symmetry, rotation invariance,
+and direct-versus-registry agreement for the active `LS=02` tensor Waves. The
+process-neutral tensor test continues to validate the reusable contractions
+without duplicating process-owned normalized-CG constants.

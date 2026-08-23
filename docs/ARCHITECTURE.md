@@ -341,9 +341,23 @@ registered basis. The current catalogue is:
 | `gvv.scalar_00` | `0++(00)` | `process/waves/Scalar00.cuh` |
 | `gvv.scalar_22` | `0++(22)` | `process/waves/Scalar22.cuh` |
 | `gvv.pseudoscalar_11` | `0-+(11)` | `process/waves/Pseudoscalar11.cuh` |
+| `gvv.tensor_02_u1` | `2++`, `LS=02`, `U1` | `process/waves/Tensor02U1.cuh` |
+| `gvv.tensor_02_u2` | `2++`, `LS=02`, `U2` | `process/waves/Tensor02U2.cuh` |
+| `gvv.tensor_02_u3` | `2++`, `LS=02`, `U3` | `process/waves/Tensor02U3.cuh` |
+| `gvv.tensor_20_u1` | `2++`, `LS=20`, `U1` | `process/waves/Tensor20U1.cuh` |
+| `gvv.tensor_20_u2` | `2++`, `LS=20`, `U2` | `process/waves/Tensor20U2.cuh` |
+| `gvv.tensor_20_u3` | `2++`, `LS=20`, `U3` | `process/waves/Tensor20U3.cuh` |
+| `gvv.tensor_22_u1` | `2++`, `LS=22`, `U1` | `process/waves/Tensor22U1.cuh` |
+| `gvv.tensor_22_u2` | `2++`, `LS=22`, `U2` | `process/waves/Tensor22U2.cuh` |
+| `gvv.tensor_22_u3` | `2++`, `LS=22`, `U3` | `process/waves/Tensor22U3.cuh` |
+| `gvv.tensor_42_u1` | `2++`, `LS=42`, `U1` | `process/waves/Tensor42U1.cuh` |
+| `gvv.tensor_42_u2` | `2++`, `LS=42`, `U2` | `process/waves/Tensor42U2.cuh` |
+| `gvv.tensor_42_u3` | `2++`, `LS=42`, `U3` | `process/waves/Tensor42U3.cuh` |
 
 `Scalar22` is the scalar basis with orbital/spin labels `(22)`; it is not a
-spin-two `2++` Wave.
+spin-two `2++` Wave. The nominal model selects only `tensor_02_u1/u2/u3` for
+`f2(1565)` and `f2(1810)`. Registration of the remaining tensor Waves does not
+allocate Fit matrices unless an active Term selects them.
 
 The Wave contains production and decay angular tensors and the required
 barrier factors. It does **not** contain the Resonance propagator or coupling.

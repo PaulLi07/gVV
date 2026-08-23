@@ -28,14 +28,30 @@ __global__ void compile_gvv_amplitude_path(double* output)
         }
     }
 
-    TermSpec terms[GVV_NBASIS] = {
+    // The two tensor Resonances reuse the same three Wave slots. Keeping both
+    // sets here exercises the duplicate-Wave Term contraction used before the
+    // Fit hot path aggregates coefficients by Wave.
+    constexpr int number_terms = 9;
+    TermSpec terms[number_terms] = {
         {0, GVV_SCALAR_00, GVV_SCALAR_00},
         {1, GVV_SCALAR_22, GVV_SCALAR_22},
-        {2, GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11}};
-    DeviceComplex coefficients[GVV_NBASIS] = {
+        {2, GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11},
+        {6, GVV_TENSOR_02_U1, GVV_TENSOR_02_U1},
+        {6, GVV_TENSOR_02_U2, GVV_TENSOR_02_U2},
+        {6, GVV_TENSOR_02_U3, GVV_TENSOR_02_U3},
+        {7, GVV_TENSOR_02_U1, GVV_TENSOR_02_U1},
+        {7, GVV_TENSOR_02_U2, GVV_TENSOR_02_U2},
+        {7, GVV_TENSOR_02_U3, GVV_TENSOR_02_U3}};
+    DeviceComplex coefficients[number_terms] = {
         DeviceComplex(1.0, 0.0),
         DeviceComplex(0.5, 0.2),
-        DeviceComplex(0.3, -0.1)};
+        DeviceComplex(0.3, -0.1),
+        DeviceComplex(0.2, 0.1),
+        DeviceComplex(-0.1, 0.3),
+        DeviceComplex(0.4, -0.2),
+        DeviceComplex(0.15, -0.05),
+        DeviceComplex(0.25, 0.10),
+        DeviceComplex(-0.20, 0.15)};
 
     output[0] = wave_matrix[
         GVV_SCALAR_00 * GVV_NBASIS + GVV_SCALAR_00];
@@ -47,7 +63,7 @@ __global__ void compile_gvv_amplitude_path(double* output)
         terms,
         coefficients,
         wave_matrix,
-        GVV_NBASIS,
+        number_terms,
         GVV_NBASIS);
 }
 
