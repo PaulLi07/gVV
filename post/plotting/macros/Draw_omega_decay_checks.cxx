@@ -16,9 +16,10 @@ namespace omega_decay_checks {
 // User configuration
 // ============================================================================
 // Each distribution combines the omega1 and omega2 candidates with half
-// weight per candidate. No additional cosine reflection is applied because
-// each pion angle is already defined in its parent omega helicity frame.
-// Relative paths are interpreted from the project root.
+// weight per candidate. A pion polar angle is measured in the corresponding
+// omega_i helicity frame: z_i follows omega_i in the X rest frame. No
+// additional cosine reflection is applied. Relative paths are interpreted
+// from the project root.
 //
 // Run with defaults:
 //   root post/plotting/macros/Draw_omega_decay_checks.cxx
@@ -33,11 +34,11 @@ constexpr const char* kDefaultOutput =
 // Check observables, binning, ranges, and x-axis titles.
 const std::vector<gvvplot::VariableSpec> kVariables = {
     {gvvplot::kCosThetaPipOmega, 40, -1.0, 1.0,
-     "cos#theta_{#pi^{+}}^{#omega}", false},
+     "cos#theta_{#pi^{+}}^{(#omega hel.)}", false},
     {gvvplot::kCosThetaPimOmega, 40, -1.0, 1.0,
-     "cos#theta_{#pi^{-}}^{#omega}", false},
+     "cos#theta_{#pi^{-}}^{(#omega hel.)}", false},
     {gvvplot::kCosThetaPi0Omega, 40, -1.0, 1.0,
-     "cos#theta_{#pi^{0}}^{#omega}", false},
+     "cos#theta_{#pi^{0}}^{(#omega hel.)}", false},
     {gvvplot::kMassPipPimOmega, 45, 0.25, 0.70,
      "M(#pi^{+}#pi^{-}) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kMassPipPi0Omega, 45, 0.25, 0.70,
@@ -60,15 +61,16 @@ constexpr double kDataMarkerSize = 0.55;
 constexpr int kDataColor = kBlack;
 constexpr int kDataLineWidth = 1;
 constexpr int kBackgroundFillStyle = 3004;
-constexpr int kBackgroundColor = kBlue;
+constexpr int kBackgroundColor = kGray + 1;
 constexpr int kTotalColor = kBlue + 1;
 constexpr int kTotalLineWidth = 2;
 constexpr int kGroupLineWidth = 2;
-const int kGroupLineStyles[] = {2, 7, 9, 3, 5};
+constexpr int kGroupLineStyle = 2;
 const int kGroupLineColors[] = {
-    kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7, kCyan + 2};
+    kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7,
+    kCyan + 2, kViolet + 1, kTeal + 3, kPink + 7};
 constexpr std::size_t kGroupStyleCount =
-    sizeof(kGroupLineStyles) / sizeof(kGroupLineStyles[0]);
+    sizeof(kGroupLineColors) / sizeof(kGroupLineColors[0]);
 
 // Axes and automatic vertical range.
 constexpr int kAxisDivisions = 505;
@@ -79,6 +81,9 @@ constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
 constexpr double kPositiveRangeScale = 1.45;
+// The shared legend is drawn in the first panel. Its larger headroom keeps
+// the legend clear of the distributions without compressing the other five.
+constexpr double kLegendPanelPositiveRangeScale = 1.95;
 
 // Per-panel chi-square annotation.
 constexpr int kAnnotationFont = 22;
@@ -110,7 +115,7 @@ constexpr const char* kTotalLegendLabel = "Total fit";
 constexpr const char* kDataLegendOption = "lep";
 constexpr const char* kBackgroundLegendOption = "f";
 constexpr const char* kLineLegendOption = "l";
-constexpr const char* kGroupLegendPrefix = "coherent ";
+constexpr const char* kGroupLegendSuffix = " coherence class";
 
 // ============================================================================
 // Implementation below. Normal figure changes should only require the block
@@ -119,7 +124,8 @@ constexpr const char* kGroupLegendPrefix = "coherent ";
 
 void FormatPanel(
     gvvplot::PanelHistograms& panel,
-    const gvvplot::VariableSpec& variable)
+    const gvvplot::VariableSpec& variable,
+    std::size_t panel_index)
 {
     panel.background->SetFillStyle(kBackgroundFillStyle);
     panel.background->SetFillColor(kBackgroundColor);
@@ -129,8 +135,7 @@ void FormatPanel(
     for (std::size_t group = 0; group < panel.groups.size(); ++group) {
         panel.groups[group]->SetLineColor(
             kGroupLineColors[group % kGroupStyleCount]);
-        panel.groups[group]->SetLineStyle(
-            kGroupLineStyles[group % kGroupStyleCount]);
+        panel.groups[group]->SetLineStyle(kGroupLineStyle);
         panel.groups[group]->SetLineWidth(kGroupLineWidth);
     }
 
@@ -150,12 +155,17 @@ void FormatPanel(
     panel.data->SetLineColor(kDataColor);
     panel.data->SetLineWidth(kDataLineWidth);
 
-    const double maximum =
-        std::max(panel.data->GetMaximum(), panel.total->GetMaximum());
-    const double minimum = std::min(0.0, panel.total->GetMinimum());
+    std::vector<const TH1D*> curves = {panel.background, panel.total};
+    curves.insert(curves.end(), panel.groups.begin(), panel.groups.end());
+    const gvvplot::VerticalRange range =
+        gvvplot::FindVerticalRange(panel.data, curves);
+    const double positive_scale =
+        panel_index + 1 == static_cast<std::size_t>(kLegendPad)
+            ? kLegendPanelPositiveRangeScale
+            : kPositiveRangeScale;
     panel.data->GetYaxis()->SetRangeUser(
-        minimum < 0.0 ? kNegativeRangeScale * minimum : 0.0,
-        maximum > 0.0 ? kPositiveRangeScale * maximum : 1.0);
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
+        range.maximum > 0.0 ? positive_scale * range.maximum : 1.0);
 }
 
 void DrawPanel(
@@ -163,7 +173,7 @@ void DrawPanel(
     const gvvplot::VariableSpec& variable,
     std::size_t panel_index)
 {
-    FormatPanel(panel, variable);
+    FormatPanel(panel, variable, panel_index);
     panel.data->Draw(kDataDrawOption);
     panel.background->Draw(kBackgroundDrawOption);
     for (TH1D* group : panel.groups) group->Draw(kGroupDrawOption);
@@ -249,8 +259,8 @@ void Draw_omega_decay_checks(
         omega_decay_checks::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            omega_decay_checks::kGroupLegendPrefix
-            + input.groups[group].label;
+            input.groups[group].label
+            + omega_decay_checks::kGroupLegendSuffix;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),
@@ -258,6 +268,7 @@ void Draw_omega_decay_checks(
     }
     legend->Draw();
 
+    gvvplot::EnsureOutputDirectory(output_path);
     canvas->Print((output_path + ".pdf").c_str());
     canvas->Print((output_path + ".eps").c_str());
 }

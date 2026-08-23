@@ -535,3 +535,46 @@ on the fixed `lxlogin005` node:
   `positive_parity`/`negative_parity` definitions were unchanged.
 
 No Fit, numerical Post Calculation, GPU runtime test, or Slurm job was run.
+
+## Unified plotting presentation (2026-08-24)
+
+- Standardized the visual roles used by all supported figures: black data,
+  gray hatched Background, the unchanged reserved solid-blue Total fit, and a
+  common dashed line style for every coherence class.
+- Replaced order-dependent Term-component appearance with deterministic,
+  distinct color/line-style combinations derived from the component metadata.
+  The component figure keeps six `3 x 2` physics panels and places its dynamic
+  legend in a full-width strip; spline smoothing remains excluded for diagonal
+  `|A_i|^2` histograms.
+- Rebuilt the polarization figure as three horizontal panels with one shared
+  legend, increased the legend-bearing omega-decay panel headroom, and made
+  frame, candidate-combination, and oriented decay-plane-normal labels
+  explicit.
+- Made vertical ranges cover data errors, signed Background, Total fit, and
+  every group or component curve drawn. Angular moments now identify
+  `Data - signed background` and fitted signal MC, use unnormalized binwise
+  Legendre-sum labels with computed mass-bin widths, and include gray zero
+  references for signed nonzero moments.
+- Let `post/plotting/draw.sh` accept zero arguments for
+  `results/projection-initial.root` or one Projection override, and added
+  `post/plotting/PLOTTING_STYLE.md` as the English presentation and review
+  contract.
+
+This is a presentation and plotting-interface update. It does not change Fit,
+Projection weights, histogram filling, the likelihood, or Post Calculation,
+and it requires no GPU or Slurm job.
+
+Verification was performed on the fixed `lxlogin005` node with ROOT 6.32.02:
+
+- `git diff --check`, `bash -n post/plotting/draw.sh`, and C++14 syntax checks
+  with warnings enabled passed for all six ROOT macros;
+- the zero-argument `draw.sh` entry point completed with status zero on the
+  existing `results/projection-initial.root` and regenerated all six PDF/EPS
+  pairs without changing the printed projection chi-square diagnostics;
+- all six PDFs were rendered through their CropBox and inspected at normal
+  reading size; the odd-moment legend was moved to a shared top strip after
+  the first rendering exposed an overlap, and the second rendering was clear;
+- the obsolete `projection_detailed-initial.pdf/.eps` files were removed after
+  confirming that no supported macro or driver produces them.
+
+No Fit, Post Calculation, GPU executable, or Slurm job was run.

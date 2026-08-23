@@ -788,6 +788,8 @@ The common plotting utilities:
   histograms;
 - use exchange-symmetric filling for observables with interchangeable omegas;
 - calculate simple binned diagnostic chi-square values;
+- find a complete vertical envelope from data errors and every histogram that
+  a panel will draw;
 - provide the common base ROOT style and project-root path helper.
 
 Each `.cxx` macro is the complete presentation module for one figure. It owns
@@ -798,10 +800,26 @@ Legendre arithmetic, histogram filling, and the moment chi-square calculation.
 The odd macro keeps the ordered-omega diagnostic separate because it is not a
 label-independent observable of two identical omegas.
 
+The standard presentation contract is explicit rather than implicit in ROOT
+defaults. Data use black markers, Background is a gray hatched histogram, the
+original solid-blue Total-fit style is reserved, every coherence class uses
+the same dashed line style with a distinct color, and diagonal Term styles are
+deterministic and distinct under model reordering. The polarization figure is
+three horizontal panels with a shared legend; the component figure keeps six
+`3 x 2` physics panels and gives their dynamic legend a full-width strip.
+Angular-moment panels identify `Data - signed background` and fitted signal MC,
+show unnormalized binwise Legendre sums with computed mass-bin widths, and draw
+a gray zero reference for signed nonzero moments. Frame and candidate labels
+state the X or omega helicity convention instead of relying on ambiguous short
+names.
+
 `post/plotting/draw.sh` runs the six ROOT macros and writes PDF/EPS files under
-`post/plotting/results/`. The same macros can be executed directly with ROOT;
-their no-argument defaults and runtime relative arguments are resolved from the
-project root located from the macro source.
+`post/plotting/results/`. It accepts no argument for the default
+`results/projection-initial.root` or one argument to override that input. The
+same macros can be executed directly with ROOT; their no-argument defaults and
+runtime relative arguments are resolved from the project root located from the
+macro source. The full visual and naming contract is recorded in
+[`post/plotting/PLOTTING_STYLE.md`](../post/plotting/PLOTTING_STYLE.md).
 Plotting needs no GPU and submits no Slurm job.
 
 ## 8. Extension boundaries

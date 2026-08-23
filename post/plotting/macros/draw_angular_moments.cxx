@@ -2,6 +2,8 @@
 
 #include "TCanvas.h"
 #include "TLatex.h"
+#include "TLegend.h"
+#include "TLine.h"
 
 #include <algorithm>
 #include <string>
@@ -46,10 +48,13 @@ constexpr double kPadGap = 0.002;
 constexpr const char* kXAxisTitle =
     "M(#omega#omega) (GeV/#font[12]{c}^{2})";
 constexpr const char* kYAxisTitleFormat =
-    "#LT P_{%d}(cos#theta_{#omega}) #GT / 50 MeV";
+    "#sum P_{%d}(cos#theta_{#omega}^{(X hel.)}) / "
+    "(%.1f MeV/#font[12]{c}^{2})";
+constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.35;
 constexpr double kPositiveRangeScale = 1.35;
+constexpr double kLegendPanelPositiveRangeScale = 1.55;
 
 // Data and fitted-model appearance.
 constexpr int kDataMarkerStyle = 8;
@@ -58,6 +63,23 @@ constexpr int kDataColor = kBlack;
 constexpr int kDataLineWidth = 1;
 constexpr int kModelColor = kBlue + 1;
 constexpr int kModelLineWidth = 2;
+
+// A single legend in the first panel applies to all moment orders.
+constexpr double kLegendX1 = 0.49;
+constexpr double kLegendY1 = 0.74;
+constexpr double kLegendX2 = 0.93;
+constexpr double kLegendY2 = 0.89;
+constexpr int kLegendFont = 22;
+constexpr double kLegendTextSize = 0.043;
+constexpr int kLegendBorderSize = 0;
+constexpr int kLegendFillStyle = 0;
+constexpr const char* kDataLegendLabel = "Data - signed background";
+constexpr const char* kModelLegendLabel = "Fitted signal MC";
+
+// Zero reference for nonzero Legendre moments.
+constexpr int kZeroLineColor = kGray + 1;
+constexpr int kZeroLineStyle = 3;
+constexpr int kZeroLineWidth = 1;
 
 // Per-panel chi-square annotation.
 constexpr int kAnnotationFont = 22;
@@ -77,7 +99,10 @@ constexpr const char* kDataRedrawOption = "E1 SAME";
 // above.
 // ============================================================================
 
-void FormatPanel(gvvplot::MomentHistograms& histograms, int order)
+void FormatPanel(
+    gvvplot::MomentHistograms& histograms,
+    int order,
+    std::size_t panel_index)
 {
     histograms.data->SetMarkerStyle(kDataMarkerStyle);
     histograms.data->SetMarkerSize(kDataMarkerSize);
@@ -86,25 +111,39 @@ void FormatPanel(gvvplot::MomentHistograms& histograms, int order)
     histograms.model->SetLineColor(kModelColor);
     histograms.model->SetLineWidth(kModelLineWidth);
     histograms.data->GetXaxis()->SetTitle(kXAxisTitle);
+    const double mass_bin_width_mev =
+        kGeVToMeV * (kMassUpper - kMassLower) / kMassBins;
     histograms.data->GetYaxis()->SetTitle(
-        Form(kYAxisTitleFormat, order));
+        Form(kYAxisTitleFormat, order, mass_bin_width_mev));
     histograms.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     histograms.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
 
-    const double maximum = std::max(
-        histograms.data->GetMaximum(), histograms.model->GetMaximum());
-    const double minimum = std::min(
-        histograms.data->GetMinimum(), histograms.model->GetMinimum());
+    const std::vector<const TH1D*> curves = {histograms.model};
+    const gvvplot::VerticalRange range =
+        gvvplot::FindVerticalRange(histograms.data, curves);
+    const double positive_scale =
+        panel_index == 0 ? kLegendPanelPositiveRangeScale
+                         : kPositiveRangeScale;
     histograms.data->GetYaxis()->SetRangeUser(
-        minimum < 0.0 ? kNegativeRangeScale * minimum : 0.0,
-        maximum > 0.0 ? kPositiveRangeScale * maximum : 1.0);
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
+        range.maximum > 0.0 ? positive_scale * range.maximum : 1.0);
 }
 
-void DrawPanel(gvvplot::MomentHistograms& histograms, int order)
+void DrawPanel(
+    gvvplot::MomentHistograms& histograms,
+    int order,
+    std::size_t panel_index)
 {
-    FormatPanel(histograms, order);
+    FormatPanel(histograms, order, panel_index);
     histograms.data->Draw(kDataDrawOption);
     histograms.model->Draw(kModelDrawOption);
+    if (order != 0) {
+        TLine* zero = new TLine(kMassLower, 0.0, kMassUpper, 0.0);
+        zero->SetLineColor(kZeroLineColor);
+        zero->SetLineStyle(kZeroLineStyle);
+        zero->SetLineWidth(kZeroLineWidth);
+        zero->Draw("SAME");
+    }
     histograms.data->Draw(kDataRedrawOption);
 
     const std::pair<double, int> chi_square =
@@ -160,9 +199,31 @@ void draw_angular_moments(
                 even_moments::kMassLower,
                 even_moments::kMassUpper,
                 "gvv_even_moment");
-        even_moments::DrawPanel(histograms, order);
+        even_moments::DrawPanel(histograms, order, panel);
+
+        if (panel == 0) {
+            TLegend* legend = new TLegend(
+                even_moments::kLegendX1,
+                even_moments::kLegendY1,
+                even_moments::kLegendX2,
+                even_moments::kLegendY2);
+            legend->SetBorderSize(even_moments::kLegendBorderSize);
+            legend->SetFillStyle(even_moments::kLegendFillStyle);
+            legend->SetTextFont(even_moments::kLegendFont);
+            legend->SetTextSize(even_moments::kLegendTextSize);
+            legend->AddEntry(
+                histograms.data,
+                even_moments::kDataLegendLabel,
+                "lep");
+            legend->AddEntry(
+                histograms.model,
+                even_moments::kModelLegendLabel,
+                "l");
+            legend->Draw();
+        }
     }
 
+    gvvplot::EnsureOutputDirectory(output_path);
     canvas->Print((output_path + ".pdf").c_str());
     canvas->Print((output_path + ".eps").c_str());
 }

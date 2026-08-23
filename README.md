@@ -480,14 +480,26 @@ uncertainties.
 Plotting is a ROOT task driven only by the projection file:
 
 ```bash
-post/plotting/draw.sh results/projection-initial.root
+post/plotting/draw.sh
+post/plotting/draw.sh results/projection-<tag>.root
 ```
 
+With no argument, the driver reads `results/projection-initial.root`; one
+argument overrides that input. The script rejects additional arguments.
 The script writes the main and component projections, a dedicated polarization
 figure, omega-decay check distributions, and even/odd angular-moment figures
 under `post/plotting/results/`. It discovers active Terms, JPC groups, and
 background samples from the projection maps instead of using a fixed Resonance
 list.
+
+All standard plots follow one visual contract: data are black points,
+Background is a gray hatched histogram, the original solid blue Total-fit
+style is reserved, all coherence classes use the same dashed line style with
+distinct colors, and Term components receive deterministic distinct styles
+from their Projection metadata. Automatic vertical ranges include data errors
+and every drawn curve. See the
+[plotting style guide](post/plotting/PLOTTING_STYLE.md) for the frame,
+candidate-combination, layout, labeling, and review conventions.
 
 Each ROOT macro is also a standalone plotting module. After loading the
 environment, it can be executed directly with its default `initial` input and
@@ -601,4 +613,5 @@ process-detail callback, and fitted-state machinery remain reusable.
 | [Wave development](docs/WAVE_DEVELOPMENT.md) | Building, registering, and validating a new complete Wave |
 | [Tensor conventions](docs/TENSOR_CONVENTIONS.md) | Lorentz indices, spin projectors, bare orbital tensors, barriers, and normalized-CG boundary |
 | [Post README](post/README.md) | Focused Post Calculation and Post Plotting contract |
+| [Plotting style](post/plotting/PLOTTING_STYLE.md) | Unified curve roles, layouts, axis/frame naming, automatic ranges, and plot-review checklist |
 | [Refactor log](docs/REFACTOR_LOG.md) | Historical implementation and verification record |

@@ -57,6 +57,15 @@
   legends, and annotations; relative runtime paths resolve from the project
   root, shared headers retain only common services, and `draw.sh` remains the
   one-command driver.
+- Unified the supported plot presentation without changing projection
+  contents: gray hatched Background, reserved original Total-fit style,
+  uniformly dashed coherence classes, deterministic distinct metadata-based
+  Term styles, complete vertical envelopes, accurate frame/candidate labels,
+  three horizontal polarization panels, and a full-width component legend.
+  Angular moments now identify their inputs, show unnormalized binwise sums
+  with computed mass-bin widths, and include zero references where signed.
+  Added `post/plotting/PLOTTING_STYLE.md`; `draw.sh` now accepts either no
+  argument for `results/projection-initial.root` or one input override.
 - Reworked the documentation into a user-facing installation/physics README,
   a complete architecture guide, separate Fit/Post workflow manual, per-file
   code reference, and detailed Resonance/Term and Wave extension guides.

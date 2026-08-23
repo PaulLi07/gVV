@@ -313,8 +313,13 @@ inline void FillObservable(
 
 struct ComponentInfo {
     int index = -1;
+    int resonance_index = -1;
+    int wave_type = -1;
     std::string name;
     std::string label;
+    std::string resonance_id;
+    std::string wave_id;
+    std::string wave_label;
     std::string jpc;
 };
 
@@ -326,6 +331,17 @@ struct GroupInfo {
 
 inline std::string RootLabel(std::string label)
 {
+    // ROOT TLatex uses #font[42]{...} for upright roman text. Translate the
+    // one LaTeX command used by model labels before handling particle names
+    // such as \eta through ROOT's ordinary backslash-to-hash convention.
+    const std::string latex_roman = "\\mathrm{";
+    const std::string root_roman = "#font[42]{";
+    std::size_t position = 0;
+    while ((position = label.find(latex_roman, position))
+           != std::string::npos) {
+        label.replace(position, latex_roman.size(), root_roman);
+        position += root_roman.size();
+    }
     std::replace(label.begin(), label.end(), '\\', '#');
     std::replace(label.begin(), label.end(), '~', ' ');
     return label;
@@ -339,16 +355,31 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
         throw std::runtime_error("projection file has no component_map tree");
     }
     RequireBranch(tree, "component_index");
+    RequireBranch(tree, "resonance_index");
+    RequireBranch(tree, "wave_type");
     RequireBranch(tree, "name");
     RequireBranch(tree, "label");
+    RequireBranch(tree, "resonance_id");
+    RequireBranch(tree, "wave_id");
+    RequireBranch(tree, "wave_label");
     RequireBranch(tree, "jpc");
     int component_index = -1;
+    int resonance_index = -1;
+    int wave_type = -1;
     char name[64] = {0};
     char label[128] = {0};
+    char resonance_id[64] = {0};
+    char wave_id[64] = {0};
+    char wave_label[128] = {0};
     char jpc[16] = {0};
     tree->SetBranchAddress("component_index", &component_index);
+    tree->SetBranchAddress("resonance_index", &resonance_index);
+    tree->SetBranchAddress("wave_type", &wave_type);
     tree->SetBranchAddress("name", name);
     tree->SetBranchAddress("label", label);
+    tree->SetBranchAddress("resonance_id", resonance_id);
+    tree->SetBranchAddress("wave_id", wave_id);
+    tree->SetBranchAddress("wave_label", wave_label);
     tree->SetBranchAddress("jpc", jpc);
     std::vector<ComponentInfo> result;
     for (Long64_t row = 0; row < tree->GetEntries(); ++row) {
@@ -357,7 +388,16 @@ inline std::vector<ComponentInfo> ReadComponentMap(TFile& input)
             throw std::runtime_error(
                 "invalid component index in component_map");
         }
-        result.push_back({component_index, name, label, jpc});
+        result.push_back({
+            component_index,
+            resonance_index,
+            wave_type,
+            name,
+            label,
+            resonance_id,
+            wave_id,
+            wave_label,
+            jpc});
     }
     std::sort(
         result.begin(), result.end(),
@@ -490,6 +530,60 @@ struct PanelHistograms {
     std::vector<TH1D*> groups;
     std::vector<TH1D*> components;
 };
+
+// Raw vertical extent of a plot before macro-specific visual headroom is
+// applied. Zero is included so ordinary event projections keep their baseline.
+struct VerticalRange {
+    double minimum = 0.0;
+    double maximum = 0.0;
+};
+
+// Find the complete visible range of the objects that a panel will draw.
+// Data errors are included; model/background curves contribute their bin
+// contents because their statistical uncertainties are not drawn.
+inline VerticalRange FindVerticalRange(
+    const TH1D* data,
+    const std::vector<const TH1D*>& curves)
+{
+    VerticalRange range;
+    const auto include_value = [&range](double value) {
+        if (!std::isfinite(value)) return;
+        range.minimum = std::min(range.minimum, value);
+        range.maximum = std::max(range.maximum, value);
+    };
+
+    for (int bin = 1; bin <= data->GetNbinsX(); ++bin) {
+        const double value = data->GetBinContent(bin);
+        const double error = data->GetBinError(bin);
+        include_value(value);
+        if (std::isfinite(error)) {
+            include_value(value - error);
+            include_value(value + error);
+        }
+    }
+    for (const TH1D* curve : curves) {
+        if (curve == nullptr) continue;
+        for (int bin = 1; bin <= curve->GetNbinsX(); ++bin) {
+            include_value(curve->GetBinContent(bin));
+        }
+    }
+    return range;
+}
+
+// ROOT does not create parent directories when a canvas is printed. Keep
+// direct `root macro.cxx` execution convenient without moving output policy
+// into the shared plotting layer.
+inline void EnsureOutputDirectory(const std::string& output_prefix)
+{
+    const TString directory = gSystem->DirName(output_prefix.c_str());
+    if (directory.IsNull() || directory == ".") return;
+    if (gSystem->AccessPathName(directory.Data(), kFileExists)
+        && gSystem->mkdir(directory.Data(), kTRUE) != 0) {
+        throw std::runtime_error(
+            "cannot create plotting output directory "
+            + std::string(directory.Data()));
+    }
+}
 
 // Convert one Projection observable into unstyled histograms. The caller owns
 // axis formatting, curve styling, draw order, annotations, and legends.

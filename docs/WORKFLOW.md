@@ -600,9 +600,12 @@ Post Plotting is an interpreted ROOT workflow and does not require
 `bin/Post.exe`. From the repository root, run:
 
 ```bash
+post/plotting/draw.sh
 post/plotting/draw.sh results/projection-TAG.root
 ```
 
+The zero-argument form uses `results/projection-initial.root`; one optional
+argument overrides that input, and additional arguments are rejected.
 `draw.sh` sources the project environment, verifies the input and ROOT binary,
 derives `TAG` from the projection basename, creates
 `post/plotting/results/`, and runs six independently executable macros in ROOT
@@ -654,12 +657,14 @@ binning, axes, canvas geometry, colors, line/marker styles, draw options,
 legend, and annotations. The implementation follows below that block. Shared
 headers contain only common Projection reading, histogram/moment construction,
 diagnostics, path resolution, and base style.
+The visual, layout, frame-naming, and review contract is documented in
+[`post/plotting/PLOTTING_STYLE.md`](../post/plotting/PLOTTING_STYLE.md).
 
 | Macro | Output prefix | Purpose |
 |---|---|---|
 | `Draw_projection.cxx` | `projection-TAG` | Main exchange-symmetric 3x2 kinematic projection |
-| `Draw_projection_components.cxx` | `projection_components-TAG` | Diagonal `|A_i|^2` component curves; interference is intentionally omitted |
-| `Draw_polarization.cxx` | `polarization-TAG` | Three exchange-symmetric omega polarization angles |
+| `Draw_projection_components.cxx` | `projection_components-TAG` | Six 3x2 kinematic panels and a full-width legend for diagonal `|A_i|^2` components; interference is intentionally omitted |
+| `Draw_polarization.cxx` | `polarization-TAG` | Three horizontal omega decay-plane-normal projections with a shared legend |
 | `Draw_omega_decay_checks.cxx` | `omega_decay_checks-TAG` | Six candidate-combined pion-angle and pion-pair-mass checks |
 | `draw_angular_moments.cxx` | `angular_moments-TAG` | Exchange-symmetrized even Legendre moments `P0`, `P2`, `P4`, and `P6` |
 | `draw_angular_moments_odd.cxx` | `angular_moments_odd_diagnostic-TAG` | Ordered-omega odd moments `P1`, `P3`, and `P5` for pairing/order-bias diagnosis |
@@ -668,14 +673,17 @@ Each macro writes both `.pdf` and `.eps`, yielding twelve tagged figure files.
 Existing same-name figures are replaced by ROOT's print operation.
 
 The main projection contains `M(omega omega)`, candidate-combined
-`M(gamma omega)`, `cos(theta_gamma)`, exchange-symmetric `cos(theta_omega)`
-and `phi_omega`, and the candidate-combined `M(pi+ pi- pi0)` distribution.
+`M(gamma omega_i)`, `cos(theta_gamma)` in the `psi(2S)` rest frame,
+exchange-symmetric `cos(theta_omega)` and `phi_omega` in the X helicity frame,
+and the candidate-combined `M(pi+ pi- pi0)` distribution.
 For `phi_omega`, the omega2 exchange image is obtained by wrapping
 `phi_omega1 + pi` into `(-pi, pi]`.
 
-The polarization figure contains the candidate-combined decay-plane polar
-cosine and azimuth plus the exchange-symmetrized signed difference of the two
-local plane azimuths. The omega-decay check figure combines the two candidates
+The polarization figure contains candidate-combined
+`cos(theta_n_omega)` and `phi_n_omega` for the oriented
+`n_i = unit[p(pi+_i) cross p(pi-_i)]` analyzer in each omega helicity frame,
+plus the exchange-symmetrized signed, wrapped `Delta phi(n_1,n_2)`. The
+omega-decay check figure combines the two candidates
 with half weight each for the three pion helicity cosines and for
 `M(pi+ pi-)`, `M(pi+ pi0)`, and `M(pi- pi0)`. It does not add an artificial
 `+/-cos(theta_pi)` reflection.
@@ -683,8 +691,17 @@ with half weight each for the three pion helicity cosines and for
 The projection utilities require projection schema version 3 and discover
 Terms, JPC groups, and background samples dynamically from `component_map`,
 `group_map`, and `background_map`. The main plots compare data with fitted
-signal plus signed background. The diagonal-component plot is not expected to
-sum to the coherent total because it omits Term interference. Odd moments are
+signal plus signed background. Data are black markers, Background is a gray
+hatched histogram, Total fit keeps its reserved solid blue appearance, and
+every coherence-class curve uses the same dashed line style with a distinct
+color. Diagonal component styles are deterministic and distinct under model
+reordering. The automatic vertical envelope covers data errors and every
+drawn histogram. The diagonal-component plot is not expected to sum to the
+coherent total because it omits Term interference.
+
+Angular-moment panels show unnormalized binwise Legendre sums. Their mass-bin
+width labels are derived from the configured range and bin count, and every
+signed nonzero moment includes a gray zero reference. Odd moments are
 diagnostics tied to the input-labelled omega ordering and are not
 label-independent observables of the identical-omega final state.
 
@@ -765,6 +782,7 @@ the state rather than reopening that path.
 | `post/plotting/draw.sh` | Plot-only ROOT driver and tagged output routing |
 | `post/plotting/GVVPlotUtils.h` | Dynamic Projection reader, common histogram construction, diagnostics, path helper, and base style |
 | `post/plotting/GVVAngularMoments.h` | Shared Legendre/moment arithmetic and unstyled histogram construction |
+| `post/plotting/PLOTTING_STYLE.md` | Unified visual roles, layouts, frame/candidate naming, automatic ranges, and plot-review checklist |
 | `post/plotting/macros/*.cxx` | Independently executable, fully configured figure modules |
 
 ### 14. Common failures and their meaning

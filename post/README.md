@@ -46,6 +46,7 @@ post/
 └── plotting/
     ├── GVVAngularMoments.h
     ├── GVVPlotUtils.h
+    ├── PLOTTING_STYLE.md
     ├── draw.sh
     ├── macros/
     │   ├── Draw_projection.cxx
@@ -313,9 +314,12 @@ products.
 From the repository root:
 
 ```bash
+post/plotting/draw.sh
 post/plotting/draw.sh results/projection-<tag>.root
 ```
 
+The zero-argument form reads `results/projection-initial.root`. The optional
+single argument selects another Projection; additional arguments are rejected.
 The script resolves its own location, sources `config/gvv_env.sh`, verifies
 the input and ROOT executable, derives the tag from the input basename,
 creates `post/plotting/results/`, and invokes each macro with ROOT in batch
@@ -383,6 +387,15 @@ arithmetic, unstyled moment-histogram construction, and the moment diagnostic.
 Do not add figure-specific axes, binning, canvas layout, or colors to either
 header.
 
+The [plotting style guide](plotting/PLOTTING_STYLE.md) is the authoritative
+human-readable contract for visual roles, layout, frame and candidate naming,
+automatic ranges, and review. In particular, data use black markers,
+Background uses a gray hatched histogram, the solid blue Total-fit appearance
+is reserved, all coherence classes use line style 2 with distinct colors, and
+Term-component styles are deterministic functions of the component metadata.
+The vertical envelope includes data errors, signed Background, Total fit, and
+every group or component curve actually drawn.
+
 ### Projection contract consumed
 
 `GVVPlotUtils.h` requires projection schema version 3. It reads:
@@ -392,7 +405,8 @@ header.
   `weight_group`, and symmetric `weight_component`;
 - `bg`: background observables, zero-based `background_index`, and signed
   plotting `weight_bg`;
-- `component_map`: current Term indices and display labels;
+- `component_map`: current Term indices, display labels, Resonance IDs, Wave
+  IDs/labels, device types, and JPC values;
 - `group_map`: current coherent JPC group indices and labels;
 - `background_map`: current background metadata;
 - `metadata`: schema version and declared background count.
@@ -413,8 +427,8 @@ visual convention.
 | Entry point | Interpretation | Output basename |
 |---|---|---|
 | `Draw_projection.cxx` | Main 3x2 exchange-symmetric projection | `projection-<tag>` |
-| `Draw_projection_components.cxx` | Per-Term diagonal component diagnostic | `projection_components-<tag>` |
-| `Draw_polarization.cxx` | Three omega polarization-angle projections | `polarization-<tag>` |
+| `Draw_projection_components.cxx` | Six `3x2` kinematic panels plus a full-width legend for per-Term diagonal components | `projection_components-<tag>` |
+| `Draw_polarization.cxx` | Three horizontal omega decay-plane-normal projections with one shared legend | `polarization-<tag>` |
 | `Draw_omega_decay_checks.cxx` | Pion-angle and pion-pair-mass checks | `omega_decay_checks-<tag>` |
 | `draw_angular_moments.cxx` | Symmetrized even `P0/P2/P4/P6` moments | `angular_moments-<tag>` |
 | `draw_angular_moments_odd.cxx` | Ordered-omega `P1/P3/P5` diagnostic | `angular_moments_odd_diagnostic-<tag>` |
@@ -422,15 +436,20 @@ visual convention.
 Each basename is written as both PDF and EPS under
 `post/plotting/results/`, for twelve files in a complete run.
 
-The main observables are `M(omega omega)`, symmetrized `M(gamma omega)`,
-`cos(theta_gamma)`, exchange-symmetric `cos_theta_omega` and `phi_omega`, and
-the two omega-candidate `M(pi+ pi- pi0)` values combined with half weight each.
+The main observables are `M(omega omega)`, candidate-combined
+`M(gamma omega_i)`, `cos(theta_gamma)` in the `psi(2S)` rest frame,
+exchange-symmetric `cos(theta_omega)` and `phi_omega` in the X helicity frame,
+and the two omega-candidate `M(pi+ pi- pi0)` values combined with half weight
+each.
 The omega2 azimuthal exchange image is reconstructed as wrapped
 `phi_omega1 + pi` because the two omegas are back-to-back in the X frame.
 
-The polarization figure combines both candidates for the decay-plane polar
-cosine and azimuth, and symmetrizes the signed difference of the two local
-plane azimuths. The omega-decay check figure combines both candidates with
+The polarization figure combines both candidates for
+`cos(theta_n_omega)` and `phi_n_omega` of the oriented
+`n_i = unit[p(pi+_i) cross p(pi-_i)]` analyzer in each omega helicity frame,
+and symmetrizes the signed, wrapped `Delta phi(n_1,n_2)`. Its three panels are
+horizontal and use one shared legend strip. The omega-decay check figure
+combines both candidates with
 half weight each for `cos_theta_pip_omega`, `cos_theta_pim_omega`,
 `cos_theta_pi0_omega`, `M(pi+ pi-)`, `M(pi+ pi0)`, and `M(pi- pi0)`. The pion
 cosines are not additionally reflected because each is already defined in its
@@ -440,24 +459,37 @@ standard figures.
 
 The component diagnostic draws only diagonal `|A_i|^2` entries. It cannot and
 should not close to the total coherent curve when interference is present.
+It assigns every active Term a stable, distinct color/line-style combination
+from its Resonance, Wave, and Term metadata rather than its current list
+position.
 The coherent JPC-group curves include only pairs internal to each group;
 cross-group interference remains in the total model.
 
 Even moments are exchange-symmetrized physical diagnostics for the identical
 omega pair. Odd moments deliberately retain the input-labelled `omega1`
 ordering and should be interpreted only as assignment/order-bias diagnostics.
+Both moment figures show the unnormalized binwise sum of Legendre weights, not
+an event-normalized average; their mass-bin width is derived from the configured
+range and bin count. A gray zero reference is drawn for every signed nonzero
+moment, and the legend identifies `Data - signed background` and fitted signal
+MC.
 
 ### Plotting acceptance checklist
 
 1. confirm all twelve PDF/EPS products were created;
 2. check ROOT printed no missing-tree, missing-branch, schema, or map-size
    exception;
-3. verify the legends contain the intended dynamic Terms and JPC groups;
-4. inspect signed-background behavior and any bins with a non-positive total
+3. verify the legends contain the intended dynamic Terms and JPC groups, and
+   that no two Terms have the same final appearance;
+4. verify Background is gray and hatched, Total fit retains its reserved
+   style, and every coherence class uses the common dashed style;
+5. inspect signed-background behavior and any bins with a non-positive total
    expectation;
-5. compare the displayed Pearson `chi2/Nbin` only as a projection diagnostic,
+6. confirm the complete vertical envelope includes data errors and every drawn
+   curve without clipping;
+7. compare the displayed Pearson `chi2/Nbin` only as a projection diagnostic,
    not as the unbinned fit objective or a complete global goodness-of-fit;
-6. treat odd moments as ordering diagnostics, not physical odd moments of an
+8. treat odd moments as ordering diagnostics, not physical odd moments of an
    unlabeled identical-omega state.
 
 ## Common Post errors

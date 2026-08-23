@@ -32,15 +32,16 @@ const std::vector<gvvplot::VariableSpec> kVariables = {
     {gvvplot::kMassOmegaOmega, 60, 1.50, 3.20,
      "M(#omega#omega) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kMassGammaOmega, 60, 0.85, 2.95,
-     "M(#gamma#omega) (GeV/#font[12]{c}^{2})", true},
+     "M(#gamma#omega_{i}) (GeV/#font[12]{c}^{2}), i=1,2", true},
     {gvvplot::kCosThetaGamma, 40, -1.0, 1.0,
-     "cos#theta_{#gamma}", false},
+     "cos#theta_{#gamma}^{(#psi(2S) rest)}", false},
     {gvvplot::kCosThetaOmega, 40, -1.0, 1.0,
-     "sym. cos#theta_{#omega}", false},
+     "cos#theta_{#omega}^{(X hel.; sym.)}", false},
     {gvvplot::kPhiOmega, 40, -TMath::Pi(), TMath::Pi(),
-     "sym. #phi_{#omega} (rad)", false},
+     "#phi_{#omega}^{(X hel.; sym.)} (rad)", false},
     {gvvplot::kMassOmega, 42, 0.740, 0.824,
-     "M(#pi^{+}#pi^{-}#pi^{0}) (GeV/#font[12]{c}^{2})", true}};
+     "M(#pi^{+}_{i}#pi^{-}_{i}#pi^{0}_{i}) "
+     "(GeV/#font[12]{c}^{2}), i=1,2", true}};
 
 constexpr const char* kCanvasName = "gvv_projection_main";
 constexpr const char* kCanvasTitle = "GVV main projections";
@@ -57,21 +58,29 @@ constexpr double kDataMarkerSize = 0.55;
 constexpr int kDataColor = kBlack;
 constexpr int kDataLineWidth = 1;
 constexpr int kBackgroundFillStyle = 3004;
-constexpr int kBackgroundColor = kBlue;
+constexpr int kBackgroundColor = kGray + 1;
 constexpr int kTotalColor = kBlue + 1;
 constexpr int kTotalLineWidth = 2;
 constexpr int kGroupLineWidth = 2;
-const int kGroupLineStyles[] = {2, 7, 9, 3, 5};
+constexpr int kGroupLineStyle = 2;
 const int kGroupLineColors[] = {
-    kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7, kCyan + 2};
-constexpr std::size_t kGroupStyleCount =
-    sizeof(kGroupLineStyles) / sizeof(kGroupLineStyles[0]);
+    kRed + 1,
+    kGreen + 2,
+    kMagenta + 1,
+    kOrange + 7,
+    kCyan + 2,
+    kViolet + 1,
+    kTeal + 3,
+    kPink + 7};
+constexpr std::size_t kGroupColorCount =
+    sizeof(kGroupLineColors) / sizeof(kGroupLineColors[0]);
 
 // Axes and automatic vertical range.
 constexpr int kAxisDivisions = 505;
 constexpr const char* kMassYAxisFormat =
     "Events / (%.1f MeV/#font[12]{c}^{2})";
 constexpr const char* kDimensionlessYAxisFormat = "Events / %.3g";
+constexpr const char* kAzimuthYAxisFormat = "Events / (%.3g rad)";
 constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
@@ -107,7 +116,7 @@ constexpr const char* kTotalLegendLabel = "Total fit";
 constexpr const char* kDataLegendOption = "lep";
 constexpr const char* kBackgroundLegendOption = "f";
 constexpr const char* kLineLegendOption = "l";
-constexpr const char* kGroupLegendPrefix = "coherent ";
+constexpr const char* kGroupLegendSuffix = " coherence class";
 
 // ============================================================================
 // Implementation below. Normal figure changes should only require the block
@@ -125,19 +134,24 @@ void FormatPanel(
     panel.total->SetLineWidth(kTotalLineWidth);
     for (std::size_t group = 0; group < panel.groups.size(); ++group) {
         panel.groups[group]->SetLineColor(
-            kGroupLineColors[group % kGroupStyleCount]);
-        panel.groups[group]->SetLineStyle(
-            kGroupLineStyles[group % kGroupStyleCount]);
+            kGroupLineColors[group % kGroupColorCount]);
+        panel.groups[group]->SetLineStyle(kGroupLineStyle);
         panel.groups[group]->SetLineWidth(kGroupLineWidth);
     }
 
     const double bin_width =
         (variable.upper - variable.lower) / variable.bins;
     panel.data->GetXaxis()->SetTitle(variable.x_title);
-    panel.data->GetYaxis()->SetTitle(
-        variable.mass_axis
-            ? Form(kMassYAxisFormat, kGeVToMeV * bin_width)
-            : Form(kDimensionlessYAxisFormat, bin_width));
+    if (variable.mass_axis) {
+        panel.data->GetYaxis()->SetTitle(
+            Form(kMassYAxisFormat, kGeVToMeV * bin_width));
+    } else if (variable.variable == gvvplot::kPhiOmega) {
+        panel.data->GetYaxis()->SetTitle(
+            Form(kAzimuthYAxisFormat, bin_width));
+    } else {
+        panel.data->GetYaxis()->SetTitle(
+            Form(kDimensionlessYAxisFormat, bin_width));
+    }
     panel.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     panel.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
     panel.data->GetXaxis()->SetNdivisions(kAxisDivisions);
@@ -147,12 +161,15 @@ void FormatPanel(
     panel.data->SetLineColor(kDataColor);
     panel.data->SetLineWidth(kDataLineWidth);
 
-    const double maximum =
-        std::max(panel.data->GetMaximum(), panel.total->GetMaximum());
-    const double minimum = std::min(0.0, panel.total->GetMinimum());
+    std::vector<const TH1D*> range_curves = {
+        panel.background, panel.total};
+    range_curves.insert(
+        range_curves.end(), panel.groups.begin(), panel.groups.end());
+    const gvvplot::VerticalRange range =
+        gvvplot::FindVerticalRange(panel.data, range_curves);
     panel.data->GetYaxis()->SetRangeUser(
-        minimum < 0.0 ? kNegativeRangeScale * minimum : 0.0,
-        maximum > 0.0 ? kPositiveRangeScale * maximum : 1.0);
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
+        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0);
 }
 
 void DrawPanel(
@@ -194,6 +211,7 @@ void Draw_projection(
         gvvplot::ResolveProjectPath(input_file, __FILE__);
     const std::string output_path =
         gvvplot::ResolveProjectPath(output_prefix, __FILE__);
+    gvvplot::EnsureOutputDirectory(output_path);
 
     gvvplot::SetBESIIIStyle();
     gvvplot::ProjectionInput input = gvvplot::LoadProjection(input_path.c_str());
@@ -246,7 +264,7 @@ void Draw_projection(
         projection_main::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            projection_main::kGroupLegendPrefix + input.groups[group].label;
+            input.groups[group].label + projection_main::kGroupLegendSuffix;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),

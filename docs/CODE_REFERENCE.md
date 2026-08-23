@@ -767,10 +767,14 @@ This header owns only common Projection data services:
 - the observable enum/specification type supplied by individual macros;
 - the common BESIII base ROOT style and project-root path resolution;
 - schema-v3 and required-branch validation;
-- dynamic component/group map readers;
+- dynamic component/group map readers, including the Resonance, Wave, and Term
+  identifiers used for deterministic component styles;
 - event branch binding and exchange-symmetric observable filling;
 - construction of data, signed-background, fitted-signal, total, group, and
   optional diagonal-Term histograms;
+- complete vertical-envelope discovery over data errors and every supplied
+  histogram;
+- minimal ROOT-label conversion for the model labels used by this project;
 - simple Pearson chi-square diagnostics.
 
 It reads no `model.json` and has no built-in Resonance list. Component plots
@@ -789,8 +793,9 @@ macros.
 
 ### `post/plotting/draw.sh` — Plotting, Infrastructure
 
-This is the user plotting entry point. It accepts exactly one projection ROOT
-file, loads the project ROOT environment, derives the tag from
+This is the user plotting entry point. It accepts zero or one projection ROOT
+file argument: zero uses `results/projection-initial.root`, while one overrides
+that default. It loads the project ROOT environment, derives the tag from
 `projection-<tag>.root`, creates `post/plotting/results/`, and invokes each of
 the six macros in ROOT batch mode. It neither requests a GPU nor submits a
 Slurm job.
@@ -805,8 +810,8 @@ configuration and presentation:
 | File | Figure |
 |---|---|
 | `post/plotting/macros/Draw_projection.cxx` | main `3 x 2` exchange-symmetric kinematic projections with dynamic coherent JPC groups |
-| `post/plotting/macros/Draw_projection_components.cxx` | diagonal Term-component diagnostic, intentionally excluding interference curves |
-| `post/plotting/macros/Draw_polarization.cxx` | candidate-combined decay-plane polar/azimuthal angles and exchange-symmetric plane-angle difference |
+| `post/plotting/macros/Draw_projection_components.cxx` | six `3 x 2` kinematic panels plus a full-width dynamic legend for diagonal Term components, intentionally excluding interference curves |
+| `post/plotting/macros/Draw_polarization.cxx` | three horizontal candidate-combined decay-plane-normal projections with one shared legend |
 | `post/plotting/macros/Draw_omega_decay_checks.cxx` | candidate-combined pion helicity cosines and pion-pair invariant-mass checks |
 | `post/plotting/macros/draw_angular_moments.cxx` | physical even `P0/P2/P4/P6` omega-angle moments |
 | `post/plotting/macros/draw_angular_moments_odd.cxx` | ordered-omega odd `P1/P3/P5` diagnostic |
@@ -816,6 +821,16 @@ options, legend, or annotations in that preamble. Relative runtime paths are
 interpreted from the project root; absolute paths are preserved. Change a
 shared header only for a genuinely common Projection contract,
 histogram-building rule, moment formula, path rule, or base style.
+
+### `post/plotting/PLOTTING_STYLE.md` — Plotting documentation
+
+Defines the common presentation contract without acting as a runtime input.
+It reserves the original solid-blue Total-fit style, assigns gray hatching to
+Background, requires one common dashed style for every coherence class, and
+requires deterministic distinct metadata-based Term styles. It also documents
+complete vertical envelopes, figure layouts, frame and candidate naming,
+unnormalized angular-moment sums, zero references, and the plot-review
+checklist.
 
 ### `post/README.md` — Calculation and Plotting user contract
 

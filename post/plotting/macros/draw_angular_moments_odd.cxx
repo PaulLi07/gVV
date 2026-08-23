@@ -2,6 +2,9 @@
 
 #include "TCanvas.h"
 #include "TLatex.h"
+#include "TLegend.h"
+#include "TLine.h"
+#include "TPad.h"
 
 #include <algorithm>
 #include <string>
@@ -38,16 +41,22 @@ constexpr bool kOddDiagnostic = true;
 constexpr const char* kCanvasName = "gvv_odd_moments";
 constexpr const char* kCanvasTitle = "GVV odd angular-moment diagnostic";
 constexpr int kCanvasWidth = 1500;
-constexpr int kCanvasHeight = 500;
+constexpr int kCanvasHeight = 560;
 constexpr int kCanvasColumns = 3;
 constexpr int kCanvasRows = 1;
 constexpr double kPadGap = 0.002;
+constexpr double kPlotPadY1 = 0.00;
+constexpr double kPlotPadY2 = 0.86;
+constexpr double kLegendPadY1 = 0.86;
+constexpr double kLegendPadY2 = 1.00;
 
 // Axes and automatic vertical range.
 constexpr const char* kXAxisTitle =
     "M(#omega#omega) (GeV/#font[12]{c}^{2})";
 constexpr const char* kYAxisTitleFormat =
-    "#LT P_{%d}(cos#theta_{#omega}) #GT / 50 MeV";
+    "#sum P_{%d}(cos#theta_{#omega_{1}}^{(X hel.)}) / "
+    "(%.1f MeV/#font[12]{c}^{2})";
+constexpr double kGeVToMeV = 1000.0;
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.35;
 constexpr double kPositiveRangeScale = 1.35;
@@ -60,6 +69,24 @@ constexpr int kDataLineWidth = 1;
 constexpr int kModelColor = kBlue + 1;
 constexpr int kModelLineWidth = 2;
 
+// One top strip holds the diagnostic statement and shared two-entry legend.
+constexpr double kLegendX1 = 0.40;
+constexpr double kLegendY1 = 0.05;
+constexpr double kLegendX2 = 0.98;
+constexpr double kLegendY2 = 0.95;
+constexpr int kLegendColumns = 2;
+constexpr int kLegendFont = 22;
+constexpr double kLegendTextSize = 0.27;
+constexpr int kLegendBorderSize = 0;
+constexpr int kLegendFillStyle = 0;
+constexpr const char* kDataLegendLabel = "Data - signed background";
+constexpr const char* kModelLegendLabel = "Fitted signal MC";
+
+// Zero reference for signed odd moments.
+constexpr int kZeroLineColor = kGray + 1;
+constexpr int kZeroLineStyle = 3;
+constexpr int kZeroLineWidth = 1;
+
 // Per-panel chi-square and ordered-omega diagnostic annotations.
 constexpr int kAnnotationFont = 22;
 constexpr double kAnnotationSize = 0.050;
@@ -67,10 +94,11 @@ constexpr double kAnnotationX = 0.18;
 constexpr double kAnnotationY = 0.84;
 constexpr const char* kAnnotationFormat =
     "P_{%d}: #chi^{2}/N_{bin}=%.1f/%d";
-constexpr double kDiagnosticSize = 0.040;
-constexpr double kDiagnosticX = 0.18;
-constexpr double kDiagnosticY = 0.76;
-constexpr const char* kDiagnosticText = "ordered-#omega diagnostic only";
+constexpr double kDiagnosticSize = 0.27;
+constexpr double kDiagnosticX = 0.03;
+constexpr double kDiagnosticY = 0.50;
+constexpr const char* kDiagnosticText =
+    "ordered #omega_{1}; not exchange symmetric";
 
 // ROOT draw options and layer order used by DrawPanel().
 constexpr const char* kDataDrawOption = "E1";
@@ -82,7 +110,9 @@ constexpr const char* kDataRedrawOption = "E1 SAME";
 // above.
 // ============================================================================
 
-void FormatPanel(gvvplot::MomentHistograms& histograms, int order)
+void FormatPanel(
+    gvvplot::MomentHistograms& histograms,
+    int order)
 {
     histograms.data->SetMarkerStyle(kDataMarkerStyle);
     histograms.data->SetMarkerSize(kDataMarkerSize);
@@ -91,25 +121,33 @@ void FormatPanel(gvvplot::MomentHistograms& histograms, int order)
     histograms.model->SetLineColor(kModelColor);
     histograms.model->SetLineWidth(kModelLineWidth);
     histograms.data->GetXaxis()->SetTitle(kXAxisTitle);
+    const double mass_bin_width_mev =
+        kGeVToMeV * (kMassUpper - kMassLower) / kMassBins;
     histograms.data->GetYaxis()->SetTitle(
-        Form(kYAxisTitleFormat, order));
+        Form(kYAxisTitleFormat, order, mass_bin_width_mev));
     histograms.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     histograms.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
 
-    const double maximum = std::max(
-        histograms.data->GetMaximum(), histograms.model->GetMaximum());
-    const double minimum = std::min(
-        histograms.data->GetMinimum(), histograms.model->GetMinimum());
+    const std::vector<const TH1D*> curves = {histograms.model};
+    const gvvplot::VerticalRange range =
+        gvvplot::FindVerticalRange(histograms.data, curves);
     histograms.data->GetYaxis()->SetRangeUser(
-        minimum < 0.0 ? kNegativeRangeScale * minimum : 0.0,
-        maximum > 0.0 ? kPositiveRangeScale * maximum : 1.0);
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
+        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0);
 }
 
-void DrawPanel(gvvplot::MomentHistograms& histograms, int order)
+void DrawPanel(
+    gvvplot::MomentHistograms& histograms,
+    int order)
 {
     FormatPanel(histograms, order);
     histograms.data->Draw(kDataDrawOption);
     histograms.model->Draw(kModelDrawOption);
+    TLine* zero = new TLine(kMassLower, 0.0, kMassUpper, 0.0);
+    zero->SetLineColor(kZeroLineColor);
+    zero->SetLineStyle(kZeroLineStyle);
+    zero->SetLineWidth(kZeroLineWidth);
+    zero->Draw("SAME");
     histograms.data->Draw(kDataRedrawOption);
 
     const std::pair<double, int> chi_square =
@@ -125,9 +163,6 @@ void DrawPanel(gvvplot::MomentHistograms& histograms, int order)
              order,
              chi_square.first,
              chi_square.second));
-    label.SetTextSize(kDiagnosticSize);
-    label.DrawLatex(
-        kDiagnosticX, kDiagnosticY, kDiagnosticText);
 }
 
 } // namespace odd_moments
@@ -148,16 +183,30 @@ void draw_angular_moments_odd(
         odd_moments::kCanvasTitle,
         odd_moments::kCanvasWidth,
         odd_moments::kCanvasHeight);
-    canvas->Divide(
+    TPad* plot_pad = new TPad(
+        "gvv_odd_moment_plots", "", 0.0, odd_moments::kPlotPadY1,
+        1.0, odd_moments::kPlotPadY2);
+    plot_pad->SetFillStyle(0);
+    plot_pad->Draw();
+    plot_pad->Divide(
         odd_moments::kCanvasColumns,
         odd_moments::kCanvasRows,
         odd_moments::kPadGap,
         odd_moments::kPadGap);
 
+    canvas->cd();
+    TPad* legend_pad = new TPad(
+        "gvv_odd_moment_legend", "", 0.0, odd_moments::kLegendPadY1,
+        1.0, odd_moments::kLegendPadY2);
+    legend_pad->SetFillStyle(0);
+    legend_pad->SetMargin(0.0, 0.0, 0.0, 0.0);
+    legend_pad->Draw();
+
+    gvvplot::MomentHistograms legend_histograms;
     for (std::size_t panel = 0;
          panel < odd_moments::kOrders.size();
          ++panel) {
-        canvas->cd(static_cast<int>(panel) + 1);
+        plot_pad->cd(static_cast<int>(panel) + 1);
         const int order = odd_moments::kOrders[panel];
         gvvplot::MomentHistograms histograms =
             gvvplot::BuildMomentHistograms(
@@ -169,8 +218,40 @@ void draw_angular_moments_odd(
                 odd_moments::kMassUpper,
                 "gvv_odd_moment");
         odd_moments::DrawPanel(histograms, order);
+        if (panel == 0) legend_histograms = histograms;
     }
 
+    legend_pad->cd();
+    TLatex diagnostic;
+    diagnostic.SetNDC();
+    diagnostic.SetTextFont(odd_moments::kAnnotationFont);
+    diagnostic.SetTextSize(odd_moments::kDiagnosticSize);
+    diagnostic.DrawLatex(
+        odd_moments::kDiagnosticX,
+        odd_moments::kDiagnosticY,
+        odd_moments::kDiagnosticText);
+
+    TLegend* legend = new TLegend(
+        odd_moments::kLegendX1,
+        odd_moments::kLegendY1,
+        odd_moments::kLegendX2,
+        odd_moments::kLegendY2);
+    legend->SetBorderSize(odd_moments::kLegendBorderSize);
+    legend->SetFillStyle(odd_moments::kLegendFillStyle);
+    legend->SetTextFont(odd_moments::kLegendFont);
+    legend->SetTextSize(odd_moments::kLegendTextSize);
+    legend->SetNColumns(odd_moments::kLegendColumns);
+    legend->AddEntry(
+        legend_histograms.data,
+        odd_moments::kDataLegendLabel,
+        "lep");
+    legend->AddEntry(
+        legend_histograms.model,
+        odd_moments::kModelLegendLabel,
+        "l");
+    legend->Draw();
+
+    gvvplot::EnsureOutputDirectory(output_path);
     canvas->Print((output_path + ".pdf").c_str());
     canvas->Print((output_path + ".eps").c_str());
 }

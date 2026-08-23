@@ -12,12 +12,13 @@ PLOT_DIR="$SCRIPT_DIR/macros"
 OUTPUT_DIR="$SCRIPT_DIR/results"
 source "$PROJECT/config/gvv_env.sh"
 ROOT_BIN=${ROOT_BIN:-$ROOTSYS/bin/root}
+DEFAULT_PROJECTION="$PROJECT/results/projection-initial.root"
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 results/projection-<tag>.root" >&2
+if [[ $# -gt 1 ]]; then
+    echo "Usage: $0 [results/projection-<tag>.root]" >&2
     exit 2
 fi
-PROJECTION=$1
+PROJECTION=${1:-$DEFAULT_PROJECTION}
 if [[ $PROJECTION != /* ]]; then
     PROJECTION="$PWD/$PROJECTION"
 fi

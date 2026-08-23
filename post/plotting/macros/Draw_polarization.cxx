@@ -4,6 +4,7 @@
 #include "TLatex.h"
 #include "TLegend.h"
 #include "TMath.h"
+#include "TPad.h"
 
 #include <algorithm>
 #include <iostream>
@@ -16,9 +17,13 @@ namespace polarization {
 // ============================================================================
 // User configuration
 // ============================================================================
-// The two omega candidates are combined with half weight per candidate. The
-// signed plane-angle difference is filled together with its exchange image.
-// Relative paths are interpreted from the project root.
+// For omega_i, the helicity-frame z axis follows omega_i in the X rest frame,
+// y is normal to the X -> omega omega decay plane, and x completes a
+// right-handed basis. The oriented decay-plane normal is
+// n_i = unit[p(pi+_i) cross p(pi-_i)] in the omega_i rest frame. The two omega
+// candidates are combined with half weight per candidate; Delta phi is filled
+// together with its exchange image. Relative paths are interpreted from the
+// project root.
 //
 // Run with defaults:
 //   root post/plotting/macros/Draw_polarization.cxx
@@ -33,20 +38,23 @@ constexpr const char* kDefaultOutput =
 // Polarization observables, binning, ranges, and x-axis titles.
 const std::vector<gvvplot::VariableSpec> kVariables = {
     {gvvplot::kCosThetaDecayPlaneOmega, 40, -1.0, 1.0,
-     "cos#theta_{decay plane}^{#omega}", false},
+     "cos#theta_{#hat{n}_{#omega}}^{(#omega hel.)}", false},
     {gvvplot::kPhiDecayPlaneOmega, 40, -TMath::Pi(), TMath::Pi(),
-     "#phi_{decay plane}^{#omega} (rad)", false},
+     "#phi_{#hat{n}_{#omega}}^{(#omega hel.)} (rad)", false},
     {gvvplot::kDeltaPhiDecayPlanes, 40, -TMath::Pi(), TMath::Pi(),
-     "sym. #Delta#phi_{decay planes} (rad)", false}};
+     "#Delta#phi(#hat{n}_{1},#hat{n}_{2}) (rad)", false}};
 
 constexpr const char* kCanvasName = "gvv_polarization";
 constexpr const char* kCanvasTitle = "GVV polarization observables";
-constexpr int kCanvasWidth = 900;
-constexpr int kCanvasHeight = 760;
-constexpr int kCanvasColumns = 2;
-constexpr int kCanvasRows = 2;
+constexpr int kCanvasWidth = 1500;
+constexpr int kCanvasHeight = 560;
+constexpr int kCanvasColumns = 3;
+constexpr int kCanvasRows = 1;
 constexpr double kPadGap = 0.002;
-constexpr int kLegendPad = 4;
+constexpr double kPlotPadY1 = 0.00;
+constexpr double kPlotPadY2 = 0.86;
+constexpr double kLegendPadY1 = 0.86;
+constexpr double kLegendPadY2 = 1.00;
 
 // Data, background, total-fit, and coherent-group appearance.
 constexpr int kDataMarkerStyle = 8;
@@ -54,19 +62,21 @@ constexpr double kDataMarkerSize = 0.55;
 constexpr int kDataColor = kBlack;
 constexpr int kDataLineWidth = 1;
 constexpr int kBackgroundFillStyle = 3004;
-constexpr int kBackgroundColor = kBlue;
+constexpr int kBackgroundColor = kGray + 1;
 constexpr int kTotalColor = kBlue + 1;
 constexpr int kTotalLineWidth = 2;
 constexpr int kGroupLineWidth = 2;
-const int kGroupLineStyles[] = {2, 7, 9, 3, 5};
+constexpr int kGroupLineStyle = 2;
 const int kGroupLineColors[] = {
-    kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7, kCyan + 2};
+    kRed + 1, kGreen + 2, kMagenta + 1, kOrange + 7,
+    kCyan + 2, kViolet + 1, kTeal + 3, kPink + 7};
 constexpr std::size_t kGroupStyleCount =
-    sizeof(kGroupLineStyles) / sizeof(kGroupLineStyles[0]);
+    sizeof(kGroupLineColors) / sizeof(kGroupLineColors[0]);
 
 // Axes and automatic vertical range.
 constexpr int kAxisDivisions = 505;
-constexpr const char* kYAxisFormat = "Events / %.3g";
+constexpr const char* kDimensionlessYAxisFormat = "Events / %.3g";
+constexpr const char* kAzimuthYAxisFormat = "Events / (%.3g rad)";
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
 constexpr double kPositiveRangeScale = 1.45;
@@ -87,12 +97,13 @@ constexpr const char* kTotalDrawOption = "HIST SAME";
 constexpr const char* kDataRedrawOption = "E1 SAME";
 
 // Legend box and text.
-constexpr double kLegendX1 = 0.10;
-constexpr double kLegendY1 = 0.18;
-constexpr double kLegendX2 = 0.92;
-constexpr double kLegendY2 = 0.82;
+constexpr double kLegendX1 = 0.03;
+constexpr double kLegendY1 = 0.05;
+constexpr double kLegendX2 = 0.97;
+constexpr double kLegendY2 = 0.95;
+constexpr int kLegendColumns = 3;
 constexpr int kLegendFont = 22;
-constexpr double kLegendTextSize = 0.055;
+constexpr double kLegendTextSize = 0.28;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
 constexpr const char* kDataLegendLabel = "Data";
@@ -101,7 +112,7 @@ constexpr const char* kTotalLegendLabel = "Total fit";
 constexpr const char* kDataLegendOption = "lep";
 constexpr const char* kBackgroundLegendOption = "f";
 constexpr const char* kLineLegendOption = "l";
-constexpr const char* kGroupLegendPrefix = "coherent ";
+constexpr const char* kGroupLegendSuffix = " coherence class";
 
 // ============================================================================
 // Implementation below. Normal figure changes should only require the block
@@ -120,15 +131,19 @@ void FormatPanel(
     for (std::size_t group = 0; group < panel.groups.size(); ++group) {
         panel.groups[group]->SetLineColor(
             kGroupLineColors[group % kGroupStyleCount]);
-        panel.groups[group]->SetLineStyle(
-            kGroupLineStyles[group % kGroupStyleCount]);
+        panel.groups[group]->SetLineStyle(kGroupLineStyle);
         panel.groups[group]->SetLineWidth(kGroupLineWidth);
     }
 
     const double bin_width =
         (variable.upper - variable.lower) / variable.bins;
     panel.data->GetXaxis()->SetTitle(variable.x_title);
-    panel.data->GetYaxis()->SetTitle(Form(kYAxisFormat, bin_width));
+    const bool azimuth = variable.variable == gvvplot::kPhiDecayPlaneOmega
+                         || variable.variable
+                                == gvvplot::kDeltaPhiDecayPlanes;
+    panel.data->GetYaxis()->SetTitle(Form(
+        azimuth ? kAzimuthYAxisFormat : kDimensionlessYAxisFormat,
+        bin_width));
     panel.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     panel.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
     panel.data->GetXaxis()->SetNdivisions(kAxisDivisions);
@@ -138,12 +153,13 @@ void FormatPanel(
     panel.data->SetLineColor(kDataColor);
     panel.data->SetLineWidth(kDataLineWidth);
 
-    const double maximum =
-        std::max(panel.data->GetMaximum(), panel.total->GetMaximum());
-    const double minimum = std::min(0.0, panel.total->GetMinimum());
+    std::vector<const TH1D*> curves = {panel.background, panel.total};
+    curves.insert(curves.end(), panel.groups.begin(), panel.groups.end());
+    const gvvplot::VerticalRange range =
+        gvvplot::FindVerticalRange(panel.data, curves);
     panel.data->GetYaxis()->SetRangeUser(
-        minimum < 0.0 ? kNegativeRangeScale * minimum : 0.0,
-        maximum > 0.0 ? kPositiveRangeScale * maximum : 1.0);
+        range.minimum < 0.0 ? kNegativeRangeScale * range.minimum : 0.0,
+        range.maximum > 0.0 ? kPositiveRangeScale * range.maximum : 1.0);
 }
 
 void DrawPanel(
@@ -193,17 +209,30 @@ void Draw_polarization(
         polarization::kCanvasTitle,
         polarization::kCanvasWidth,
         polarization::kCanvasHeight);
-    canvas->Divide(
+    TPad* plot_pad = new TPad(
+        "gvv_polarization_plots", "", 0.0, polarization::kPlotPadY1,
+        1.0, polarization::kPlotPadY2);
+    plot_pad->SetFillStyle(0);
+    plot_pad->Draw();
+    plot_pad->Divide(
         polarization::kCanvasColumns,
         polarization::kCanvasRows,
         polarization::kPadGap,
         polarization::kPadGap);
 
+    canvas->cd();
+    TPad* legend_pad = new TPad(
+        "gvv_polarization_legend", "", 0.0,
+        polarization::kLegendPadY1, 1.0, polarization::kLegendPadY2);
+    legend_pad->SetFillStyle(0);
+    legend_pad->SetMargin(0.0, 0.0, 0.0, 0.0);
+    legend_pad->Draw();
+
     std::vector<gvvplot::PanelHistograms> panels;
     for (std::size_t index = 0;
          index < polarization::kVariables.size();
          ++index) {
-        canvas->cd(static_cast<int>(index) + 1);
+        plot_pad->cd(static_cast<int>(index) + 1);
         panels.push_back(gvvplot::BuildPanel(
             input,
             polarization::kVariables[index],
@@ -213,7 +242,7 @@ void Draw_polarization(
             panels.back(), polarization::kVariables[index], index);
     }
 
-    canvas->cd(polarization::kLegendPad);
+    legend_pad->cd();
     TLegend* legend = new TLegend(
         polarization::kLegendX1,
         polarization::kLegendY1,
@@ -223,6 +252,7 @@ void Draw_polarization(
     legend->SetFillStyle(polarization::kLegendFillStyle);
     legend->SetTextFont(polarization::kLegendFont);
     legend->SetTextSize(polarization::kLegendTextSize);
+    legend->SetNColumns(polarization::kLegendColumns);
     legend->AddEntry(
         panels[0].data,
         polarization::kDataLegendLabel,
@@ -237,7 +267,7 @@ void Draw_polarization(
         polarization::kLineLegendOption);
     for (std::size_t group = 0; group < input.groups.size(); ++group) {
         const std::string label =
-            polarization::kGroupLegendPrefix + input.groups[group].label;
+            input.groups[group].label + polarization::kGroupLegendSuffix;
         legend->AddEntry(
             panels[0].groups[group],
             label.c_str(),
@@ -245,6 +275,7 @@ void Draw_polarization(
     }
     legend->Draw();
 
+    gvvplot::EnsureOutputDirectory(output_path);
     canvas->Print((output_path + ".pdf").c_str());
     canvas->Print((output_path + ".eps").c_str());
 }
