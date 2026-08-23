@@ -111,6 +111,7 @@ Use the existing conventions consistently:
 | Input sample order | `[px, py, pz, E]`, converted in `TermEvaluator.cu` |
 | Metric | \((+,-,-,-)\) |
 | Levi-Civita | \(\epsilon^{0123}=+1\) |
+| Relative daughter momentum | \(r=k_1-k_2\), then projected transverse to its parent |
 | Pion order in an omega | \(\pi^0,\pi^+,\pi^-\) |
 | Default barrier radius | 0.59 fm |
 | Identical-vector exchange | exchange the complete two omega decay systems |
@@ -132,9 +133,10 @@ Use the narrowest existing layer that owns the operation.
 |---|---|
 | `framework/math/` | `FV`, `DeviceComplex`, metric signs, Levi-Civita convention |
 | `framework/tensors/Tensor.cuh` | Rank-two tensor algebra, metric tensor, epsilon tensor |
-| `framework/tensors/SpinProjector.cuh` | Spin-1 transverse projector |
-| `framework/tensors/OrbitalTensor.cuh` | Covariant P- and D-wave orbital tensors |
-| `framework/tensors/BarrierFactor.cuh` | Blatt-Weisskopf \(B_L\), currently \(L=0,1,2\) |
+| `framework/tensors/TensorContraction.cuh` | Named one-index, two-index, double, trace, and symmetrization operations |
+| `framework/tensors/SpinProjector.cuh` | Spin-1 transverse metric and direct spin-2 projection of a rank-two source |
+| `framework/tensors/OrbitalTensor.cuh` | Bare covariant P/D tensors and direct bare G-wave contraction with a rank-two source |
+| `framework/tensors/BarrierFactor.cuh` | Blatt-Weisskopf \(B_L\) for \(L=0,1,2,3,4\) |
 | `framework/dynamics/Kinematics.cuh` | Process-independent two-body breakup momentum |
 | `framework/dynamics/Propagators.cuh` | Process-independent line shapes; not part of a Wave |
 | `process/ProcessKinematics.cuh` | GVV masses and \(\omega\to3\pi\) current model |
@@ -149,6 +151,13 @@ Never call a Resonance propagator from `process/waves/`. The propagator library
 is reusable because it accepts explicit physical parameters; the Wave library
 is process-specific because it knows the complete event and polarization
 structure.
+
+The orbital helpers deliberately return bare STF geometry and never include a
+barrier or normalized-CG coefficient. The exact index definitions, reduced
+rank-four contraction, and the Condon-Shortley/Racah normalization selected
+for future high-spin Waves are recorded in
+[`TENSOR_CONVENTIONS.md`](TENSOR_CONVENTIONS.md). Do not change the existing
+bare D-wave normalization to implement one new basis.
 
 ## Step 1: derive the physics basis first
 
@@ -377,7 +386,7 @@ relevant threshold. At minimum verify:
 3. exchange of the two complete omega systems has the required Bose behavior;
 4. the omega geometric currents remain transverse to their omega momenta;
 5. every new orbital tensor is transverse to its parent;
-6. a D-wave tensor, if used, is traceless;
+6. every D- or G-wave rank-two result, if used, is symmetric and traceless;
 7. the photon projector is transverse;
 8. the complete Gram matrix is symmetric with non-negative diagonal and is
    positive semidefinite within a scale-aware numerical tolerance;

@@ -393,3 +393,52 @@ Verification on the fixed `lxlogin005` node:
   executables compiled and linked with CUDA 12 and ROOT 6.32.02;
 - `make check` passed all 12 login-node-safe tests;
 - no Fit, Post Calculation, GPU executable, or Slurm job was run.
+
+## Process-neutral high-spin tensor building blocks (2026-08-23)
+
+Working branch: `feature/tensor-building-blocks`.
+
+- Added `TensorContraction.cuh` with named, metric-explicit rank-two
+  contractions instead of an ambiguous tensor multiplication operator.
+- Added direct application of the spin-two polarization projector to a
+  rank-two source without allocating a rank-four projector.
+- Added the reduced bare G-wave contraction
+  `t^(4)^{mu nu lambda tau} source_{lambda tau}` without introducing a
+  256-component per-thread tensor type. The result is already symmetric,
+  transverse, and traceless, so no outer spin-two projector is required.
+- Completed the existing Blatt-Weisskopf implementation consecutively through
+  `L=4`, preserving the original `L=0,1,2` formulae and units.
+- Kept every orbital helper as bare STF geometry. Barrier factors are still
+  multiplied exactly once in a process Wave; normalized orbital and LS
+  Clebsch-Gordan factors remain process-level responsibilities.
+- Fixed the future high-spin convention to Condon-Shortley spherical vectors
+  and Racah-normalized harmonics, including the reviewed conversion between
+  bare STF and normalized `02`, `20`, `22`, and `42` decay tensors.
+- Added a focused CUDA regression that compares the efficient projector and
+  G-wave path with independent explicit-index references, plus host checks for
+  the new higher-L barrier polynomials.
+- Updated the README, architecture guide, Wave-development guide, code
+  reference, changelog, and the dedicated tensor-convention document. No
+  spin-two Wave, Wave registry entry, Resonance, Term, or model field was
+  added.
+
+Verification was performed with CUDA 12 and ROOT 6.32.02 on the fixed
+`lxlogin005` node. No Slurm job was submitted and no GPU executable, Fit, or
+Post Calculation was run:
+
+- all 12 login-node test executables and all three CUDA runtime test
+  executables compiled;
+- the finalized tensor CUDA regression compiled after the independent raw-
+  source reference and metric-sign checks were added;
+- `make fit post` compiled and linked both production executables;
+- 10 of the 12 login-node tests passed when run against the user's current
+  working model;
+- `test_fit_parameters` and `test_wave_registry` stopped on their nominal
+  hard-coded parameter/resonance counts because the user's uncommitted
+  `config/model.json` deliberately sets `X_2370_11` inactive. That model edit
+  was preserved and excluded from this commit; neither failure enters the new
+  process-neutral tensor code.
+
+The new CUDA tensor identities still require their first runtime execution in
+the user-controlled Slurm GPU environment before the subsequent spin-two Wave
+implementation is release-gated.

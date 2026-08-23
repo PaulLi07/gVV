@@ -65,6 +65,44 @@ int main()
         return 3;
     }
 
+    // The higher-L factors use the same normalization: at q=q0, q^L B_L=1.
+    // Check both the newly completed consecutive L=3 support and the L=4
+    // factor needed by a bare G-wave orbital tensor.
+    const double barrier_probe = 0.47;
+    const double barrier_q2 = barrier_probe * barrier_probe;
+    const double barrier_q4 = barrier_q2 * barrier_q2;
+    const double barrier_scale2 = old_scale * old_scale;
+    const double barrier_scale4 = barrier_scale2 * barrier_scale2;
+    const double expected_b3 = std::sqrt(
+        277.0
+        / (barrier_q4 * barrier_q2
+           + 6.0 * barrier_scale2 * barrier_q4
+           + 45.0 * barrier_scale4 * barrier_q2
+           + 225.0 * barrier_scale4 * barrier_scale2));
+    const double expected_b4 = std::sqrt(
+        12746.0
+        / (barrier_q4 * barrier_q4
+           + 10.0 * barrier_scale2 * barrier_q4 * barrier_q2
+           + 135.0 * barrier_scale4 * barrier_q4
+           + 1575.0 * barrier_scale4 * barrier_scale2 * barrier_q2
+           + 11025.0 * barrier_scale4 * barrier_scale4));
+    if (!close_to(ctpwa::blatt_weisskopf(barrier_probe, 3), expected_b3)
+        || !close_to(ctpwa::blatt_weisskopf(barrier_probe, 4), expected_b4)) {
+        std::cerr << "higher-L Blatt-Weisskopf formula is wrong\n";
+        return 11;
+    }
+    if (!close_to(
+            std::pow(old_scale, 3)
+                * ctpwa::blatt_weisskopf(old_scale, 3),
+            1.0)
+        || !close_to(
+            std::pow(old_scale, 4)
+                * ctpwa::blatt_weisskopf(old_scale, 4),
+            1.0)) {
+        std::cerr << "higher-L barrier normalization is inconsistent\n";
+        return 12;
+    }
+
     const double rho_mass = 0.77526;
     const double rho_width = 0.1474;
     const double charged_pion_mass = 0.13957039;

@@ -37,6 +37,26 @@ __host__ __device__ inline double blatt_weisskopf(
             / (q2 * q2 + 3.0 * scale2 * q2
                + 9.0 * scale2 * scale2));
     }
+    if (orbital_l == 3) {
+        const double q4 = q2 * q2;
+        const double scale4 = scale2 * scale2;
+        return sqrt(
+            277.0
+            / (q4 * q2 + 6.0 * scale2 * q4
+               + 45.0 * scale4 * q2 + 225.0 * scale4 * scale2));
+    }
+    if (orbital_l == 4) {
+        const double q4 = q2 * q2;
+        const double q6 = q4 * q2;
+        const double scale4 = scale2 * scale2;
+        const double scale6 = scale4 * scale2;
+        const double scale8 = scale4 * scale4;
+        return sqrt(
+            12746.0
+            / (q4 * q4 + 10.0 * scale2 * q6
+               + 135.0 * scale4 * q4
+               + 1575.0 * scale6 * q2 + 11025.0 * scale8));
+    }
     return 0.0;
 }
 

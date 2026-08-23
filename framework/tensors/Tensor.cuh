@@ -87,8 +87,9 @@ class tensor{
             return temp;
         }
 
-        //NOTICE! Defaultly, this operator choose the second index of tensor!
-        //It does not matter when contract with symmetric tensor, like Projection
+        // A^{mu nu} v_nu: the second tensor index is contracted with the
+        // covariant vector. TensorContraction.cuh provides the equivalent
+        // named helper for code where the index choice should be explicit.
         __device__ FV  operator*(FV obj) const {
             FV temp(0,0,0,0);
 

@@ -2,6 +2,11 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Completed the process-neutral high-spin tensor toolkit with named Lorentz
+  contractions, direct spin-two projection, a reduced bare G-wave
+  contraction, consecutive Blatt-Weisskopf factors through `L=4`, focused
+  CUDA/host regressions, and an explicit Condon-Shortley/Racah normalization
+  contract; no `2++` Wave or model Term was registered.
 - Unified all ordinary Breit-Wigner denominators behind one reusable
   `BW_from_width` function, moved uniform table interpolation into the generic
   dynamics library, and made the event current and omega-width integration

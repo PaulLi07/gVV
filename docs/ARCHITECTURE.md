@@ -8,6 +8,8 @@ independent downstream modules consume the fit products. It is an architecture
 reference: field-by-field configuration details are in
 [`MODEL_CONFIGURATION.md`](MODEL_CONFIGURATION.md), and the practical recipe
 for implementing a new basis is in [`WAVE_DEVELOPMENT.md`](WAVE_DEVELOPMENT.md).
+The shared Lorentz/STF and normalized-CG conventions are fixed in
+[`TENSOR_CONVENTIONS.md`](TENSOR_CONVENTIONS.md).
 
 The current process is
 
@@ -889,6 +891,9 @@ Before accepting an architecture change, verify:
 - [`MODEL_CONFIGURATION.md`](MODEL_CONFIGURATION.md): exact `model.json`
   contract and Resonance/Term editing procedures.
 - [`WAVE_DEVELOPMENT.md`](WAVE_DEVELOPMENT.md): concise new-Wave checklist.
+- [`TENSOR_CONVENTIONS.md`](TENSOR_CONVENTIONS.md): Lorentz indices, spin
+  projection, bare orbital tensors, barrier separation, and normalized-CG
+  conventions.
 - [`../post/README.md`](../post/README.md): Post input/output usage.
 - [`REFACTOR_LOG.md`](REFACTOR_LOG.md): refactor decisions, verification, and
   deferred support limits.

@@ -71,6 +71,7 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_wave_registry.exe \
 	$(TEST_BIN_DIR)/test_likelihood.exe
 GPU_TESTS = \
+	$(TEST_BIN_DIR)/test_tensor_building_blocks.exe \
 	$(TEST_BIN_DIR)/test_gvv_wave_numerics.exe \
 	$(TEST_BIN_DIR)/test_intensity_equivalence.exe
 DEPENDENCY_FILES = \
@@ -195,6 +196,9 @@ $(TEST_BIN_DIR)/test_likelihood.exe: tests/test_likelihood.cpp | $(TEST_BIN_DIR)
 	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_gvv_wave_numerics.exe: tests/test_gvv_wave_numerics.cu | $(TEST_BIN_DIR)
+	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_tensor_building_blocks.exe: tests/test_tensor_building_blocks.cu | $(TEST_BIN_DIR)
 	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_intensity_equivalence.exe: tests/test_intensity_equivalence.cu $(OBJ_DIR)/TermEvaluator.o | $(TEST_BIN_DIR)

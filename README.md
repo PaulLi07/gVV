@@ -318,7 +318,7 @@ make check
 | `make post` | Build `bin/Post.exe` separately |
 | `make tests` | Build the ordinary test executables |
 | `make check` | Run the 12 login-node-safe tests |
-| `make gpu-tests` | Compile the two explicit GPU runtime regressions |
+| `make gpu-tests` | Compile the three explicit GPU runtime regressions |
 | `make check-gpu` | Execute those regressions on an allocated CUDA device |
 | `make clean` | Remove generated objects, executables, and dependency files |
 
@@ -509,6 +509,9 @@ A new Wave is process code because it defines a new covariant numerator:
 Do not put a Resonance denominator or model-wide Term logic into a Wave. See
 [Wave development](docs/WAVE_DEVELOPMENT.md) for physics invariants, code
 templates, registration details, and the required validation matrix.
+The reusable Lorentz contractions, spin-two projection, bare high-spin
+orbital tensors, barrier separation, and normalized-CG convention are defined
+in [Tensor conventions](docs/TENSOR_CONVENTIONS.md).
 
 ### Add a new propagator
 
@@ -549,5 +552,6 @@ process-detail callback, and fitted-state machinery remain reusable.
 | [Code reference](docs/CODE_REFERENCE.md) | Responsibility of every production file and important internal code blocks |
 | [Model configuration](docs/MODEL_CONFIGURATION.md) | Full JSON contract and Resonance/Term add-disable-delete procedures |
 | [Wave development](docs/WAVE_DEVELOPMENT.md) | Building, registering, and validating a new complete Wave |
+| [Tensor conventions](docs/TENSOR_CONVENTIONS.md) | Lorentz indices, spin projectors, bare orbital tensors, barriers, and normalized-CG boundary |
 | [Post README](post/README.md) | Focused Post Calculation and Post Plotting contract |
 | [Refactor log](docs/REFACTOR_LOG.md) | Historical implementation and verification record |

@@ -27,7 +27,7 @@ The Makefile makes the product split explicit:
 - default `all` resolves to `fit` and builds only `bin/Fit.exe`;
 - `post` independently builds `bin/Post.exe`;
 - `tests`/`check` build and run the login-node-safe suite;
-- `gpu-tests`/`check-gpu` build and run the two CUDA-device regressions;
+- `gpu-tests`/`check-gpu` build and run the three CUDA-device regressions;
 - `clean` removes only generated objects, binaries, tests, and dependency
   files listed by the build graph.
 
@@ -195,25 +195,43 @@ provides tensor arithmetic, contraction with an `FV` using the adopted metric,
 the normal metric tensor, and a two-vector Levi-Civita tensor construction.
 It is low-level algebra only; a complete Wave must not be added here.
 
+### `framework/tensors/TensorContraction.cuh` — Shared
+
+Provides explicitly named Lorentz contractions for rank-two tensors. It
+covers contraction of the second index with a vector, contraction of the
+second indices of two tensors, a double contraction, the Lorentz trace, and
+symmetrization. The functions make every metric sign visible without adding
+an ambiguous tensor multiplication operator.
+
 ### `framework/tensors/SpinProjector.cuh` — Shared
 
-Provides the spin-one transverse projector
-`g - p p/(p.p)`. Process code supplies the momentum and owns any physical
-assumption about which state is being projected.
+Provides the spin-one transverse metric `g - p p/(p.p)` and applies the
+spin-two polarization projector directly to an arbitrary rank-two source.
+The implementation symmetrizes, projects both indices, and removes the trace
+without materializing a rank-four projector. Process code supplies the
+momentum and owns the physical meaning of the source.
 
 ### `framework/tensors/OrbitalTensor.cuh` — Shared
 
-Builds covariant P- and D-wave orbital objects from a parent momentum and
-relative daughter momentum. The D-wave block removes the trace in the
-parent-transverse subspace. Barrier factors and complete spin couplings remain
-outside these functions.
+Builds bare covariant P- and D-wave orbital objects from a parent momentum and
+relative daughter momentum. It also contracts the bare rank-four G-wave STF
+tensor directly with a rank-two source, returning the required rank-two
+result without allocating a 256-component object. Barrier factors, orbital
+normalization, and complete spin couplings remain outside these functions.
 
 ### `framework/tensors/BarrierFactor.cuh` — Shared
 
 Defines the project Blatt-Weisskopf normalization, units, default radius, and
-the implemented `L=0,1,2` functions. It returns zero for an unsupported
+the implemented `L=0,1,2,3,4` functions. It returns zero for an unsupported
 orbital momentum or invalid radius. The nominal radius lives here so dynamics
 does not create a reverse dependency into process code.
+
+### `docs/TENSOR_CONVENTIONS.md` — Shared physics contract
+
+Records the stored-index and metric conventions, projector and bare-STF
+formulae, the direct G-wave contraction, barrier separation, and the selected
+Condon-Shortley/Racah normalized-CG boundary for future high-spin process
+Waves.
 
 ### 5.3 Reusable dynamics
 
@@ -765,7 +783,7 @@ runtime input.
 ## 9. Verification inventory
 
 The ordinary test suite is deliberately runnable without a CUDA device. The
-two GPU runtime tests are separate because an IHEP login node may provide
+three GPU runtime tests are separate because an IHEP login node may provide
 `nvcc` while exposing no GPU. Compile on the login node; execute
 `make check-gpu` only inside a Slurm GPU job.
 
@@ -773,7 +791,7 @@ two GPU runtime tests are separate because an IHEP login node may provide
 
 | File | What it guards |
 |---|---|
-| `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy barrier normalization, unified running-width equivalence, shared BW denominator, threshold continuation, Flatte subtraction, nominal-mass rho-isobar equivalence, and compilation of the omega device path |
+| `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy and higher-L barrier normalization, unified running-width equivalence, shared BW denominator, threshold continuation, Flatte subtraction, nominal-mass rho-isobar equivalence, and compilation of the omega device path |
 | `tests/test_gvv_amplitude.cu` | compile-time integration of registered Waves with the common GVV amplitude contraction |
 | `tests/test_propagator_registry.cu` | propagator device dispatch, nominal line-shape contracts, host omega-width interpolation/configuration/convergence, and the omega wrapper's use of the shared BW denominator |
 | `tests/test_propagator_compiler.cu` | all supported GVV propagator JSON contracts, self-contained omega-omega channel context, generic free-ratio bindings, and invalid width/threshold/field rejection |
@@ -793,13 +811,15 @@ executables do not require an allocated CUDA device at runtime.
 
 | File | What it guards |
 |---|---|
+| `tests/test_tensor_building_blocks.cu` | named Lorentz contractions, explicit spin-two projection, symmetry/transversality/trace/idempotence, reduced versus explicit rank-four G-wave contraction, redundant outer-projector removal, parity and power scaling, and analytic rest-frame probes |
 | `tests/test_gvv_wave_numerics.cu` | complete-Wave numerical finiteness, rotations, Bose symmetry, omega-current/projector/orbital/photon transversality, D-wave trace, Gram symmetry/positive semidefiniteness, cross-class orthogonality, and nonzero registered-Wave diagonals on a non-collinear physical fixture |
 | `tests/test_intensity_equivalence.cu` | direct Term contraction versus optimized Wave aggregation, packed-component closure, shared Wave slots, near-cancelling coefficients, several Term counts, nonzero batch offsets, and GPU pair reduction versus host sums |
 
-The first protects the physics identities of complete registered bases. The
-second protects the algebraic equivalence of the Fit, Projection, and Post
-representations. Both must be extended when a new Wave changes the active
-numerical basis.
+The tensor test protects reusable low-level identities and is extended only
+when those building blocks change. The complete-Wave test protects the
+physics identities of registered bases, while the intensity test protects the
+algebraic equivalence of the Fit, Projection, and Post representations. The
+last two must be extended when a new Wave changes the active numerical basis.
 
 ## 10. Where a change belongs
 
