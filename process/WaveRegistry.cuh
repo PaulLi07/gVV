@@ -107,6 +107,7 @@ struct GVVWaveMetadata {
     std::string id;
     std::string jpc;
     std::string latex;
+    // Phase-reference block metadata; never used to mask Gram-matrix entries.
     std::string coherence_class;
     int wave_type = -1;
 };

@@ -370,11 +370,19 @@ with other blocks. The rules are therefore:
    `positive_real` phase reference.
 4. Every other active class needs one `positive_real` phase reference.
 
+The current Wave registry has two such classes:
+
+| `coherence_class` | Registered Waves | Nominal reference |
+|---|---|---|
+| `positive_parity` | `gvv.scalar_00`, `gvv.scalar_22`, and all `gvv.tensor_*` Waves | `f0_1710_00`, `positive_real` phase reference |
+| `negative_parity` | `gvv.pseudoscalar_11` | `eta_1760_11`, fixed global `scale_and_phase` reference |
+
 `coherence_class` belongs to registered Wave metadata, not to `model.json`.
 It does not turn interference on or off. The intensity engine always retains
 all Wave cross terms. Separate classes are valid only when the corresponding
 Wave Gram-matrix block is physically zero; this must be demonstrated by the
-GPU numerical tests.
+GPU numerical tests. The present names describe the verified GVV blocks, but
+parity alone is not sufficient to classify a future Wave.
 
 Choose a phase reference expected to remain significant. If a Term must be
 tested against zero, first transfer the phase role to another active Term in
@@ -488,8 +496,8 @@ Then add its Term:
 ```
 
 No count, C++ array, likelihood code, Projection code, or Post code changes.
-The existing scalar phase reference remains the only reference in the scalar
-coherence class, so the new coupling must be ordinary complex Cartesian.
+The existing `positive_parity` phase reference remains the only reference in
+that class, so the new coupling must be ordinary complex Cartesian.
 
 If this is the first Term in a newly registered coherence class, choose one
 stable Term in that class as `positive_real` with `reference: "phase"`. Do not
@@ -551,9 +559,9 @@ width, add one `scalar_sd_running_bw` Resonance and two Terms referencing it:
 }
 ```
 
-Both Terms remain in the scalar coherence class and interfere. Note again
-that `gvv.scalar_22` is the scalar \(0^{++}\), \(L=S=2\) basis; it is not a
-spin-two \(2^{++}\) Wave.
+Both Terms remain in the `positive_parity` coherence class and interfere. Note
+again that `gvv.scalar_22` is the scalar \(0^{++}\), \(L=S=2\) basis; it is
+not a spin-two \(2^{++}\) Wave.
 
 ### Disable an ordinary Term
 
@@ -573,8 +581,9 @@ would leave two free parameters in Minuit and would not disable the Term.
 
 ### Disable the phase reference of one class
 
-Suppose `f0_1710_00` is to be disabled while another scalar Term remains
-active. Transfer the scalar phase convention first. For example, change
+Suppose `f0_1710_00`, the nominal `positive_parity` phase reference, is to be
+disabled while any other Term in that class remains active, including a
+`2++` Term. Transfer the phase convention first. For example, change
 `f0_1500_00` to:
 
 ```json
@@ -593,14 +602,16 @@ and set:
 ```
 
 The inactive Term may retain its old coupling object because inactive
-references do not count. If every scalar Term is disabled, the scalar class
-disappears and no replacement scalar reference is needed.
+references do not count. If every active Term in `positive_parity` is
+disabled, that class disappears and no replacement reference is needed. If
+all scalar Terms are disabled while a tensor Term remains active, however,
+one stable tensor Term must become the `positive_real` reference.
 
 ### Disable the global scale-and-phase reference
 
 The nominal global reference is `eta_1760_11`. If it is disabled while other
-pseudoscalar Terms remain, transfer the fixed convention within the same class
-in the same edit. For example, make `eta_c_11`:
+Terms in `negative_parity` remain, transfer the fixed convention within that
+class in the same edit. For example, make `eta_c_11`:
 
 ```json
 "coupling": {
@@ -611,17 +622,19 @@ in the same edit. For example, make `eta_c_11`:
 ```
 
 and set `eta_1760_11` to `"active": false`. Moving the fixed reference within
-the same coherence class is the least disruptive convention change. If it is
-moved to another class instead, the original active class still needs its own
-`positive_real` phase reference.
+the same coherence class is the least disruptive convention change. If the
+fixed reference is moved into another active class, change that destination
+class's former `positive_real` phase reference to `complex_cartesian` in the
+same edit. If the original class remains active, give it one `positive_real`
+reference; if it becomes empty, no replacement is required.
 
 ### Re-enable a Term
 
 `"active": true` and an omitted `active` field are equivalent, but references
 must be reconsidered.
 
-If the scalar phase role was moved from `f0_1710_00` to `f0_1500_00`, choose
-one of these two valid conventions when re-enabling:
+If the `positive_parity` phase role was moved from `f0_1710_00` to
+`f0_1500_00`, choose one of these two valid conventions when re-enabling:
 
 - keep `f0_1500_00` as `positive_real` and change `f0_1710_00` to
   `complex_cartesian` with an array initial value; or

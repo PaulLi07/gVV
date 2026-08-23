@@ -124,6 +124,21 @@ cross-Wave entries remain in the sum. It reduces the contraction cost from
 | `gvv.tensor_42_u2` | `2++`, `LS=42`, production covariant 2 | `process/waves/Tensor42U2.cuh` |
 | `gvv.tensor_42_u3` | `2++`, `LS=42`, production covariant 3 | `process/waves/Tensor42U3.cuh` |
 
+The Wave registry currently defines two phase-reference classes:
+
+| `coherence_class` | Registered Waves | Nominal reference |
+|---|---|---|
+| `positive_parity` | all `0++` and `2++` Waves | `f0_1710_00`, positive real |
+| `negative_parity` | the `0-+` Wave | `eta_1760_11`, fixed to the global scale and phase |
+
+These names describe phase-reference bookkeeping for the two numerically
+orthogonal parity blocks. They do not switch interference on or off: the
+intensity engine still evaluates every cross-Wave Gram-matrix entry. Waves
+that can interfere, such as the registered `0++` and `2++` bases, must remain
+in the same class and share one arbitrary phase convention. A future Wave must
+be classified from its event-level Gram-matrix cross terms, not from parity
+alone.
+
 `gvv.scalar_22` remains the scalar `0++(22)` basis; it is not a spin-two
 Wave. The nominal model currently activates only the three `LS=02` tensor
 covariants, for `f2(1565)` and `f2(1810)`. The higher-orbital tensor Waves are
@@ -492,7 +507,8 @@ When the Wave already exists, no C++/CUDA source change is required:
 
 1. add the Resonance propagator instance to `resonances`;
 2. add a Term that links it to a registered Wave and coupling;
-3. preserve exactly one phase reference in every active coherence class and
+3. preserve exactly one phase reference in every active coherence class
+   (`positive_parity` and `negative_parity` in the current catalogue) and
    exactly one nonzero global `scale_and_phase` reference;
 4. run model/unit validation before a production scan.
 
@@ -516,8 +532,8 @@ A new Wave is process code because it defines a new covariant numerator:
 1. construct one complete tensor in `process/waves/<Name>.cuh` from reusable
    `framework/math`, `framework/tensors`, and `framework/dynamics` blocks;
 2. add its device enum and dispatch in `process/WaveRegistry.cuh`;
-3. add its stable ID, JPC, LaTeX label, coherence class, and enum at the single
-   host registry in `process/WaveRegistry.cu`;
+3. add its stable ID, JPC, LaTeX label, physically justified coherence class,
+   and enum at the single host registry in `process/WaveRegistry.cu`;
 4. extend registry/model tests and the complete-Wave GPU numerical tests;
 5. only then reference the new stable Wave ID from `model.json`.
 

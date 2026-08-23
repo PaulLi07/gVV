@@ -230,8 +230,8 @@ does not create a reverse dependency into process code.
 
 Records the stored-index and metric conventions, projector and bare-STF
 formulae, the direct G-wave contraction, barrier separation, and the selected
-Condon-Shortley/Racah normalized-CG boundary for future high-spin process
-Waves.
+Condon-Shortley/Racah normalized-CG boundary for the registered and future
+high-spin process Waves.
 
 ### 5.3 Reusable dynamics
 
@@ -492,6 +492,11 @@ coherence class, and device type. Adding a Resonance on an existing Wave must
 not change this file. Adding a new Wave requires exactly one host record here
 and a matching device dispatch entry in the header.
 
+The current table assigns every registered `0++` and `2++` Wave to
+`positive_parity`, and assigns the `0-+` Wave to `negative_parity`. These
+values define phase-reference blocks only. Neither `WaveRegistry` nor
+`ModelCompiler` uses them to remove a Gram-matrix entry from the intensity.
+
 ### `process/ProcessModel.h` — Shared Fit/Calculation
 
 Defines dense `TermSpec`, coupling policy codes, compiled Resonance/Term
@@ -512,7 +517,9 @@ This is the only process file that needs a propagator-specific compiler branch.
 Owns complete active-model assembly: process ID, active Term dynamics,
 inactive-only Resonance pruning, independent Resonance compilation, Wave-slot
 assignment, coupling policies, and one reference per coherence class. It
-contains neither Wave formulae nor propagator formulae.
+therefore validates one reference in each active `positive_parity` or
+`negative_parity` block of the current catalogue. It contains neither Wave
+formulae nor propagator formulae.
 
 ### 6.4 Common process contraction
 

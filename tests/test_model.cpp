@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
         require(
             model.term("f0_1710_00").coupling.mode
                 == ctpwa::CouplingMode::PositiveReal,
-            "scalar phase-reference coupling mismatch");
+            "positive-parity phase-reference coupling mismatch");
         require(
             model.term("eta_1760_11").coupling.reference
                 == ctpwa::CouplingReference::ScaleAndPhase,

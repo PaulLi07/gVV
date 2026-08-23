@@ -3,12 +3,13 @@
 Canonical repository:
 `/besfs10/groups/psip/psipgroup/user/liyuhong/GVV/analysis/pwa/ctpwa/Release/gVV`
 
-## Scope and invariants
+## Initial modular-refactor scope and invariants
 
-The work is an architecture-equivalent refactor. It does not add or remove a
-nominal physics contribution, introduce a `2++` Wave, or change propagator,
-Wave, omega-width, normalization, or sideband formulae. Old fit-result parsing
-compatibility and configuration snapshots were intentionally removed.
+The initial architecture migration was an amplitude-equivalent refactor. It
+did not add or remove a nominal physics contribution, introduce a `2++` Wave,
+or change propagator, Wave, omega-width, normalization, or sideband formulae.
+Old fit-result parsing compatibility and configuration snapshots were
+intentionally removed.
 
 All active work uses one Git repository. An early isolated worktree was merged
 back and removed. The project directory was renamed from `gVV_v1` to `gVV`
@@ -442,3 +443,39 @@ Post Calculation was run:
 The new CUDA tensor identities still require their first runtime execution in
 the user-controlled Slurm GPU environment before the subsequent spin-two Wave
 implementation is release-gated.
+
+## Spin-two Waves and phase-reference class names (2026-08-23)
+
+Working branch: `feature/tensor-building-blocks`.
+
+- Added twelve complete `2++` Waves under `process/waves/`, combining
+  `LS=02,20,22,42` with the three independent radiative production covariants
+  `U1,U2,U3` under the documented normalized-CG convention.
+- Added `f2(1565)` and `f2(1810)` to the nominal model with only their three
+  `LS=02` Waves active. Each state shares one Resonance propagator across its
+  three Terms and fits three independent complex couplings.
+- Renamed the registered phase-reference tokens from `scalar` and
+  `pseudoscalar` to `positive_parity` and `negative_parity`. The former now
+  clearly covers every registered `0++` and `2++` Wave, while the latter
+  covers the registered `0-+` Wave.
+- Kept stable Wave IDs, JPC labels, the `f0_1710_00` positive-real reference,
+  the `eta_1760_11` global fixed reference, all numerical amplitudes, and every
+  Gram-matrix cross term unchanged. Existing `model.json` files require no
+  class-name edit because the tokens are owned by `WaveRegistry`.
+- Updated the README, architecture, model-configuration, Wave-development,
+  code-reference, and tensor-convention documents, including the rule that a
+  future Wave is classified by event-level Gram-matrix cross terms rather
+  than by parity alone.
+
+Verification was performed on the fixed `lxlogin005` node without submitting
+a cluster job:
+
+- `make -j2 check` rebuilt the affected registry/model tests and all 12
+  login-node-safe tests passed;
+- the registry regression explicitly checked scalar and tensor Waves in
+  `positive_parity` and the pseudoscalar Wave in `negative_parity`;
+- patch whitespace and tracked-text searches found no remaining use of the
+  retired tokens as coherence-class values or descriptions.
+
+Only the existing CUDA warning for pre-sm75 offline compilation appeared. No
+Fit, Post Calculation, GPU executable, or Slurm job was run.

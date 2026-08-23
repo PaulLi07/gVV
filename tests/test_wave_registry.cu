@@ -61,6 +61,12 @@ int main(int argc, char* argv[])
             require(!registered_types[wave.wave_type],
                     "duplicate Wave enum in registry");
             registered_types[wave.wave_type] = true;
+            require(
+                wave.coherence_class
+                    == (wave.wave_type == GVV_PSEUDOSCALAR_11
+                            ? "negative_parity"
+                            : "positive_parity"),
+                "Wave coherence-class registration mismatch");
         }
         require(
             gvv_registered_wave("gvv.tensor_02_u1").wave_type
@@ -70,7 +76,6 @@ int main(int argc, char* argv[])
                 && gvv_registered_wave("gvv.tensor_02_u3").wave_type
                     == GVV_TENSOR_02_U3,
             "LS=02 tensor Wave registration mismatch");
-
         const std::vector<std::string> resonance_ids = {
             "f0_1500", "f0_1710", "eta_1760", "eta_c_1S",
             "X_1835", "NR_0mp", "f2_1565", "f2_1810"};

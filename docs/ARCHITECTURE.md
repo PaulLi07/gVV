@@ -475,6 +475,16 @@ contract resolves them in two related layers:
 A fixed scale-and-phase reference must be nonzero. Other coherence classes use
 a positive-real coupling with free log magnitude to fix only their phase.
 
+The current GVV registry uses the following explicit names:
+
+| `coherence_class` | Registered JPC values | Nominal reference policy |
+|---|---|---|
+| `positive_parity` | `0++`, `2++` | `f0_1710_00` is positive real and fixes this block's phase |
+| `negative_parity` | `0-+` | `eta_1760_11` is the fixed global scale-and-phase reference |
+
+The names summarize the two blocks verified for the current Wave catalogue;
+they are not a rule that parity alone determines the class of a future Wave.
+
 `coherence_class` is a physical phase-convention declaration, not a plotting
 group and not a numerical mask. A new Wave belongs to an existing class if it
 can physically interfere with members of that class. A distinct class is

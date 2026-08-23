@@ -449,7 +449,8 @@ int main()
                 std::fabs(values->F[
                     scalar * GVV_NBASIS + GVV_PSEUDOSCALAR_11])
                     <= tolerance * matrix_scale,
-                "scalar and pseudoscalar coherence classes are not orthogonal");
+                "0++ Waves in positive_parity are not orthogonal to "
+                "negative_parity");
         }
         for (int tensor_wave = GVV_TENSOR_02_U1;
              tensor_wave <= GVV_TENSOR_42_U3;
@@ -457,7 +458,8 @@ int main()
             require(
                 std::fabs(matrix(tensor_wave, GVV_PSEUDOSCALAR_11))
                     <= tolerance * matrix_scale,
-                "tensor and pseudoscalar coherence classes are not orthogonal");
+                "2++ Waves in positive_parity are not orthogonal to "
+                "negative_parity");
         }
 
         check_cuda(cudaFree(values), "free Wave numerical output");

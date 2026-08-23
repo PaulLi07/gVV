@@ -1,11 +1,15 @@
 # Lorentz tensor and angular-momentum conventions
 
 This document fixes the conventions used by the reusable tensor building
-blocks. It also records the normalization boundary that future process Waves
-must follow. The framework APIs described here are independent of the GVV
-final state; a complete production-and-decay Wave remains process-specific.
+blocks. It also records the normalization boundary followed by registered and
+future process Waves. The framework APIs described here are independent of
+the GVV final state; a complete production-and-decay Wave remains
+process-specific.
 
-No spin-two GVV Wave is registered by this framework update.
+The twelve registered spin-two GVV Waves consume this contract. The nominal
+model activates the `LS=02` `U1/U2/U3` triplets for `f2(1565)` and `f2(1810)`;
+the `LS=20,22,42` Waves remain registered but inactive unless selected by
+`model.json`.
 
 ## 1. Stored indices and metric
 
@@ -158,11 +162,11 @@ q^8+10q_0^2q^6+135q_0^4q^4+1575q_0^6q^2+11025q_0^8}}.
 At $q=q_0$, $q^L B_L(q)=1$. A process Wave multiplies the appropriate
 barrier factor exactly once. Orbital helpers never multiply it implicitly.
 
-## 5. Normalized-CG convention for future Waves
+## 5. Normalized-CG convention for registered and future Waves
 
 The generic APIs above deliberately preserve the existing bare-STF
-normalization. This keeps every current Wave unchanged. Future high-spin GVV
-Waves use the following single normalized-CG convention in their process
+normalization. The registered high-spin GVV Waves, and any future high-spin
+Waves, use the following single normalized-CG convention in their process
 layer.
 
 In the parent rest frame, use the Condon-Shortley spherical vectors

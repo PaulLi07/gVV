@@ -156,7 +156,7 @@ structure.
 The orbital helpers deliberately return bare STF geometry and never include a
 barrier or normalized-CG coefficient. The exact index definitions, reduced
 rank-four contraction, and the Condon-Shortley/Racah normalization selected
-for future high-spin Waves are recorded in
+for the registered and future high-spin Waves are recorded in
 [`TENSOR_CONVENTIONS.md`](TENSOR_CONVENTIONS.md). Do not change the existing
 bare D-wave normalization to implement one new basis.
 
@@ -319,10 +319,13 @@ evaluates the complete active Wave Gram matrix. Therefore:
 - prove every claimed zero cross block numerically on several physical
   events, not only after phase-space integration.
 
-The current positive- and negative-parity blocks are numerically checked to be
-orthogonal. `gvv.scalar_00`, `gvv.scalar_22`, and all registered `2++` Waves
-share the historical `scalar` coherence token and can interfere. The token is a
-phase-reference block name, not a statement that every Wave has spin zero.
+The current registry assigns `gvv.scalar_00`, `gvv.scalar_22`, and every
+registered `2++` Wave to `positive_parity`; it assigns
+`gvv.pseudoscalar_11` to `negative_parity`. The cross block between these two
+classes is numerically checked to vanish. These tokens name phase-reference
+blocks, not spin categories or intensity masks. Do not classify a future Wave
+from its JPC label or parity alone: verify its event-level Gram-matrix cross
+terms first.
 
 Every active coherence class must have exactly one reference Term. A new Wave
 in an existing class normally uses an ordinary `complex_cartesian` coupling.

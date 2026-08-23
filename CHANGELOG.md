@@ -2,6 +2,10 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Renamed the two Wave phase-reference metadata classes from the spin-specific
+  `scalar`/`pseudoscalar` tokens to `positive_parity`/`negative_parity`.
+  Stable Wave IDs, JPC labels, amplitudes, propagators, couplings, reference
+  roles, Gram-matrix evaluation, and `model.json` remain unchanged.
 - Registered the twelve normalized `2++` complete Waves spanning
   `LS=02,20,22,42` and production covariants `U1,U2,U3`. The nominal model now
   activates only the `LS=02` triplet for `f2(1565)` and `f2(1810)`, with one
