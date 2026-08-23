@@ -479,3 +479,59 @@ a cluster job:
 
 Only the existing CUDA warning for pre-sm75 offline compilation appeared. No
 Fit, Post Calculation, GPU executable, or Slurm job was run.
+
+## Configurable Resonance parameters and self-contained FitState (2026-08-24)
+
+Working branch: `feature/configurable-propagator-parameters`.
+
+- Extended the propagator compiler so supported Resonance `mass` and `width`
+  parameters may be fixed or released entirely from `model.json`. Their free
+  Minuit coordinates use the physical identity transform, explicit finite
+  bounds with a positive lower limit, and the stable names
+  `mass_<resonance-id>` and `width_<resonance-id>`.
+- Kept positive S/D and effective omega-omega ratios in log coordinates, and
+  kept `orbital_l` as a fixed integer model choice. The full free mass range of
+  `two_body_running_bw` and `scalar_sd_running_bw` must remain strictly above
+  nominal omega-omega threshold; the subtracted effective Flatte continues to
+  support the intended subthreshold-pole use case.
+- Made the ownership rule explicit in code coverage and documentation: one
+  Resonance ID is one propagator instance shared by all Terms that reference
+  it. Reusing a propagator type string for a different Resonance ID does not
+  share parameters.
+- Upgraded the machine Fit-to-Post contract to FitState schema version 2. It
+  embeds the complete canonical model as a structured JSON object together
+  with the fitted vector, bounds, covariance, diagnostics, provenance, and
+  compatibility signatures. Schema version 1 is deliberately rejected and
+  requires a new Fit.
+- Removed the separate model-file input from Post Calculation. `Post.exe` and
+  `submit_post.sh` now accept only the fitted state, generated truth MC, and
+  selected normalization MC; the stored source model path is provenance only.
+- Split compatibility into the deterministic canonical-definition signature,
+  an explicit `gvv-amplitude-contract-vN` implementation signature, and their
+  combined identifier. Post checks all three before applying parameters. The
+  implementation version must be manually reviewed and bumped whenever an
+  unchanged model document could acquire different numerical amplitude or
+  parameter semantics.
+- Added focused coverage for mass/width policies and application, same-ID
+  sharing versus distinct-ID independence, schema-v2 embedded-model round
+  trips and schema-v1 rejection, and definition/implementation signature
+  behavior.
+
+The nominal configuration keeps its existing mass and width values fixed, so
+this change does not alter the nominal amplitude. No Slurm or GPU job was
+submitted as part of this configuration and output-contract update.
+
+Final integration verification was performed with CUDA 12 and ROOT 6.32.02
+on the fixed `lxlogin005` node:
+
+- `make -j2 check` passed all 13 login-node-safe tests, including the new
+  propagator-parameter, sharing/independence, FitState-v2, and implementation-
+  signature regressions;
+- `make -j2` and `make -j2 post` confirmed the current Fit and Post binaries;
+- `make -j2 gpu-tests` compiled all three CUDA runtime test executables without
+  executing them;
+- `bash -n submit_post.sh`, JSON syntax checks, and `git diff --check` passed;
+- the nominal `config/model.json`, `WaveRegistry`, and the user's
+  `positive_parity`/`negative_parity` definitions were unchanged.
+
+No Fit, numerical Post Calculation, GPU runtime test, or Slurm job was run.

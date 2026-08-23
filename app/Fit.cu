@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
         context.fit_config_file = fit_config_file;
         context.model_config_file = config.model_file;
         context.model_name = likelihood.Model().definition.name;
-        context.model_signature = ctpwa::model_definition_signature(
+        context.model_signature = gvv_model_signature(
             likelihood.Model().definition);
         context.samples.push_back({
             "data", "data", config.inputs.data_file,
@@ -170,6 +170,11 @@ int main(int argc, char* argv[])
         state.fit_config_file = fit_config_file;
         state.model_config_file = config.model_file;
         state.model_name = context.model_name;
+        state.model_json = likelihood.Model().definition.canonical_json;
+        state.model_definition_signature =
+            ctpwa::model_definition_signature(likelihood.Model().definition);
+        state.model_implementation_signature =
+            gvv_amplitude_implementation_signature();
         state.model_signature = context.model_signature;
         state.best = summary.best;
         state.parameters = parameters;

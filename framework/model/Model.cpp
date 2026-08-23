@@ -190,6 +190,19 @@ ParameterDefinition parse_parameter(
             fail(source, path + ".bounds", "must be finite and increasing");
         }
     }
+    if (!result.fixed && result.has_lower_bound) {
+        const double initial_coordinate =
+            result.transform == "log"
+                ? std::log(result.value)
+                : result.value;
+        if (initial_coordinate < result.lower_bound
+            || initial_coordinate > result.upper_bound) {
+            fail(
+                source,
+                path + ".value",
+                "free parameter initial value is outside bounds");
+        }
+    }
     return result;
 }
 

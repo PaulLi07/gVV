@@ -43,15 +43,28 @@ const ctpwa::ParameterDefinition& require_parameter(
     return found->second;
 }
 
-void require_fixed_identity(
+void require_identity_parameter_policy(
     const ctpwa::ResonanceDefinition& resonance,
     const std::string& name,
     const ctpwa::ParameterDefinition& parameter)
 {
-    if (!parameter.fixed || parameter.transform != "identity") {
+    if (parameter.transform != "identity") {
         throw std::runtime_error(
-            "the GVV process currently requires fixed identity parameter '"
-            + name + "' for resonance '" + resonance.id + "'");
+            "resonance '" + resonance.id + "' parameter '" + name
+            + "' must use the identity transform");
+    }
+    if (!parameter.fixed
+        && (!parameter.has_lower_bound || !parameter.has_upper_bound
+            || !std::isfinite(parameter.lower_bound)
+            || !std::isfinite(parameter.upper_bound)
+            || !(parameter.lower_bound > 0.0)
+            || !(parameter.lower_bound < parameter.upper_bound)
+            || parameter.value < parameter.lower_bound
+            || parameter.value > parameter.upper_bound)) {
+        throw std::runtime_error(
+            "free parameter '" + name + "' for resonance '" + resonance.id
+            + "' requires finite bounds with a positive lower limit "
+              "containing its initial value");
     }
 }
 
@@ -85,6 +98,29 @@ GVVPropagatorParameterMetadata parameter_metadata(
     result.display_name = display_name;
     result.unit = unit;
     result.target = target;
+    return result;
+}
+
+GVVPropagatorFitBinding identity_binding(
+    const ctpwa::ResonanceDefinition& resonance,
+    const ctpwa::ParameterDefinition& parameter,
+    const std::string& source_name,
+    const std::string& fit_name,
+    int resonance_index,
+    GVVPropagatorParameterTarget target)
+{
+    GVVPropagatorFitBinding result;
+    result.fit_name = fit_name + resonance.id;
+    result.initial_coordinate = parameter.value;
+    result.step = parameter.step;
+    result.has_lower_bound = parameter.has_lower_bound;
+    result.has_upper_bound = parameter.has_upper_bound;
+    result.lower_bound = parameter.lower_bound;
+    result.upper_bound = parameter.upper_bound;
+    result.resonance_index = resonance_index;
+    result.target = target;
+    result.transform = GVVFitTransform::Identity;
+    result.source_name = source_name;
     return result;
 }
 
@@ -125,13 +161,20 @@ void require_positive_log_parameter(
 
 void require_open_omega_omega_pole(
     const ctpwa::ResonanceDefinition& resonance,
-    double mass)
+    const ctpwa::ParameterDefinition& mass)
 {
-    if (!(mass > 2.0 * GVV_OMEGA_MASS)) {
+    const double threshold = 2.0 * GVV_OMEGA_MASS;
+    if (!(mass.value > threshold)) {
         throw std::runtime_error(
             "resonance '" + resonance.id
             + "' running-width pole must be above the nominal omega-omega "
               "threshold");
+    }
+    if (!mass.fixed && !(mass.lower_bound > threshold)) {
+        throw std::runtime_error(
+            "resonance '" + resonance.id
+            + "' requires its entire free mass range to remain above the "
+              "nominal omega-omega threshold");
     }
 }
 
@@ -187,12 +230,16 @@ GVVCompiledResonance gvv_compile_resonance(
         require_parameter(input, "mass");
     const ctpwa::ParameterDefinition& width =
         require_parameter(input, "width");
-    require_fixed_identity(input, "mass", mass);
-    require_fixed_identity(input, "width", width);
+    require_identity_parameter_policy(input, "mass", mass);
+    require_identity_parameter_policy(input, "width", width);
     if (!(mass.value > 0.0) || !(width.value > 0.0)) {
         throw std::runtime_error(
             "resonance '" + input.id
             + "' requires positive mass and pole width");
+    }
+    if (input.propagator == "two_body_running_bw"
+        || input.propagator == "scalar_sd_running_bw") {
+        require_open_omega_omega_pole(input, mass);
     }
 
     result.parameter_metadata.push_back(parameter_metadata(
@@ -204,6 +251,25 @@ GVVCompiledResonance gvv_compile_resonance(
         "GeV",
         GVVPropagatorParameterTarget::PoleWidth));
 
+    if (!mass.fixed) {
+        result.fit_bindings.push_back(identity_binding(
+            input,
+            mass,
+            "mass",
+            "mass_",
+            resonance_index,
+            GVVPropagatorParameterTarget::Mass));
+    }
+    if (!width.fixed) {
+        result.fit_bindings.push_back(identity_binding(
+            input,
+            width,
+            "width",
+            "width_",
+            resonance_index,
+            GVVPropagatorParameterTarget::PoleWidth));
+    }
+
     if (input.propagator == "fixed_width_bw") {
         result.propagator = omega_omega_descriptor(
             ctpwa::PROP_FIXED_BW, mass.value, width.value);
@@ -213,7 +279,6 @@ GVVCompiledResonance gvv_compile_resonance(
     if (input.propagator == "two_body_running_bw") {
         const int orbital_l = require_fixed_integer(
             input, "orbital_l", 0, 2);
-        require_open_omega_omega_pole(input, mass.value);
         result.propagator = omega_omega_descriptor(
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
             mass.value,
@@ -228,7 +293,6 @@ GVVCompiledResonance gvv_compile_resonance(
     }
 
     if (input.propagator == "scalar_sd_running_bw") {
-        require_open_omega_omega_pole(input, mass.value);
         const ctpwa::ParameterDefinition& ratio =
             require_parameter(input, "sd_ratio");
         require_positive_log_parameter(input, "sd_ratio", ratio);

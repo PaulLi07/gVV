@@ -442,17 +442,47 @@ void write_latex(
     output << "\\hline\n\\end{tabular}\n";
 }
 
-void validate_contract(
+GVVCompiledModel compile_embedded_model(
     const ctpwa::FitState& fit,
-    const GVVCompiledModel& model,
+    const std::string& fit_state_file)
+{
+    const ctpwa::ModelDefinition definition = ctpwa::parse_model_definition(
+        fit.model_json,
+        "embedded model in fit state '" + fit_state_file + "'");
+    if (definition.name != fit.model_name) {
+        throw std::runtime_error(
+            "embedded model name '" + definition.name
+            + "' does not match fit-state model name '"
+            + fit.model_name + "'");
+    }
+    const std::string definition_signature =
+        ctpwa::model_definition_signature(definition);
+    if (definition_signature != fit.model_definition_signature) {
+        throw std::runtime_error(
+            "embedded model definition does not match its stored signature");
+    }
+
+    const std::string implementation_signature =
+        gvv_amplitude_implementation_signature();
+    if (implementation_signature != fit.model_implementation_signature) {
+        throw std::runtime_error(
+            "fit state requires GVV amplitude implementation '"
+            + fit.model_implementation_signature
+            + "' but this Post executable provides '"
+            + implementation_signature + "'");
+    }
+    if (gvv_model_signature(definition) != fit.model_signature) {
+        throw std::runtime_error(
+            "fit-state model signature is inconsistent with its embedded "
+            "definition and GVV implementation signature");
+    }
+    return gvv_compile_model(definition);
+}
+
+void validate_parameter_contract(
+    const ctpwa::FitState& fit,
     const std::vector<GVVFitParameterBinding>& layout)
 {
-    const std::string signature =
-        ctpwa::model_definition_signature(model.definition);
-    if (signature != fit.model_signature) {
-        throw std::runtime_error(
-            "model.json does not match the model used by this fit state");
-    }
     if (fit.parameters.size() != layout.size()) {
         throw std::runtime_error("fit-state parameter count does not match model");
     }
@@ -468,28 +498,27 @@ void validate_contract(
 void usage(const char* executable)
 {
     std::cerr << "Usage: " << executable
-              << " fit_state.json model.json truth_mc.root "
-                 "normalization_mc.root\n";
+              << " fit_state.json truth_mc.root normalization_mc.root\n";
 }
 
 } // namespace
 
 int main(int argc, char* argv[])
 {
-    if (argc != 5) {
+    if (argc != 4) {
         usage(argv[0]);
         return 2;
     }
     try {
         const ctpwa::FitState fit = ctpwa::read_fit_state(argv[1]);
-        GVVCompiledModel model = gvv_load_compiled_model(argv[2]);
+        GVVCompiledModel model = compile_embedded_model(fit, argv[1]);
         std::vector<GVVFitParameterBinding> layout =
             gvv_fit_parameter_layout(model);
-        validate_contract(fit, model, layout);
+        validate_parameter_contract(fit, layout);
 
         GVVBranchConfig branches;
         GVVComponentEvaluator evaluator(
-            argv[3], argv[4], branches, std::move(model), std::move(layout));
+            argv[2], argv[3], branches, std::move(model), std::move(layout));
         const GVVIntegratedComponents components =
             evaluator.Evaluate(fit.best.values);
         evaluator.ValidateTotal(fit.best.values, components);

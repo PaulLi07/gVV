@@ -100,6 +100,13 @@ exact parameter set required by that propagator:
 }
 ```
 
+The Resonance `id` identifies the propagator **instance**. It is the sharing
+boundary for line-shape parameters. If several Terms name `f2_1810`, they use
+one compiled denominator and one fitted `mass_f2_1810`/`width_f2_1810` pair.
+If two physically distinct states happen to use `two_body_running_bw`, give
+them different Resonance IDs; the common `propagator` string selects a formula
+and never causes their parameters to be shared.
+
 ### Parameter fields
 
 Every parameter is an object with a required physical `value` and these
@@ -118,10 +125,13 @@ example, if `value` is `0.5`, `transform` is `log`, and `bounds` are
 `[-6.0, 3.0]`, Minuit starts from `log(0.5)` and the bounds apply to that log,
 not directly to the physical ratio.
 
-The generic schema permits these fields on any parameter, but the current GVV
-process compiler deliberately keeps all masses and widths fixed with the
-identity transform. The only supported free propagator parameters are the
-positive log ratios described below.
+The generic schema permits these fields on any parameter, while the GVV
+propagator compiler decides which controls are meaningful for each named
+parameter. Mass and width use physical GeV coordinates with the `identity`
+transform. When either is free, explicit finite bounds with a strictly
+positive lower limit are required. Ratio parameters use the positive `log`
+coordinate documented for their specific propagator. Discrete `orbital_l`
+always remains fixed.
 
 ## Supported propagators
 
@@ -131,15 +141,22 @@ rejected when the Resonance is needed by an active Term.
 | `propagator` | Required parameters | Current fit policy |
 |---|---|---|
 | `nonresonant` | none | Unity, no propagator parameter |
-| `fixed_width_bw` | `mass`, `width` | Both fixed, identity |
-| `two_body_running_bw` | `mass`, `width`, `orbital_l` | All fixed; \(L=0,1,2\) |
-| `scalar_sd_running_bw` | `mass`, `width`, `sd_ratio` | Mass/width fixed; positive log ratio fixed or free |
-| `subtracted_effective_flatte` | `mass`, `width`, `omegaomega_ratio` | Mass/width fixed; positive log ratio fixed or free |
+| `fixed_width_bw` | `mass`, `width` | Mass/width fixed or free, identity |
+| `two_body_running_bw` | `mass`, `width`, `orbital_l` | Mass/width fixed or free, identity; fixed integer \(L=0,1,2\) |
+| `scalar_sd_running_bw` | `mass`, `width`, `sd_ratio` | Mass/width fixed or free, identity; positive log ratio fixed or free |
+| `subtracted_effective_flatte` | `mass`, `width`, `omegaomega_ratio` | Mass/width fixed or free, identity; positive log ratio fixed or free |
 
 Mass and width must both be positive for every resonant model. A
 pole-normalized running-width model must also have its pole above the nominal
 omega-omega threshold; use a physically appropriate sub-threshold line shape
 rather than allowing a silently vanishing pole width.
+
+For a free `mass` in `two_body_running_bw` or `scalar_sd_running_bw`, the
+complete allowed interval must lie above the nominal omega-omega threshold.
+This guarantees that every Minuit trial point has the pole normalization
+required by those running-width formulae. The subtracted effective Flatte
+continuation explicitly supports a subthreshold pole, so it does not impose
+that running-width bound.
 
 ### `nonresonant`
 
@@ -177,6 +194,26 @@ width would not be meaningful.
     "mass": {"value": 1.50, "fixed": true},
     "width": {"value": 0.10, "fixed": true}
   }
+}
+```
+
+To float its pole parameters, change only their parameter objects. For
+example, the following uses GeV for values, steps, and bounds:
+
+```json
+"mass": {
+  "value": 1.81,
+  "fixed": false,
+  "transform": "identity",
+  "step": 0.002,
+  "bounds": [1.70, 1.92]
+},
+"width": {
+  "value": 0.20,
+  "fixed": false,
+  "transform": "identity",
+  "step": 0.005,
+  "bounds": [0.02, 0.50]
 }
 ```
 
@@ -303,6 +340,10 @@ Adding a new line shape is intentionally independent of Wave registration:
    parameter-order/application tests.
 6. Document the required JSON fields, units, physical domain, threshold
    policy, and whether a parameter may float.
+7. If the new formula or compiler semantics change numerical amplitudes, bump
+   `kGVVAmplitudeImplementationSignature` in `process/ModelCompiler.cu` in the
+   same commit. This explicit contract is combined with the canonical model
+   signature in every fitted state and checked by Post Calculation.
 
 No propagator-specific edit should be needed in `WaveRegistry`,
 `ParameterMapping`, `FitLikelihood`, `ProjectionWriter`, or Post Calculation.
@@ -407,10 +448,10 @@ Pruning occurs in this order:
 
 Consequently, an inactive Term contributes no coupling parameter, GPU entry,
 fit-report component, projection component, or Post component. A Resonance
-used only by inactive Terms is also absent, so even a free `sd_ratio` or
-`omegaomega_ratio` on that Resonance does not enter Minuit. If another active
-Term shares the Resonance, the Resonance and its free parameters correctly
-remain active.
+used only by inactive Terms is also absent, so none of its free mass, width, or
+ratio parameters enters Minuit. If another active Term shares the Resonance,
+the Resonance and its one shared set of free parameters correctly remain
+active.
 
 This behavior is independent of propagator type. It is not implemented by
 setting a coupling to zero.
@@ -422,8 +463,9 @@ Wave and Resonance definitions valid so that re-enabling it is a safe one-line
 operation.
 
 Changing `active`, even from `true` to `false`, changes the canonical model
-signature. A fit state from the old document cannot be supplied to Post with
-the new document.
+definition and its signature. Each schema-version-2 fit state embeds the exact
+definition used by its Fit, so Post reconstructs the old or new model from the
+selected state instead of reading the current `config/model.json`.
 
 ## Parameter mapping into Minuit
 
@@ -444,12 +486,16 @@ the fit configuration; the fixed reference remains unchanged.
 
 After all coupling parameters, active Resonances contribute:
 
+- `mass_<resonance-id>` for a free identity-coordinate mass;
+- `width_<resonance-id>` for a free identity-coordinate width;
 - `log_rDS_<resonance-id>` for a free `sd_ratio`;
 - `log_Romega_<resonance-id>` for a free `omegaomega_ratio`.
 
-Their steps and bounds come from the corresponding parameter objects and are
-already in log space. At every likelihood evaluation the mapping exponentiates
-these coordinates back to positive physical values.
+Their steps and bounds come from the corresponding parameter objects. Mass
+and width coordinates are already physical GeV values; ratio coordinates are
+in log space and are exponentiated back to positive physical values at every
+likelihood evaluation. One binding is emitted per free parameter of each
+active Resonance instance, independent of how many Terms reference it.
 
 Because inactive objects are removed before this layout is built, no source
 constant describes the number or order of Minuit parameters.
@@ -700,6 +746,8 @@ Typical diagnostics have direct meanings:
 | `references unknown resonance` | Active Term dynamics names a missing Resonance |
 | `does not accept parameter` | Propagator parameter is extra or misspelled |
 | `requires positive log-transformed ...` | Ratio is non-positive or does not specify `transform: "log"` |
+| `requires finite bounds with a positive lower limit` | A free mass or width lacks a finite positive physical interval or its initial value is outside it |
+| `mass lower bound must remain above` | A free pole-normalized running-width mass range crosses the nominal omega-omega threshold |
 | `fixed integer in the supported range` | `orbital_l` is not fixed identity integer 0, 1, or 2 |
 
 ## Safe scan checklist
@@ -712,7 +760,8 @@ Before editing:
 - identify the current global reference and the reference in every affected
   coherence class;
 - derive the propagator hypothesis independently of the numerator Wave;
-- preserve the exact model file needed by any pending Post calculation.
+- remember that sharing is controlled by the Resonance ID, not by the
+  propagator type or Wave ID.
 
 While editing:
 
@@ -752,9 +801,10 @@ After a fit:
 - confirm that disabled couplings and inactive-only propagator parameters are
   absent;
 - inspect convergence, covariance, boundaries, and closure diagnostics;
-- retain the exact model JSON until all Post calculations for that fit are
-  complete;
-- do not combine a fit state with a model whose signature has changed.
+- retain the schema-version-2 fit-state JSON; it contains the exact formatted
+  model definition, fitted coordinates, covariance, and compatibility
+  signatures required by Post;
+- do not manually edit the embedded model or its signatures.
 
 For a new covariant basis, stop at the model layer and follow [Wave
 development](WAVE_DEVELOPMENT.md). Do not invent an unregistered Wave ID or

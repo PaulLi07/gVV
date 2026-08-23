@@ -58,7 +58,29 @@ int main()
         source.fit_config_file = "config/fit.json";
         source.model_config_file = "config/model.json";
         source.model_name = "unit model";
-        source.model_signature = "fnv1a64:0123456789abcdef";
+        source.model_json = R"json({
+          "schema_version": 1,
+          "process": "unit_process",
+          "resonances": [
+            {"id": "nr", "propagator": "nonresonant", "parameters": {}}
+          ],
+          "terms": [
+            {
+              "id": "unit_term",
+              "wave": "unit.wave",
+              "coupling": {
+                "mode": "fixed_complex",
+                "reference": "scale_and_phase",
+                "initial": [1.0, 0.0]
+              },
+              "dynamics": {}
+            }
+          ]
+        })json";
+        source.model_definition_signature = "fnv1a64:0123456789abcdef";
+        source.model_implementation_signature = "unit-amplitude-contract-v1";
+        source.model_signature =
+            "unit-amplitude-contract-v1:fnv1a64:0123456789abcdef";
         ctpwa::FitParameterSpec parameter;
         parameter.name = "x";
         parameter.initial_value = 1.0;
@@ -89,8 +111,23 @@ int main()
         source.best.valid = true;
 
         ctpwa::write_fit_state(file_name, source);
+        const nlohmann::json serialized = read_json(file_name);
+        require(
+            serialized["schema_version"] == 2,
+            "fit-state schema version was not updated");
+        require(
+            serialized["model"]["definition"].is_object(),
+            "embedded model was not serialized as an object");
         const ctpwa::FitState restored = ctpwa::read_fit_state(file_name);
         require(restored.output_tag == "unit", "output tag was not restored");
+        require(
+            nlohmann::json::parse(restored.model_json)
+                == serialized["model"]["definition"],
+            "embedded model definition changed during round trip");
+        require(
+            restored.model_implementation_signature
+                == "unit-amplitude-contract-v1",
+            "implementation signature was not restored");
         require(restored.parameters.size() == 2, "parameter count changed");
         require(restored.parameters[0].name == "x", "parameter name changed");
         require(std::fabs(restored.best.values[0] - 1.25) < 1.0e-12,
@@ -114,6 +151,18 @@ int main()
         invalid = valid;
         invalid["covariance"][1][1] = -0.01;
         require_invalid(file_name, invalid, "negative diagonal");
+
+        invalid = valid;
+        invalid["schema_version"] = 1;
+        require_invalid(file_name, invalid, "does not embed the model definition");
+
+        invalid = valid;
+        invalid["model"]["definition"] = "not an object";
+        require_invalid(file_name, invalid, "structured JSON object");
+
+        invalid = valid;
+        invalid["model"]["implementation_signature"] = "";
+        require_invalid(file_name, invalid, "must be a non-empty string");
 
         std::remove(file_name);
         std::cout << "FitState round-trip test passed\n";

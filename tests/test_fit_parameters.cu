@@ -43,6 +43,33 @@ void require(bool condition, const char* message)
     }
 }
 
+ctpwa::ResonanceDefinition& mutable_resonance(
+    ctpwa::ModelDefinition& model,
+    const std::string& id)
+{
+    for (ctpwa::ResonanceDefinition& resonance : model.resonances) {
+        if (resonance.id == id) {
+            return resonance;
+        }
+    }
+    throw std::runtime_error("missing Resonance definition '" + id + "'");
+}
+
+void configure_free_identity(
+    ctpwa::ParameterDefinition& parameter,
+    double lower,
+    double upper,
+    double step)
+{
+    parameter.fixed = false;
+    parameter.transform = "identity";
+    parameter.step = step;
+    parameter.has_lower_bound = true;
+    parameter.has_upper_bound = true;
+    parameter.lower_bound = lower;
+    parameter.upper_bound = upper;
+}
+
 } // namespace
 
 int main()
@@ -192,6 +219,115 @@ int main()
                     && !has_parameter(
                         without_f2_layout, "log_Romega_f2_1565"),
                 "inactive tensor Resonance leaked into the fit layout");
+
+        ctpwa::ModelDefinition shared_definition = compiled.definition;
+        ctpwa::ResonanceDefinition& shared_input =
+            mutable_resonance(shared_definition, "f2_1810");
+        configure_free_identity(
+            shared_input.parameters.at("mass"), 1.70, 1.95, 0.001);
+        configure_free_identity(
+            shared_input.parameters.at("width"), 0.05, 0.40, 0.002);
+        GVVCompiledModel shared = gvv_compile_model(shared_definition);
+        const std::vector<GVVFitParameterBinding> shared_layout =
+            gvv_fit_parameter_layout(shared);
+        const std::vector<ctpwa::FitParameterSpec> shared_parameters =
+            gvv_fit_parameter_specs(shared_layout);
+        require(
+            shared_layout.size() == layout.size() + 2
+                && shared.propagator_fit_bindings.size() == 4,
+            "one shared Resonance produced duplicate fit coordinates");
+        const int shared_mass =
+            find_parameter(shared_parameters, "mass_f2_1810");
+        const int shared_width =
+            find_parameter(shared_parameters, "width_f2_1810");
+        const int shared_resonance_index =
+            shared.find_resonance("f2_1810");
+        require(
+            shared_layout[shared_mass].target_index
+                    == shared_resonance_index
+                && shared_layout[shared_width].target_index
+                    == shared_resonance_index
+                && shared_layout[shared_mass].propagator_target
+                    == GVVPropagatorParameterTarget::Mass
+                && shared_layout[shared_width].propagator_target
+                    == GVVPropagatorParameterTarget::PoleWidth,
+            "shared Resonance mass/width targets are wrong");
+        for (const std::string& id : {
+                 "f2_1810_02_u1", "f2_1810_02_u2", "f2_1810_02_u3"}) {
+            require(
+                shared.terms[shared.find_term(id)].resonance_index
+                    == shared_resonance_index,
+                "Terms using one Resonance ID did not share one parameter set");
+        }
+        std::vector<double> shared_values;
+        for (const ctpwa::FitParameterSpec& parameter : shared_parameters) {
+            shared_values.push_back(parameter.initial_value);
+        }
+        shared_values[shared_mass] = 1.84;
+        shared_values[shared_width] = 0.21;
+        gvv_apply_fit_parameters(shared, shared_layout, shared_values);
+        require(
+            std::fabs(gvv_propagator_parameter_value(
+                          shared.resonances[shared_resonance_index],
+                          GVVPropagatorParameterTarget::Mass)
+                      - 1.84) < 1.0e-12
+                && std::fabs(gvv_propagator_parameter_value(
+                                 shared.resonances[shared_resonance_index],
+                                 GVVPropagatorParameterTarget::PoleWidth)
+                             - 0.21)
+                    < 1.0e-12,
+            "shared Resonance mass/width application is wrong");
+
+        ctpwa::ModelDefinition independent_definition =
+            compiled.definition;
+        configure_free_identity(
+            mutable_resonance(independent_definition, "f0_1710")
+                .parameters.at("mass"),
+            1.68, 1.78, 0.001);
+        configure_free_identity(
+            mutable_resonance(independent_definition, "f2_1810")
+                .parameters.at("mass"),
+            1.70, 1.95, 0.001);
+        GVVCompiledModel independent =
+            gvv_compile_model(independent_definition);
+        const std::vector<GVVFitParameterBinding> independent_layout =
+            gvv_fit_parameter_layout(independent);
+        const std::vector<ctpwa::FitParameterSpec> independent_parameters =
+            gvv_fit_parameter_specs(independent_layout);
+        const int f0_mass =
+            find_parameter(independent_parameters, "mass_f0_1710");
+        const int f2_mass =
+            find_parameter(independent_parameters, "mass_f2_1810");
+        require(
+            independent_layout[f0_mass].target_index
+                    == independent.find_resonance("f0_1710")
+                && independent_layout[f2_mass].target_index
+                    == independent.find_resonance("f2_1810")
+                && independent_layout[f0_mass].target_index
+                    != independent_layout[f2_mass].target_index,
+            "distinct Resonance IDs did not produce independent bindings");
+        std::vector<double> independent_values;
+        for (const ctpwa::FitParameterSpec& parameter :
+             independent_parameters) {
+            independent_values.push_back(parameter.initial_value);
+        }
+        independent_values[f0_mass] = 1.71;
+        independent_values[f2_mass] = 1.84;
+        gvv_apply_fit_parameters(
+            independent, independent_layout, independent_values);
+        require(
+            std::fabs(gvv_propagator_parameter_value(
+                          independent.resonances[
+                              independent.find_resonance("f0_1710")],
+                          GVVPropagatorParameterTarget::Mass)
+                      - 1.71) < 1.0e-12
+                && std::fabs(gvv_propagator_parameter_value(
+                                 independent.resonances[
+                                     independent.find_resonance("f2_1810")],
+                                 GVVPropagatorParameterTarget::Mass)
+                             - 1.84)
+                    < 1.0e-12,
+            "distinct Resonance mass bindings were not independent");
 
         const int number_terms = static_cast<int>(compiled.terms.size());
         const int number_pairs = ctpwa::component_pair_count(number_terms);

@@ -137,6 +137,30 @@ int main(int argc, char* argv[])
             })",
             "reference amplitude must be nonzero");
 
+        require_invalid(
+            R"({
+              "schema_version": 1,
+              "process": "test_process",
+              "resonances": [{
+                "id":"r","propagator":"nonresonant",
+                "parameters":{
+                  "ratio":{
+                    "value":0.5,
+                    "fixed":false,
+                    "transform":"log",
+                    "step":0.1,
+                    "bounds":[-0.5,1.0]
+                  }
+                }
+              }],
+              "terms": [{
+                "id":"t","wave":"test.wave",
+                "coupling":{"mode":"fixed_complex","reference":"scale_and_phase","initial":[1,0]},
+                "dynamics":{}
+              }]
+            })",
+            "free parameter initial value is outside bounds");
+
         std::cout << "Runtime model-definition tests passed\n";
     } catch (const std::exception& error) {
         std::cerr << "Model-definition test failed: " << error.what() << '\n';

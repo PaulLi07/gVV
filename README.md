@@ -68,6 +68,9 @@ The model separates three concepts that change at different rates:
 A Resonance is not a Wave, and a propagator is not embedded in a Wave. Several
 Resonances can reuse the same Wave, and one Resonance may be used by several
 Terms when the intended line shape is common to those contributions.
+The Resonance ID is the propagator-instance identity: Terms that name the same
+ID share one mass, width, and any other line-shape parameters. Distinct IDs
+remain independent even when they select the same reusable `propagator` type.
 
 For Term `t`, the event-dependent complex scalar coefficient can be written
 schematically as
@@ -192,7 +195,7 @@ ROOT samples -> SampleLoader -> cached F_ab ----+----> FitLikelihood
 ### Post-processing
 
 ```text
-fit-state JSON + matching model.json + truth MC + selected MC
+fit-state JSON (embedded model) + truth MC + selected MC
                               |
                               v
                        Post Calculation
@@ -347,7 +350,7 @@ make check
 | `make` or `make fit` | Build `bin/Fit.exe` |
 | `make post` | Build `bin/Post.exe` separately |
 | `make tests` | Build the ordinary test executables |
-| `make check` | Run the 12 login-node-safe tests |
+| `make check` | Run the 13 login-node-safe tests |
 | `make gpu-tests` | Compile the three explicit GPU runtime regressions |
 | `make check-gpu` | Execute those regressions on an allocated CUDA device |
 | `make clean` | Remove generated objects, executables, and dependency files |
@@ -368,6 +371,11 @@ This is the single amplitude-model description. It defines Resonance
 instances, propagator parameters, Terms, Wave IDs, coupling modes, reference
 roles, and the active/inactive selection. Runtime array sizes and the Minuit
 parameter vector are compiled from its active content.
+
+Supported propagator parameters are controlled in the same objects. A mass or
+width can be fixed or floated with an initial value, step, and explicit
+physical bounds when its propagator contract permits it. Sharing is determined
+only by the Resonance ID, never by the propagator-type string.
 
 ### `config/fit.json`
 
@@ -413,9 +421,11 @@ the existing products:
 The report contains all fit attempts, selected convergence diagnostics,
 active Waves/Terms/Resonances, free and fixed physical parameters, and full
 covariance/correlation matrices. The fitted-state JSON contains the ordered
-free-parameter state, parameter metadata, covariance, and model signature. It
-is the machine-readable numerical bridge; downstream code does not parse the
-human report.
+free-parameter state, parameter metadata, covariance, the complete formatted
+model definition, and separate definition/implementation compatibility
+signatures. This schema-version-2 file is the self-contained machine-readable
+bridge; downstream code does not parse the human report or reopen
+`model.json`.
 
 The projection ROOT file uses schema version 3. It stores data, signed
 backgrounds, fitted accepted-MC weights, complete Term-pair component weights,
@@ -436,21 +446,21 @@ Build the numerical executable independently:
 make -j2 post
 ```
 
-Submit it with the fitted state, the exact matching model, generated truth MC,
-and selected normalization MC:
+Submit it with the fitted state, generated truth MC, and selected
+normalization MC. The exact model is already embedded in the state:
 
 ```bash
 ./submit_post.sh \
   results/fit_state-initial.json \
-  config/model.json \
   RootSet/truth_mc.root \
   RootSet/normalization_mc.root
 ```
 
-The model signature and exact free-parameter order must match the state. Post
-Calculation integrates diagonal Term contributions and signed interference in
-bounded GPU batches, builds Term and JPC-group fit fractions and efficiencies,
-and propagates the Fit covariance by finite differences.
+Post recompiles the embedded definition, checks its definition signature, the
+current GVV amplitude-implementation signature, and the exact free-parameter
+order. It then integrates diagonal Term contributions and signed interference
+in bounded GPU batches, builds Term and JPC-group fit fractions and
+efficiencies, and propagates the Fit covariance by finite differences.
 
 Products are overwritten for the same tag:
 
@@ -553,6 +563,12 @@ A new line shape normally touches only three focused boundaries:
 2. add its exact GVV JSON contract, channel context, metadata, and any generic
    fit binding in `process/PropagatorCompiler.*`;
 3. add formula/compiler tests and document the JSON parameters.
+
+Numerical changes to a registered Wave, propagator, Term assembly, or fit
+binding must also bump the explicit `gvv-amplitude-contract-vN` implementation
+identifier in `process/ModelCompiler.cu`. Fit and Post combine that identifier
+with the declarative-model signature, preventing a current executable from
+silently interpreting state produced by a different numerical convention.
 
 `WaveRegistry`, `ParameterMapping`, `FitLikelihood`, Projection, and Post do
 not require propagator-specific branches. The compiled descriptor already

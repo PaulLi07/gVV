@@ -194,11 +194,13 @@ previous products with that tag. Never run two Fit jobs with the same output
 directory and tag concurrently, because both jobs would target the same log
 and numerical files.
 
-The submission wrapper passes file paths; it does not snapshot `fit.json`,
-`model.json`, or ROOT inputs. Treat those files as immutable from submission
-until the background job completes. For concurrent hypotheses, use separate
-configuration files and unique tags instead of editing one queued job's files
-in place.
+The Fit submission wrapper passes file paths; it does not snapshot `fit.json`,
+`model.json`, or ROOT inputs before the queued Fit starts. Treat those files as
+immutable from Fit submission until the background job completes. A successful
+Fit then embeds its complete model definition in the fitted-state output, so a
+later Post job no longer depends on that source `model.json` path. For
+concurrent hypotheses, still use separate configuration files and unique tags
+instead of editing one queued Fit's files in place.
 
 #### 4.2 `config/model.json`: physical model
 
@@ -206,6 +208,13 @@ in place.
 instances, registered Wave IDs, Terms, coupling policies, and reference
 amplitudes. The generic parser and GVV compiler validate it before sample GPU
 allocation.
+
+The Resonance ID is the instance boundary. Several Terms naming one Resonance
+share its mass, width, and other propagator parameters; different Resonance
+IDs remain independent even if they select the same propagator formula. For
+supported line shapes, mass and width can be fixed or floated directly through
+their parameter objects. Free identity-coordinate mass/width parameters require
+explicit finite positive physical bounds; discrete `orbital_l` remains fixed.
 
 For routine resonance scans using existing Waves, edit only this file. See
 `MODEL_CONFIGURATION.md` for supported propagators and the add/disable/remove
@@ -236,7 +245,9 @@ shell out to the schema file.
 9. run the configured nominal and randomized MIGRAD/HESSE starts;
 10. accept only starts that satisfy the fit-engine convergence contract and
     select the accepted start with the lowest NLL;
-11. apply the selected state and serialize the human report and machine state;
+11. apply the selected state and serialize the human report and the
+    schema-version-2 machine state, including its formatted model definition
+    and GVV implementation contract;
 12. evaluate the selected model on normalization MC and serialize the
     process-specific projection ROOT contract.
 
@@ -351,16 +362,36 @@ parsed by Post. It contains:
 
 #### 7.2 Machine fitted state
 
-`fit_state-TAG.json` has schema version 1. It stores the output tag, source
-configuration paths, model name and deterministic signature, selected-fit
-diagnostics, the ordered free coordinates, and the full covariance matrix.
-Fixed parameters are intentionally obtained from the matching `model.json`;
-they are described in the human report but are not duplicated as machine-state
-coordinates.
+`fit_state-TAG.json` has schema version 2. It stores the output tag, source
+configuration paths as provenance, selected-fit diagnostics, ordered free
+coordinates, full covariance matrix, and the complete formatted model
+definition. The `model` object carries separate definition and GVV
+implementation signatures plus their combined compatibility key. Fixed
+parameters remain ordinary fields in the embedded definition rather than
+Minuit coordinates.
 
-Post Calculation validates the model signature, free-parameter count, names,
-and order before applying the state. Do not edit a fit-state JSON manually or
-pair it with a model file from a different model scan.
+Its model block has this shape:
+
+```json
+"model": {
+  "source_file": "config/model.json",
+  "name": "nominal",
+  "definition": {"schema_version": 1, "process": "..."},
+  "definition_signature": "fnv1a64:...",
+  "implementation_signature": "gvv-amplitude-contract-v1",
+  "signature": "gvv-amplitude-contract-v1:fnv1a64:..."
+}
+```
+
+`source_file` is provenance only. `definition` is the authoritative Post input;
+the three signatures separate a changed JSON model from a changed numerical
+GVV implementation.
+
+Post Calculation parses and recompiles that embedded definition, validates all
+three signatures, then validates the free-parameter count, names, and order
+before applying the state. Schema-version-1 states are intentionally rejected;
+rerun Fit to produce a self-contained state. Do not edit generated fitted-state
+JSON manually.
 
 #### 7.3 Projection ROOT schema
 
@@ -448,7 +479,7 @@ Post processing is intentionally modular:
 
 | Module | Fit output read | Additional input | Runs where | Products |
 |---|---|---|---|---|
-| Post Calculation | `fit_state-TAG.json` | exact `model.json`, generated truth MC, selected normalization MC | Background Slurm GPU job | tagged TXT, ROOT, and LaTeX numerical results |
+| Post Calculation | `fit_state-TAG.json` (including its embedded model) | generated truth MC, selected normalization MC | Background Slurm GPU job | tagged TXT, ROOT, and LaTeX numerical results |
 | Post Plotting | `projection-TAG.root` | none | `lxlogin` with ROOT | tagged PDF and EPS figures |
 
 Post Calculation does not read the projection ROOT file. Post Plotting does
@@ -462,15 +493,15 @@ results.
 The command-line order is fixed:
 
 ```text
-Post.exe fit_state.json model.json truth_mc.root normalization_mc.root
+Post.exe fit_state.json truth_mc.root normalization_mc.root
 ```
 
-The four inputs mean:
+The three inputs mean:
 
-1. the machine state from the accepted Fit;
-2. the exact model definition used by that Fit;
-3. generated truth MC before event selection;
-4. the selected normalization-MC sample from the same unweighted production.
+1. the machine state from the accepted Fit, including its exact model
+   definition and compatibility signatures;
+2. generated truth MC before event selection;
+3. the selected normalization-MC sample from the same unweighted production.
 
 Both MC files obey the shared `Pwa` branch contract. They are integrated as
 unweighted event samples. The selected/truth integral ratio is an efficiency
@@ -484,8 +515,8 @@ the files satisfy the branch schema.
 Post Calculation:
 
 1. reads and validates the fit-state JSON;
-2. compiles the supplied model and rejects a signature or free-parameter-order
-   mismatch;
+2. parses and compiles the embedded model and rejects a definition,
+   implementation, combined-signature, or free-parameter-order mismatch;
 3. restores the selected fitted coordinates;
 4. loads generated truth and selected MC and builds the same registered-Wave
    contractions used by Fit;
@@ -518,21 +549,20 @@ source config/gvv_env.sh
 make -j2 post
 ./submit_post.sh \
   results/fit_state-TAG.json \
-  config/model.json \
   RootSet/truth_mc.root \
   RootSet/normalization_mc.root
 ```
 
-All four arguments are required. `submit_post.sh` resolves and checks them,
+All three arguments are required. `submit_post.sh` resolves and checks them,
 verifies `bin/Post.exe`, derives `TAG` from `fit_state.output_tag`, creates the
 fixed Post result and log directories, and submits itself in worker mode.
 The paths are passed to the queued job without copying their contents; do not
-edit or replace the state, model, truth MC, or selected MC before completion.
+edit or replace the state, truth MC, or selected MC before completion.
 Inside the background Slurm allocation, worker mode loads the environment and
 runs:
 
 ```text
-srun --ntasks=1 bin/Post.exe <state> <model> <truth> <selected>
+srun --ntasks=1 bin/Post.exe <state> <truth> <selected>
 ```
 
 The Post log is always `runlog/post-TAG.log`; unlike the Fit log, its directory
@@ -680,7 +710,6 @@ the result downstream.
 make -j2 post
 ./submit_post.sh \
   results/fit_state-TAG.json \
-  config/model.json \
   RootSet/truth_mc.root \
   RootSet/normalization_mc.root
 ```
@@ -705,11 +734,13 @@ For each hypothesis:
 3. assign a unique, descriptive output tag;
 4. submit the Fit and inspect convergence;
 5. run either downstream branch only after accepting the Fit;
-6. keep the matching model JSON available for Post Calculation.
+6. keep the fitted-state JSON and the matching truth/selected MC available for
+   Post Calculation.
 
-The machine state records a model signature but does not embed a replacement
-copy of `model.json`. Preserve the exact configuration by normal version
-control and disciplined tags rather than manually editing generated states.
+The schema-version-2 machine state embeds the exact formatted `model.json`
+definition used by Fit. Keep the source configuration under normal version
+control for provenance and future edits, but Post reconstructs its model from
+the state rather than reopening that path.
 
 ### 13. Entry points and operational files
 
@@ -748,7 +779,8 @@ control and disciplined tags rather than manually editing generated states.
 | No accepted multistart result | Inspect MIGRAD/HESSE/EDM output, parameterization, initialization, boundaries, and model identifiability |
 | Likelihood reports invalid intensity or normalization | The active model produced a non-finite, negative, or zero event intensity, or a non-positive MC normalization |
 | Projection reports non-positive effective yield | Signed background coefficients and sample sizes imply an invalid fitted signal-yield target |
-| Post says model/signature/order mismatch | Use the exact `model.json` that produced the selected fit state; do not mix scan points |
+| Post rejects schema version 1 | Rerun Fit with the current executable to create a schema-version-2 state containing the model definition |
+| Post says definition/implementation/signature/order mismatch | The state was edited, is internally inconsistent, or was produced by a different GVV numerical implementation; use the matching current Fit output |
 | Post reports component or fraction closure failure | Treat it as a numerical/implementation failure; do not use partial outputs |
 | Post reports non-positive Term truth integral | An active fitted contribution is exactly zero/undefined for component efficiency; revisit the active model or reference choice |
 | Efficiency is implausible but the job succeeds | Verify truth and selected MC are the same unweighted production before/after selection |
@@ -756,7 +788,7 @@ control and disciplined tags rather than manually editing generated states.
 | Component curves do not add to total | Expected: the component diagnostic shows diagonals only and omits signed interference |
 | Odd angular moments are nonzero | Investigate omega assignment/order bias; these are intentionally ordered-omega diagnostics |
 | Same-tag outputs change unexpectedly | A repeated or concurrent job used the same directory and tag; use unique tags for simultaneous jobs |
-| A queued job used unexpected configuration | Submission passes paths rather than snapshots; do not edit configuration, state, model, or input files until the job finishes |
+| A queued job used unexpected configuration | Fit submission passes configuration paths and Post passes state/MC paths; do not edit the files used by a queued job until it finishes |
 | CUDA runtime failure on `lxlogin` | Submit the relevant executable/test as a background Slurm payload instead of running it directly or entering a GPU node |
 
 ## Shared responsibility boundary

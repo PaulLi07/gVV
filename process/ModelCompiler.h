@@ -10,4 +10,13 @@ GVVCompiledModel gvv_compile_model(
 
 GVVCompiledModel gvv_load_compiled_model(const std::string& file_name);
 
+// Bump this contract identifier whenever a change alters the numerical meaning
+// of a registered Wave, Resonance propagator, Term assembly, or fit binding.
+const char* gvv_amplitude_implementation_signature();
+
+// Combined compatibility key for one declarative model and this GVV amplitude
+// implementation. Fit and Post Calculation must agree on this value.
+std::string gvv_model_signature(
+    const ctpwa::ModelDefinition& definition);
+
 #endif // CTPWA_PROCESS_MODEL_COMPILER_H

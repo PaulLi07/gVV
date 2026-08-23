@@ -143,7 +143,12 @@ name `process/`.
 config/model.json
         |
         v
-ModelDefinition --canonical signature--> FitState compatibility key
+ModelDefinition --definition signature--+
+        |                                |
+        +--> embedded canonical model    +--> combined compatibility key
+        |                                ^         ^
+        v                                |         |
+GVV implementation contract ------------+---------+
         |
         v
 GVVCompiledModel <---- ParameterMapping <---- flat Minuit vector
@@ -174,7 +179,7 @@ config/fit.json -> FitEngine objective <----------------+
 | Fit sample orchestration | `process/FitLikelihood` | MIGRAD policy or ROOT serialization |
 | Multistart minimization | `framework/fit/FitEngine` | Resonance/Wave/Term types |
 | User fit report | `framework/fit/FitOutput` plus a process detail callback | machine consumption |
-| Machine fit handoff | `framework/fit/FitState` | the full process model |
+| Machine fit handoff | `framework/fit/FitState` | compiled GVV arrays or external MC samples |
 | Projection ROOT schema | `process/ProjectionWriter` | minimization |
 | Post numerical observables | `post/calculation` | plot styling |
 | Projection figures | `post/plotting` | model reconstruction or truth-MC integration |
@@ -201,9 +206,11 @@ can validate IDs, coupling syntax, parameter transforms, and the global
 scale-and-phase convention without knowing what `gvv_x_to_omega_omega`
 means.
 
-The canonical JSON is hashed with deterministic FNV-1a. This signature is a
-compatibility key, not a security hash: Post Calculation uses it to reject a
-fit state paired with a different model document.
+The canonical JSON is hashed with deterministic FNV-1a. This definition
+signature is a compatibility key, not a security hash. A separate explicit
+GVV implementation signature identifies the numerical meaning supplied by
+the compiled Wave, propagator, and process-amplitude code. Fit records both
+signatures and their combined compatibility identifier.
 
 ### 5.2 Active process model: `GVVCompiledModel`
 
@@ -217,6 +224,14 @@ current process and GPU kernels:
 - a unique list of registered Wave types used by the active Terms;
 - host metadata that preserves stable IDs, labels, JPC, coherence class,
   propagator names, and coupling policies.
+
+A Resonance ID identifies one physical propagator instance in one model. If
+several Terms reference the same Resonance ID, they intentionally share that
+instance and therefore share its mass, width, and any other fitted propagator
+parameters. The `propagator` string instead selects a reusable implementation
+type. Two different Resonance IDs may select the same propagator string and
+still represent independent states with independent parameter bindings. The
+compiler keys sharing by Resonance ID, never by propagator type.
 
 The work is deliberately split. `ModelCompiler` resolves active dependencies,
 dense slots, Term dynamics, and reference conventions. It delegates each
@@ -251,12 +266,16 @@ model and records a binding back to one of:
 - a coupling real part;
 - a coupling imaginary part;
 - the log magnitude of a positive-real phase reference;
+- a Resonance mass in its physical identity coordinate;
+- a Resonance width in its physical identity coordinate;
 - a log S/D width ratio;
 - a log effective omega-omega Flatte ratio.
 
 Fixed parameters remain in `model.json` and in the human report but do not
-appear in the flat Minuit vector. The fit-state JSON therefore cannot recreate
-the amplitude by itself; Post Calculation must also read the exact model JSON.
+appear in the flat Minuit vector. FitState schema version 2 embeds the complete
+canonical model object together with the best-fit vector and covariance, so
+Post Calculation can recreate the amplitude without reading an external
+`model.json`. The source model path remains provenance only.
 
 ### 5.5 Event sample: `GVVSample`
 
@@ -500,12 +519,22 @@ while phase-reference validation uses `coherence_class`.
 `ParameterMapping` creates a deterministic ordered free-parameter vector:
 
 1. active Term coupling coordinates in active Term order;
-2. supported free propagator-ratio coordinates in active Resonance order.
+2. supported free propagator coordinates in active Resonance order.
 
 Ordinary complex couplings use adjacent real and imaginary coordinates. A
-positive-real phase reference uses a log-magnitude coordinate. Supported
-positive propagator ratios also use log coordinates, so their physical values
-remain positive.
+positive-real phase reference uses a log-magnitude coordinate. A free
+Resonance `mass` or `width` uses the physical identity coordinate and is named
+`mass_<resonance-id>` or `width_<resonance-id>`; it requires explicit finite
+bounds with a positive lower limit, an initial value inside those bounds, and
+the `identity` transform. Supported positive propagator ratios continue to use
+log coordinates.
+
+For `two_body_running_bw` and `scalar_sd_running_bw`, the complete free mass
+interval must lie strictly above the nominal `2 m_omega` threshold because
+their pole normalization requires an open omega-omega channel. A
+`subtracted_effective_flatte` mass may remain below threshold. `orbital_l` is a
+discrete model choice and remains a fixed identity-transformed integer; it is
+not a Minuit coordinate.
 
 `FitEngine` is process-neutral. Start zero uses the nominal model values.
 Later starts randomize only entries marked by the process mapping: complex
@@ -525,22 +554,26 @@ One output tag names four independent products:
 | Product | Intended consumer | Contract |
 |---|---|---|
 | `results/fit_result-<tag>.txt` | Human analyst | Complete readable diagnostics; never parsed by project code |
-| `results/fit_state-<tag>.json` | Post Calculation | Ordered free values, errors, bounds, covariance, best-fit diagnostics, model signature |
+| `results/fit_state-<tag>.json` | Post Calculation | Schema-v2 embedded canonical model, ordered free values, errors, bounds, covariance, best-fit diagnostics, and compatibility signatures |
 | `results/projection-<tag>.root` | Post Plotting | Selected events, fitted accepted-MC weights, signed backgrounds, dynamic maps, provenance |
 | `runlog/fit-<tag>.log` | Human/operator | Full Slurm worker and executable output |
 
-Reusing a tag overwrites the existing products. The fit does not write copies
-of the input configuration.
+Reusing a tag overwrites the existing products. The fit does not write
+separate copies of the input configuration; the canonical model object is
+stored inside the machine state by contract.
 
 The text report includes every multistart attempt, best-fit diagnostics, the
 ordered free parameters, active fixed and free physical model values, and full
 covariance and correlation matrices. Its presentation can evolve without
 changing software consumers.
 
-The fit-state JSON contains only the generic fitted state. It deliberately
-does not duplicate the complete model. Downstream reconstruction therefore
-requires both the state and the exact model document and verifies their
-signature and parameter order.
+FitState schema version 2 contains the generic fitted state and the complete
+canonical model object. It stores the model-definition signature, the explicit
+GVV implementation signature, and their combined identifier. Downstream
+reconstruction parses the embedded model, checks all three values, recompiles
+it with the current executable, and verifies the free-parameter order. Schema
+version 1 is intentionally rejected; rerun Fit to create a self-contained
+schema-v2 state instead of pairing old state with a mutable external model.
 
 ### 6.10 Projection ROOT contract
 
@@ -615,7 +648,7 @@ full-model normalization.
      e. return the NLL.
 9. Run all configured starts and select the best accepted solution.
 10. Reapply the selected parameters.
-11. Write the human report and machine fit state independently.
+11. Write the human report and self-contained machine fit state independently.
 12. Evaluate bounded-batch Term components and write the projection ROOT file.
 ```
 
@@ -630,7 +663,7 @@ Post processing is split into two modules with different inputs and different
 physics responsibilities:
 
 ```text
-fit_state JSON + exact model JSON + truth MC + selected MC
+fit_state JSON (embedded model) + truth MC + selected MC
                          |
                          v
                   Post Calculation
@@ -656,9 +689,11 @@ or read truth MC.
 `Post.exe` requires:
 
 1. `fit_state-<tag>.json` from the selected fit;
-2. the exact `model.json` used for that fit;
-3. generated truth MC before selection;
-4. selected normalization MC from the same unweighted production.
+2. generated truth MC before selection;
+3. selected normalization MC from the same unweighted production.
+
+The original source path recorded in the fit state is provenance only. Post
+does not open it and cannot be redirected to a different model file.
 
 Both MC files use the same GVV `Pwa` branch contract as fit samples. The
 selected sample must represent the selected subset of the truth production;
@@ -668,12 +703,13 @@ Before numerical work, Post Calculation:
 
 - validates the fitted-state JSON structure, finite values, bounds, and
   covariance symmetry;
-- recompiles the GVV model;
-- recomputes and compares the model signature;
+- parses and recompiles the embedded canonical GVV model;
+- recomputes and compares the definition, implementation, and combined
+  compatibility signatures;
 - rebuilds the parameter mapping and compares every parameter name in order.
 
-This prevents silently applying a covariance or parameter vector to a changed
-model.
+This prevents silently applying a covariance or parameter vector to changed
+configuration or to an executable with different amplitude semantics.
 
 ### 7.2 Component integration
 
@@ -735,7 +771,7 @@ do not include finite-MC integration uncertainty or systematic uncertainty.
 | `post/calculation/results/fit_fractions-<tag>.tex` | compact fit-fraction table |
 | `runlog/post-<tag>.log` | Slurm worker and executable output |
 
-`submit_post.sh` owns only this numerical workflow. It checks the four inputs,
+`submit_post.sh` owns only this numerical workflow. It checks the three inputs,
 submits a separate GPU Slurm job, runs `Post.exe` through `srun`, and verifies
 the tagged TXT and ROOT products. It never submits a fit or runs plotting.
 
@@ -776,6 +812,10 @@ This is a configuration-only operation.
 
 1. Add the Resonance object to `config/model.json` with a supported propagator
    and its exact parameter contract.
+   Reuse an existing Resonance ID only when the new Term must share that exact
+   physical propagator instance; otherwise create a new ID even when the
+   propagator type is the same. Set `fixed`, `value`, `step`, and `bounds` on
+   each supported propagator parameter in this object.
 2. Add a Term that references the Resonance in `dynamics.resonance` and selects
    an existing registered Wave ID.
 3. Select the coupling policy and preserve the reference rules.
@@ -833,6 +873,15 @@ accepted JSON name and parameter policy remain a process-compiler concern.
    propagator-specific branch.
 5. Add formula, compiler, inactive-Term, parameter-order, and device-dispatch
    tests.
+
+The implementation contract in `process/ModelCompiler.cu` is deliberately an
+explicit version string rather than a source-tree hash. Review it whenever
+changing Wave formulae, propagator formulae or compilation, the common process
+contraction, omega substructure dynamics, or parameter interpretation. Bump
+the string whenever an unchanged model JSON could acquire different numerical
+amplitude or fitted-parameter semantics. Fit and Post must be rebuilt together
+after such a bump. This compatibility guard complements, but does not replace,
+the physics regression suite.
 
 Do not bind a generic propagator to a Wave ID. Physical quantities such as
 orbital angular momentum must be explicit propagator parameters when they
@@ -900,7 +949,8 @@ Before accepting an architecture change, verify:
 - complete Waves contain no Resonance propagator or coupling;
 - denominator angular-momentum dependence is explicit and physically correct;
 - optimized total intensity closes against direct Term-pair components;
-- fit-state reconstruction checks both model signature and parameter order;
+- fit-state reconstruction uses only its embedded model and checks definition,
+  implementation, combined signature, and parameter order;
 - projection maps remain dynamic when model content changes;
 - Fit and Post submission scripts remain independent;
 - GPU runtime tests are submitted through Slurm on an allocated GPU node, not

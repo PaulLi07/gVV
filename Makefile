@@ -66,6 +66,7 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_fit_config.exe \
 	$(TEST_BIN_DIR)/test_fit_output.exe \
 	$(TEST_BIN_DIR)/test_fit_state.exe \
+	$(TEST_BIN_DIR)/test_gvv_model_signature.exe \
 	$(TEST_BIN_DIR)/test_fit_engine.exe \
 	$(TEST_BIN_DIR)/test_model.exe \
 	$(TEST_BIN_DIR)/test_wave_registry.exe \
@@ -179,6 +180,11 @@ $(TEST_BIN_DIR)/test_fit_output.exe: tests/test_fit_output.cpp $(OBJ_DIR)/FitOut
 
 $(TEST_BIN_DIR)/test_fit_state.exe: tests/test_fit_state.cpp $(OBJ_DIR)/FitState.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/FitState.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_gvv_model_signature.exe: tests/test_gvv_model_signature.cu $(OBJ_DIR)/ModelCompiler.o $(OBJ_DIR)/PropagatorCompiler.o $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/ModelCompiler.o $(OBJ_DIR)/PropagatorCompiler.o \
+		$(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o \
+		$(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 $(TEST_BIN_DIR)/test_fit_engine.exe: tests/test_fit_engine.cpp $(OBJ_DIR)/FitEngine.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/FitEngine.o $(ROOT_LIBS) $(RPATH) \

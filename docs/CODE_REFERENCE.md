@@ -72,8 +72,8 @@ for the submitted job to complete.
 ### `submit_post.sh` — Calculation, Infrastructure
 
 This script mirrors the submission/worker structure of `submit_fit.sh`, but it
-owns only Post Calculation. It requires exactly four inputs: fitted state,
-model JSON, generated truth MC, and selected normalization MC.
+owns only Post Calculation. It requires exactly three inputs: the self-contained
+schema-v2 fitted state, generated truth MC, and selected normalization MC.
 
 The submission side reads only `output_tag` from the fitted-state JSON to name
 `runlog/post-<tag>.log`. The worker loads the project environment, invokes
@@ -115,6 +115,17 @@ This is the only user-facing description of Resonances and Terms. It contains:
 - coupling parameterization and reference policy;
 - the process dynamics link from a Term to its Resonance.
 
+A Resonance ID names one propagator instance. Terms that reference the same ID
+share its parameters, as the three `LS=02` Terms of one tensor state do. The
+`propagator` string names only a reusable implementation type: different
+Resonance IDs may use the same string while retaining independent masses,
+widths, and fit bindings.
+
+Each named parameter carries its physical `value`, `fixed` policy,
+`transform`, Minuit `step`, and optional `bounds`. Supported Resonance masses
+and widths may be released directly here with the identity transform and
+explicit finite positive bounds; no C++ edit is needed.
+
 Array order is meaningful because it determines deterministic active Term and
 Resonance ordering after inactive entries are removed. The file contains no
 fit sample paths, minimizer policy, output tag, or hard-coded runtime count.
@@ -155,8 +166,9 @@ tag intentionally overwrites the previous tagged Fit products.
    refuses to write final outputs when no attempt passes the convergence
    criteria.
 7. **Independent output writers**: reapplies the selected state, writes the
-   human report, writes the machine fit state, and asks `ProjectionWriter` to
-   create the plotting bridge.
+   human report, writes the self-contained schema-v2 machine fit state with its
+   embedded model and compatibility signatures, and asks `ProjectionWriter`
+   to create the plotting bridge.
 
 Tensor formulae, GPU kernels, Minuit algorithms, parameter-order logic, and
 ROOT projection branches deliberately live below this file.
@@ -317,7 +329,8 @@ The implementation is a strict boundary parser. Its major blocks are:
 
 - typed required-member helpers and unknown-field rejection;
 - stable-ID validation and duplicate-ID detection;
-- parameter parsing, including transform, step, and bound semantics;
+- parameter parsing, including transform, positive step, finite increasing
+  bounds, and free-initial-value containment;
 - coupling parsing, including legal mode/reference combinations, positive
   phase-reference magnitude, and a nonzero fixed scale-and-phase reference;
 - complete Resonance/Term parsing while leaving `dynamics` opaque;
@@ -386,7 +399,8 @@ framework is converted to another final-state project.
 ### `framework/fit/FitState.h` — Shared between Fit and Calculation
 
 Declares the schema-versioned machine handoff containing the output tag,
-configuration provenance, model compatibility fields, the selected
+configuration provenance, embedded canonical model JSON, definition,
+implementation, and combined compatibility signatures, the selected
 `FitAttempt`, and ordered free-parameter specifications.
 
 ### `framework/fit/FitState.cpp` — Shared between Fit and Calculation
@@ -394,8 +408,10 @@ configuration provenance, model compatibility fields, the selected
 Serializes and restores the fitted-state JSON. The reader validates safe tags,
 ordered unique names, finite values, positive steps, nonnegative errors,
 bounds, value containment, covariance dimensions, nonnegative diagonal, and
-symmetry. It does not contain the process model; downstream code must compare
-the stored model signature and parameter order to a freshly compiled model.
+symmetry. Schema version 2 writes the canonical model as a structured JSON
+object rather than an escaped string. Schema version 1 is intentionally
+rejected with an instruction to rerun Fit. Downstream code reconstructs from
+the embedded definition; `model_config_file` remains provenance only.
 
 ## 6. GVV process layer
 
@@ -510,7 +526,13 @@ Owns the exact GVV Resonance contract. It maps one propagator string and its
 named JSON parameters to a self-contained framework descriptor, validates
 positive widths, running-width pole thresholds, transforms, and supported
 orbital momentum, and emits both report metadata and generic fit bindings.
-This is the only process file that needs a propagator-specific compiler branch.
+Free `mass` and `width` use identity coordinates named
+`mass_<resonance-id>` and `width_<resonance-id>` and require finite bounds with
+a positive lower limit. The full free mass interval of
+`two_body_running_bw` and `scalar_sd_running_bw` must remain above nominal
+omega-omega threshold; `subtracted_effective_flatte` permits a subthreshold
+mass. `orbital_l` remains a fixed integer model choice. This is the only
+process file that needs a propagator-specific compiler branch.
 
 ### `process/ModelCompiler.h/.cu` — Shared Fit/Calculation
 
@@ -520,6 +542,12 @@ assignment, coupling policies, and one reference per coherence class. It
 therefore validates one reference in each active `positive_parity` or
 `negative_parity` block of the current catalogue. It contains neither Wave
 formulae nor propagator formulae.
+
+The same translation unit owns the explicit
+`gvv-amplitude-contract-vN` implementation version and combines it with the
+canonical definition signature. It must be manually bumped whenever unchanged
+model JSON could acquire different numerical amplitude or parameter semantics;
+it is intentionally not an automatic source hash.
 
 ### 6.4 Common process contraction
 
@@ -623,8 +651,8 @@ The implementation has three responsibilities:
 
 - build deterministic coupling bindings and append the generic propagator
   bindings already emitted by `PropagatorCompiler`;
-- apply flat values, exponentiating positive physical quantities stored in log
-  coordinates;
+- apply flat values, assigning mass/width identity coordinates directly and
+  exponentiating positive physical quantities stored in log coordinates;
 - write active Waves, Terms, couplings, Resonances, and fixed/free physical
   values into the human Fit report.
 
@@ -711,8 +739,9 @@ efficiencies, covariance propagation, or output formats.
 
 This is the Post numerical application. Its major blocks are:
 
-- **contract validation**: load `FitState`, compile the exact model, compare
-  the model signature, and compare every free-parameter name in order;
+- **contract validation**: load schema-v2 `FitState`, parse and compile its
+  embedded model, compare definition, implementation, and combined
+  signatures, and compare every free-parameter name in order;
 - **observable construction**: Term fit fractions and efficiencies, all pair
   interference fractions, total efficiency, JPC-group quantities, and
   cross-group interference;
@@ -809,13 +838,14 @@ three GPU runtime tests are separate because an IHEP login node may provide
 | `tests/test_dynamics.cu` | device-complex phase convention, two-body kinematics, legacy and higher-L barrier normalization, unified running-width equivalence, shared BW denominator, threshold continuation, Flatte subtraction, nominal-mass rho-isobar equivalence, and compilation of the omega device path |
 | `tests/test_gvv_amplitude.cu` | compile-time integration of registered Waves with the common GVV amplitude contraction |
 | `tests/test_propagator_registry.cu` | propagator device dispatch, nominal line-shape contracts, host omega-width interpolation/configuration/convergence, and the omega wrapper's use of the shared BW denominator |
-| `tests/test_propagator_compiler.cu` | all supported GVV propagator JSON contracts, self-contained omega-omega channel context, generic free-ratio bindings, and invalid width/threshold/field rejection |
-| `tests/test_fit_parameters.cu` | deterministic GVV free-parameter layout, coupling/reference parameterizations, log-ratio bindings, and state application |
+| `tests/test_propagator_compiler.cu` | all supported GVV propagator JSON contracts, self-contained omega-omega channel context, free mass/width identity bindings, free-ratio bindings, threshold-safe ranges, fixed orbital momentum, and invalid field/policy rejection |
+| `tests/test_fit_parameters.cu` | deterministic GVV free-parameter layout, coupling/reference parameterizations, independent bindings for distinct Resonance IDs, shared parameters for Terms using one Resonance ID, identity/log transforms, and state application |
 | `tests/test_fit_config.cpp` | strict `fit.json` parsing and tag-derived output naming |
 | `tests/test_fit_output.cpp` | presence of the required sections in the complete human Fit report |
-| `tests/test_fit_state.cpp` | fitted-state round trip and rejection of unsafe tags, duplicate names, asymmetric covariance, and negative covariance diagonal |
+| `tests/test_fit_state.cpp` | schema-v2 embedded-model round trip and rejection of schema v1, malformed model/signature fields, unsafe tags, duplicate names, asymmetric covariance, and negative covariance diagonal |
 | `tests/test_fit_engine.cpp` | generic multistart Minuit execution, convergence selection, values, errors, and covariance extraction on a small objective |
 | `tests/test_model.cpp` | nominal generic model parsing, canonical signature input, coupling/reference rules, and key invalid-model diagnostics |
+| `tests/test_gvv_model_signature.cu` | stable embedded-model round trip, definition-signature sensitivity, and explicit GVV implementation/combined-signature contract |
 | `tests/test_wave_registry.cu` | active GVV compilation, dense ordering, inactive-Term Resonance pruning, adding a Term without fixed counts, propagator parameter contracts, orbital-L range, and dynamics validation |
 | `tests/test_likelihood.cpp` | accepted-MC normalization and signed log-likelihood arithmetic, including invalid numerical inputs |
 
@@ -841,12 +871,14 @@ last two must be extended when a new Wave changes the active numerical basis.
 | Intended change | Primary files | Files that normally stay unchanged |
 |---|---|---|
 | Add/remove/disable Resonance on an existing Wave | `config/model.json` | all production C++/CUDA, Projection, Post, plotting |
+| Fix/release a supported Resonance mass or width | `config/model.json` | Wave registry, likelihood, Projection, Post source |
 | Change run samples, sideband prescription, starts, or output tag | `config/fit.json` | model and amplitude code |
 | Add a complete GVV Wave | new `process/waves/*.cuh`, `WaveRegistry.cuh/.cu`, tests | generic model, Fit engine, likelihood, parameter counts, plotting maps |
 | Add a reusable tensor primitive | `framework/tensors/`, focused tests | process compiler unless the Wave uses it |
 | Add a reusable propagator formula | `framework/dynamics/`, `PropagatorCompiler.*`, tests, model documentation | Wave registry, `ParameterMapping`, Fit likelihood, Projection, Post |
 | Change the GVV ROOT input schema | `SampleLoader.*`, application branch contract, relevant scripts/docs/tests | generic framework |
 | Change process-wide photon/polarization contraction | `ProcessAmplitude.cuh`, GPU physics tests | individual Resonance definitions |
+| Change existing amplitude/propagator/parameter semantics | owning implementation, focused tests, `gvv-amplitude-contract-vN` | fit-state schema |
 | Change Fit minimizer policy | `FitConfig.*`, `FitEngine.*`, `fit.json`, tests | process tensors and Post plotting |
 | Change projection observables/schema | `ProjectionWriter.*`, plotting readers/macros, schema tests/docs | likelihood or Minuit engine |
 | Change fit fractions/efficiencies/error propagation | `post/calculation/*` | Fit likelihood and projection plotting |
@@ -868,6 +900,6 @@ RootSet/                     untracked analysis input ROOT files
 ```
 
 When debugging a numerical disagreement, start from the bridge appropriate to
-the workflow: `fit_state` plus exact `model.json` for Post Calculation, or the
-projection ROOT schema for Plotting. Do not parse the human report to recreate
-program state.
+the workflow: the self-contained schema-v2 `fit_state` for Post Calculation,
+or the projection ROOT schema for Plotting. Do not parse the human report to
+recreate program state and do not pair a fit state with a separate model file.

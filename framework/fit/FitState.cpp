@@ -15,9 +15,44 @@ namespace {
 
 using Json = nlohmann::json;
 
+constexpr int kFitStateSchemaVersion = 2;
+
 Json optional_bound(bool present, double value)
 {
     return present ? Json(value) : Json(nullptr);
+}
+
+std::string required_nonempty_string(
+    const Json& object,
+    const char* key,
+    const std::string& path)
+{
+    const auto value = object.find(key);
+    if (value == object.end() || !value->is_string()
+        || value->get<std::string>().empty()) {
+        throw std::runtime_error(
+            "fit state " + path + "." + key
+            + " must be a non-empty string");
+    }
+    return value->get<std::string>();
+}
+
+Json parse_model_document(
+    const std::string& json_text,
+    const std::string& source)
+{
+    Json model;
+    try {
+        model = Json::parse(json_text);
+    } catch (const Json::exception& error) {
+        throw std::runtime_error(
+            "cannot parse " + source + ": " + error.what());
+    }
+    if (!model.is_object()) {
+        throw std::runtime_error(
+            source + " must be a structured JSON object");
+    }
+    return model;
 }
 
 double required_number(const Json& value, const std::string& path)
@@ -52,6 +87,20 @@ bool covariance_entries_match(double first, double second)
 
 void write_fit_state(const std::string& file_name, const FitState& state)
 {
+    if (state.schema_version != kFitStateSchemaVersion) {
+        throw std::invalid_argument(
+            "FitState writer supports only schema version 2");
+    }
+    const Json model_definition = parse_model_document(
+        state.model_json, "embedded model definition");
+    if (state.model_definition_signature.empty()
+        || state.model_implementation_signature.empty()
+        || state.model_signature.empty()) {
+        throw std::invalid_argument(
+            "fit state requires model definition, implementation, and "
+            "combined signatures");
+    }
+
     const std::size_t size = state.parameters.size();
     if (!state.best.valid || state.best.values.size() != size
         || state.best.errors.size() != size
@@ -93,8 +142,11 @@ void write_fit_state(const std::string& file_name, const FitState& state)
         {"output_tag", state.output_tag},
         {"fit_config", state.fit_config_file},
         {"model", {
-            {"file", state.model_config_file},
+            {"source_file", state.model_config_file},
             {"name", state.model_name},
+            {"definition", model_definition},
+            {"definition_signature", state.model_definition_signature},
+            {"implementation_signature", state.model_implementation_signature},
             {"signature", state.model_signature}}},
         {"best_fit", {
             {"start_index", state.best.start_index},
@@ -135,17 +187,44 @@ FitState read_fit_state(const std::string& file_name)
     }
 
     FitState result;
-    result.schema_version = document.at("schema_version").get<int>();
-    if (result.schema_version != 1) {
-        throw std::runtime_error("unsupported fit-state schema version");
+    const auto schema_version = document.find("schema_version");
+    if (schema_version == document.end()
+        || !schema_version->is_number_integer()) {
+        throw std::runtime_error(
+            "fit state schema_version must be an integer");
+    }
+    result.schema_version = schema_version->get<int>();
+    if (result.schema_version == 1) {
+        throw std::runtime_error(
+            "fit-state schema version 1 does not embed the model definition; "
+            "rerun Fit to produce schema version 2");
+    }
+    if (result.schema_version != kFitStateSchemaVersion) {
+        throw std::runtime_error(
+            "unsupported fit-state schema version "
+            + std::to_string(result.schema_version));
     }
     result.output_tag = document.at("output_tag").get<std::string>();
     require_safe_output_tag(result.output_tag);
     result.fit_config_file = document.at("fit_config").get<std::string>();
     const Json& model = document.at("model");
-    result.model_config_file = model.at("file").get<std::string>();
+    if (!model.is_object()) {
+        throw std::runtime_error("fit state model must be an object");
+    }
+    result.model_config_file = model.at("source_file").get<std::string>();
     result.model_name = model.at("name").get<std::string>();
-    result.model_signature = model.at("signature").get<std::string>();
+    const Json& model_definition = model.at("definition");
+    if (!model_definition.is_object()) {
+        throw std::runtime_error(
+            "fit state model.definition must be a structured JSON object");
+    }
+    result.model_json = model_definition.dump(2) + '\n';
+    result.model_definition_signature = required_nonempty_string(
+        model, "definition_signature", "model");
+    result.model_implementation_signature = required_nonempty_string(
+        model, "implementation_signature", "model");
+    result.model_signature = required_nonempty_string(
+        model, "signature", "model");
 
     const Json& best = document.at("best_fit");
     result.best.start_index = best.at("start_index").get<int>();

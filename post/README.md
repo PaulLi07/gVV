@@ -15,7 +15,7 @@ plotting macros, and the projection ROOT file is not an input to Calculation.
 
 ```text
 Fit
- +-- fit_state-<tag>.json + model.json + truth/selected MC
+ +-- fit_state-<tag>.json (embedded model) + truth/selected MC
  |                              |
  |                              v
  |                     Post Calculation (Slurm GPU job)
@@ -90,21 +90,20 @@ Slurm GPU job. Users do not enter the GPU node interactively and must not run
 the executable directly on `lxlogin`. Use `submit_post.sh` for the normal
 submission workflow.
 
-### Four required inputs
+### Three required inputs
 
 The executable and submission wrapper use the same positional contract:
 
 ```text
-fit_state.json model.json truth_mc.root normalization_mc.root
+fit_state.json truth_mc.root normalization_mc.root
 ```
 
 1. **Fit state** is `results/fit_state-<tag>.json` from an accepted Fit. It
    supplies the ordered best-fit free coordinates, complete covariance,
-   output tag, and model signature.
-2. **Model** is the exact `model.json` used by that Fit. It supplies all fixed
-   physical parameters and reconstructs the active Resonance/Wave/Term model.
-3. **Truth MC** is generated MC before analysis selection.
-4. **Normalization MC** is the selected subset of that same unweighted
+   output tag, complete formatted model definition, and compatibility
+   signatures. The recorded source model path is provenance only.
+2. **Truth MC** is generated MC before analysis selection.
+3. **Normalization MC** is the selected subset of that same unweighted
    production. It is the accepted sample used as the efficiency numerator.
 
 Both MC files must contain a non-empty `Pwa` tree with
@@ -126,6 +125,7 @@ The calculation intentionally does not read:
 - `fit_result-<tag>.txt`, because that format is for humans;
 - `projection-<tag>.root`, because it contains accepted-MC plot weights rather
   than the generated truth integration sample;
+- external `model.json`, because the exact Fit model is embedded in the state;
 - `config/fit.json`, because run-time sample/minimizer policy is no longer
   needed after the fitted state has been selected.
 
@@ -133,15 +133,16 @@ The calculation intentionally does not read:
 
 Before using fitted parameters, `Post.exe`:
 
-- validates fit-state schema version 1 and its numerical dimensions;
-- compiles the supplied `model.json` with the current GVV Wave registry;
-- recomputes the deterministic model signature and compares it with the state;
+- validates fit-state schema version 2 and its numerical dimensions;
+- parses and compiles the structured `model.definition` embedded by Fit;
+- recomputes the definition signature, compares the explicit GVV numerical
+  implementation identifier, and checks their combined compatibility key;
 - rebuilds the free-parameter layout and compares every name and index.
 
-A mismatch is a hard error. Do not rename Terms, change active flags, reorder
-or alter model definitions, or combine a state and model from different scan
-points. The model path recorded inside the state is provenance; the model
-passed on the command line is the one that is actually compiled and checked.
+A mismatch is a hard error. Do not edit the embedded Terms, active flags,
+parameter definitions, signatures, or free-coordinate order. Schema-version-1
+states do not contain the model and are intentionally rejected; rerun Fit with
+the current executable to produce a schema-version-2 state.
 
 ### Numerical algorithm
 
@@ -207,23 +208,22 @@ After accepting the Fit, run from the repository root on `lxlogin`:
 ```bash
 ./submit_post.sh \
   results/fit_state-<tag>.json \
-  config/model.json \
   RootSet/truth_mc.root \
   RootSet/normalization_mc.root
 ```
 
-All four arguments are required. Relative arguments are resolved against the
+All three arguments are required. Relative arguments are resolved against the
 repository root. Before submission, `submit_post.sh` verifies all inputs and
 `bin/Post.exe`, extracts `output_tag` from the fit state, creates
 `runlog/` and `post/calculation/results/`, and submits one A100 Slurm job.
 It passes absolute file paths rather than snapshots. Do not edit or replace the
-state, model, truth MC, or selected MC while the job is queued or running.
+state, truth MC, or selected MC while the job is queued or running.
 
 The background worker sources `config/gvv_env.sh`, prints job/host/GPU
 information, runs `nvidia-smi`, and launches:
 
 ```text
-srun --ntasks=1 bin/Post.exe <state> <model> <truth> <selected>
+srun --ntasks=1 bin/Post.exe <state> <truth> <selected>
 ```
 
 The Post log is `runlog/post-<tag>.log`. The wrapper opens it with truncate
@@ -464,7 +464,8 @@ ordering and should be interpreted only as assignment/order-bias diagnostics.
 
 | Error or symptom | Interpretation |
 |---|---|
-| `model.json does not match the model used by this fit state` | State and model came from different definitions or scan points |
+| `fit-state schema version 1 does not embed the model definition` | Rerun Fit with the current executable before Post Calculation |
+| Embedded definition or implementation signature mismatch | The state was edited or the Post executable implements a different numerical GVV amplitude contract |
 | `fit-state parameter order does not match model` | Active Terms or free-parameter layout changed after Fit |
 | Missing `Pwa` tree/branch | MC file does not satisfy the shared GVV sample contract |
 | Non-positive Term truth integral | Active component efficiency is undefined, commonly because the fitted coupling is exactly zero |
@@ -475,4 +476,4 @@ ordering and should be interpreted only as assignment/order-bias diagnostics.
 | Missing map or vector-size mismatch | Projection file is incomplete or does not match its metadata |
 | Components do not sum to total | Expected for diagonal-only component plots because interference is omitted |
 | Same-tag result disappeared | A later calculation or plotting run overwrote it by design |
-| Queued job used unexpected state/model content | The wrapper passes paths without copying files; keep all four inputs immutable through completion |
+| Queued job used unexpected state/MC content | The wrapper passes paths without copying files; keep all three inputs immutable through completion |

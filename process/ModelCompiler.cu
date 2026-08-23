@@ -17,6 +17,9 @@ namespace {
 
 using Json = nlohmann::json;
 
+constexpr const char* kGVVAmplitudeImplementationSignature =
+    "gvv-amplitude-contract-v1";
+
 int coupling_parameterization(ctpwa::CouplingMode mode)
 {
     if (mode == ctpwa::CouplingMode::FixedComplex) {
@@ -183,4 +186,16 @@ GVVCompiledModel gvv_compile_model(
 GVVCompiledModel gvv_load_compiled_model(const std::string& file_name)
 {
     return gvv_compile_model(ctpwa::load_model_definition(file_name));
+}
+
+const char* gvv_amplitude_implementation_signature()
+{
+    return kGVVAmplitudeImplementationSignature;
+}
+
+std::string gvv_model_signature(
+    const ctpwa::ModelDefinition& definition)
+{
+    return std::string(gvv_amplitude_implementation_signature()) + ':'
+           + ctpwa::model_definition_signature(definition);
 }

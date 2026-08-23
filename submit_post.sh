@@ -20,7 +20,7 @@ PROJECT_DIR=${GVV_PROJECT_ROOT:-$SCRIPT_DIR}
 
 usage()
 {
-    echo "Usage: $0 fit_state.json model.json truth_mc.root normalization_mc.root" >&2
+    echo "Usage: $0 fit_state.json truth_mc.root normalization_mc.root" >&2
 }
 
 resolve_project_path()
@@ -67,8 +67,8 @@ load_environment()
 
 run_worker()
 {
-    local state=$1 model=$2 truth=$3 normalization=$4
-    require_files "$state" "$model" "$truth" "$normalization"
+    local state=$1 truth=$2 normalization=$3
+    require_files "$state" "$truth" "$normalization"
     [[ -x $PROJECT_DIR/bin/Post.exe ]] || {
         echo "[GVV] Build bin/Post.exe with 'make post' before submission" >&2
         exit 8
@@ -76,7 +76,7 @@ run_worker()
 
     load_environment
     srun --ntasks=1 "$PROJECT_DIR/bin/Post.exe" \
-        "$state" "$model" "$truth" "$normalization"
+        "$state" "$truth" "$normalization"
 
     local tag output
     tag=$(read_post_tag "$state")
@@ -89,19 +89,18 @@ run_worker()
 }
 
 if [[ ${1:-} == "--worker" ]]; then
-    [[ $# -eq 5 ]] || { usage; exit 2; }
+    [[ $# -eq 4 ]] || { usage; exit 2; }
     run_worker \
         "$(readlink -f -- "$2")" "$(readlink -f -- "$3")" \
-        "$(readlink -f -- "$4")" "$(readlink -f -- "$5")"
+        "$(readlink -f -- "$4")"
     exit 0
 fi
 
-[[ $# -eq 4 ]] || { usage; exit 2; }
+[[ $# -eq 3 ]] || { usage; exit 2; }
 STATE=$(readlink -f -- "$(resolve_project_path "$1")")
-MODEL=$(readlink -f -- "$(resolve_project_path "$2")")
-TRUTH=$(readlink -f -- "$(resolve_project_path "$3")")
-NORMALIZATION=$(readlink -f -- "$(resolve_project_path "$4")")
-require_files "$STATE" "$MODEL" "$TRUTH" "$NORMALIZATION"
+TRUTH=$(readlink -f -- "$(resolve_project_path "$2")")
+NORMALIZATION=$(readlink -f -- "$(resolve_project_path "$3")")
+require_files "$STATE" "$TRUTH" "$NORMALIZATION"
 [[ -x $PROJECT_DIR/bin/Post.exe ]] || {
     echo "[GVV] Build bin/Post.exe with 'make post' before submission" >&2
     exit 8
@@ -116,6 +115,6 @@ JOB_ID=$(sbatch --parsable \
     --chdir="$PROJECT_DIR" \
     --export="ALL,GVV_PROJECT_ROOT=$PROJECT_DIR" \
     --output="$POST_LOG" --open-mode=truncate \
-    "$SCRIPT_PATH" --worker "$STATE" "$MODEL" "$TRUTH" "$NORMALIZATION")
+    "$SCRIPT_PATH" --worker "$STATE" "$TRUTH" "$NORMALIZATION")
 echo "[GVV] Submitted Post Calculation job $JOB_ID"
 echo "[GVV] Log: $POST_LOG"
