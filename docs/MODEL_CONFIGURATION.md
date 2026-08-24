@@ -497,6 +497,11 @@ in log space and are exponentiated back to positive physical values at every
 likelihood evaluation. One binding is emitted per free parameter of each
 active Resonance instance, independent of how many Terms reference it.
 
+In the current nominal model, `eta_1760` and `eta_2225` both expose their mass
+and width as free identity-coordinate parameters. The `eta_2225` central
+values are the PDG 2025 averages, and its asymmetric quoted uncertainties are
+encoded directly as the finite Minuit bounds in `config/model.json`.
+
 Because inactive objects are removed before this layout is built, no source
 constant describes the number or order of Minuit parameters.
 

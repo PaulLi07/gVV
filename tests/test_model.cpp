@@ -41,8 +41,8 @@ int main(int argc, char* argv[])
         require(
             model.process == "psi2s_to_gamma_omega_omega",
             "process id mismatch");
-        require(model.resonances.size() == 9, "nominal resonance count mismatch");
-        require(model.terms.size() == 15, "nominal term count mismatch");
+        require(model.resonances.size() == 10, "nominal resonance count mismatch");
+        require(model.terms.size() == 16, "nominal term count mismatch");
         require(
             model.resonance("f0_1710").propagator
                 == "two_body_running_bw",
@@ -59,6 +59,16 @@ int main(int argc, char* argv[])
             model.term("eta_1760_11").coupling.reference
                 == ctpwa::CouplingReference::ScaleAndPhase,
             "global reference coupling mismatch");
+        const ctpwa::ResonanceDefinition& eta_2225 =
+            model.resonance("eta_2225");
+        require(
+            eta_2225.propagator == "two_body_running_bw"
+                && !eta_2225.parameters.at("mass").fixed
+                && !eta_2225.parameters.at("width").fixed,
+            "eta(2225) floating line-shape configuration mismatch");
+        require(
+            model.term("eta_2225_11").wave == "gvv.pseudoscalar_11",
+            "eta(2225) Wave assignment mismatch");
         require(
             model.resonance("f2_1565").propagator
                 == "subtracted_effective_flatte",

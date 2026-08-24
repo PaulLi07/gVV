@@ -2,6 +2,12 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Added an active `eta(2225)` `0-+` Term using the registered
+  `gvv.pseudoscalar_11` Wave and the reusable `two_body_running_bw`
+  propagator. Its mass and width float from the PDG 2025 central values inside
+  the quoted asymmetric one-standard-deviation intervals. The user-configured
+  floating `eta(1760)` pole parameters are retained and covered by the nominal
+  parameter-layout regression.
 - Activated the existing scalar `0++(22)` Wave for both `f0(1500)` and
   `f0(1710)` as ordinary complex Terms sharing each state's unchanged
   Resonance denominator with its `0++(00)` Term. Component projections now

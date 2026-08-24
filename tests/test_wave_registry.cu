@@ -78,9 +78,10 @@ int main(int argc, char* argv[])
             "LS=02 tensor Wave registration mismatch");
         const std::vector<std::string> resonance_ids = {
             "f0_1500", "f0_1710", "eta_1760", "eta_c_1S",
-            "X_1835", "NR_0mp", "f2_1565", "f2_1810"};
+            "X_1835", "eta_2225", "NR_0mp", "f2_1565", "f2_1810"};
         const std::vector<int> propagators = {
             ctpwa::PROP_SUBTRACTED_FLATTE,
+            ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
             ctpwa::PROP_TWO_BODY_RUNNING_BW,
@@ -88,24 +89,28 @@ int main(int argc, char* argv[])
             ctpwa::PROP_NONRESONANT,
             ctpwa::PROP_SUBTRACTED_FLATTE,
             ctpwa::PROP_TWO_BODY_RUNNING_BW};
-        const std::vector<int> orbital_l = {0, 0, 1, 1, 1, 0, 0, 0};
+        const std::vector<int> orbital_l = {0, 0, 1, 1, 1, 1, 0, 0, 0};
         const std::vector<double> masses = {
-            1.522, 1.723, 1.751, 2.98409, 1.8340, 0.0, 1.571, 1.815};
+            1.522, 1.723, 1.751, 2.98409, 1.8340,
+            2.221, 0.0, 1.571, 1.815};
         const std::vector<double> widths = {
-            0.108, 0.149, 0.240, 0.0300, 0.130, 0.0, 0.132, 0.197};
+            0.108, 0.149, 0.240, 0.0300, 0.130,
+            0.185, 0.0, 0.132, 0.197};
         const std::vector<std::string> term_ids = {
             "f0_1500_00", "f0_1500_22",
             "f0_1710_00", "f0_1710_22",
-            "eta_1760_11", "eta_c_11", "X_1835_11", "NR_0mp_11",
+            "eta_1760_11", "eta_c_11", "X_1835_11", "eta_2225_11",
+            "NR_0mp_11",
             "f2_1565_02_u1", "f2_1565_02_u2", "f2_1565_02_u3",
             "f2_1810_02_u1", "f2_1810_02_u2", "f2_1810_02_u3"};
         const std::vector<int> term_resonances = {
-            0, 0, 1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 7};
+            0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 7, 7, 8, 8, 8};
         const std::vector<int> term_waves = {
             GVV_SCALAR_00, GVV_SCALAR_22,
             GVV_SCALAR_00, GVV_SCALAR_22,
             GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
             GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
+            GVV_PSEUDOSCALAR_11,
             GVV_TENSOR_02_U1, GVV_TENSOR_02_U2, GVV_TENSOR_02_U3,
             GVV_TENSOR_02_U1, GVV_TENSOR_02_U2, GVV_TENSOR_02_U3};
         const std::vector<int> coupling_policies = {
@@ -114,6 +119,7 @@ int main(int argc, char* argv[])
             COUPLING_POSITIVE_REAL,
             COUPLING_COMPLEX,
             COUPLING_FIXED_SCALE_AND_PHASE,
+            COUPLING_COMPLEX,
             COUPLING_COMPLEX,
             COUPLING_COMPLEX,
             COUPLING_COMPLEX,
@@ -138,7 +144,7 @@ int main(int argc, char* argv[])
                 "resonance lookup mismatch");
         require(model.find_term("eta_1760_11") == 4,
                 "Term lookup mismatch");
-        require(model.find_term("f2_1810_02_u3") == 13,
+        require(model.find_term("f2_1810_02_u3") == 14,
                 "tensor Term lookup mismatch");
 
         for (std::size_t index = 0; index < resonance_ids.size(); ++index) {
@@ -199,9 +205,9 @@ int main(int argc, char* argv[])
             "ignored_for_inactive_terms";
         const GVVCompiledModel reduced =
             gvv_compile_model(reduced_definition);
-        require(reduced.resonances.size() == 7,
+        require(reduced.resonances.size() == 8,
                 "inactive-only Resonance was not removed");
-        require(reduced.terms.size() == 12,
+        require(reduced.terms.size() == 13,
                 "disabled Terms were not removed from runtime layout");
         require(reduced.active_wave_types.size() == 6,
                 "reduced active Wave layout mismatch");
@@ -243,11 +249,11 @@ int main(int argc, char* argv[])
         expanded_definition.terms.push_back(extra_term);
         const GVVCompiledModel expanded =
             gvv_compile_model(expanded_definition);
-        require(expanded.resonances.size() == 9,
+        require(expanded.resonances.size() == 10,
                 "expanded resonance layout mismatch");
-        require(expanded.terms.size() == 15,
+        require(expanded.terms.size() == 16,
                 "expanded Term layout mismatch");
-        require(expanded.find_term("NR_extra_11") == 14,
+        require(expanded.find_term("NR_extra_11") == 15,
                 "expanded stable Term id mismatch");
 
         ctpwa::ModelDefinition bad_parameter = model.definition;

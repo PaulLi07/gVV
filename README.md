@@ -150,6 +150,12 @@ only the three `LS=02` covariants for `f2(1565)` and `f2(1810)`. The
 higher-orbital tensor Waves are registered for explicit future model tests but
 do not enter a Fit until selected by an active Term in `config/model.json`.
 
+The nominal negative-parity sector also includes an active `eta(2225)` Term
+using `gvv.pseudoscalar_11`. Its mass and width start from the PDG 2025 average
+and float inside the quoted asymmetric one-standard-deviation intervals.
+The existing `eta(1760)` mass and width are likewise configured as free model
+parameters, with their user-selected ranges kept in `config/model.json`.
+
 ### Accepted-MC normalization and signed likelihood
 
 The accepted normalization-MC sample defines

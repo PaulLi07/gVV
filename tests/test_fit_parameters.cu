@@ -82,12 +82,13 @@ int main()
         const std::vector<ctpwa::FitParameterSpec> parameters =
             gvv_fit_parameter_specs(layout);
 
-        // Eight active non-tensor Terms contribute thirteen coupling
-        // coordinates. The six tensor Terms add twelve more, and the two
-        // threshold line shapes add one shared log-coupling coordinate each.
-        require(layout.size() == 27 && parameters.size() == layout.size(),
+        // Nine active non-tensor Terms contribute fifteen coupling
+        // coordinates. The six tensor Terms add twelve more, the two
+        // threshold line shapes add one log-ratio each, and the floating
+        // eta(1760)/eta(2225) pole parameters add four coordinates.
+        require(layout.size() == 33 && parameters.size() == layout.size(),
                 "runtime GVV fit parameter count is wrong");
-        require(compiled.propagator_fit_bindings.size() == 2,
+        require(compiled.propagator_fit_bindings.size() == 6,
                 "free propagator parameter count is wrong");
 
         const int re_f0 = find_parameter(parameters, "Re_f0_1500_00");
@@ -106,6 +107,14 @@ int main()
             find_parameter(parameters, "log_Romega_f0_1500");
         const int f2_ratio =
             find_parameter(parameters, "log_Romega_f2_1565");
+        const int eta_1760_mass =
+            find_parameter(parameters, "mass_eta_1760");
+        const int eta_1760_width =
+            find_parameter(parameters, "width_eta_1760");
+        const int eta_2225_mass =
+            find_parameter(parameters, "mass_eta_2225");
+        const int eta_2225_width =
+            find_parameter(parameters, "width_eta_2225");
         const int re_f2_u1 =
             find_parameter(parameters, "Re_f2_1565_02_u1");
         const int im_f2_u1 =
@@ -140,6 +149,22 @@ int main()
                         && layout[ratio].propagator_target
                             == GVVPropagatorParameterTarget::FlatteRatio,
                     "threshold-line-shape parameter target is wrong");
+        }
+        require(
+            parameters[eta_2225_mass].lower_bound == 2.211
+                && parameters[eta_2225_mass].upper_bound == 2.234
+                && parameters[eta_2225_width].lower_bound == 0.165
+                && parameters[eta_2225_width].upper_bound == 0.225,
+            "eta(2225) PDG parameter bounds are wrong");
+        for (const int pole_parameter : {
+                 eta_1760_mass, eta_1760_width,
+                 eta_2225_mass, eta_2225_width}) {
+            require(
+                parameters[pole_parameter].has_lower_bound
+                    && parameters[pole_parameter].has_upper_bound
+                    && layout[pole_parameter].target
+                        == GVVFitParameterTarget::PropagatorParameter,
+                "floating eta pole-parameter binding is wrong");
         }
 
         const int f0_1500 = compiled.find_resonance("f0_1500");
@@ -190,6 +215,10 @@ int main()
         values[phase_reference] = std::log(2.0);
         values[f0_ratio] = std::log(0.75);
         values[f2_ratio] = std::log(1.25);
+        values[eta_1760_mass] = 1.80;
+        values[eta_1760_width] = 0.25;
+        values[eta_2225_mass] = 2.222;
+        values[eta_2225_width] = 0.190;
         values[re_f2_u1] = 0.33;
         values[im_f2_u1] = -0.22;
         gvv_apply_fit_parameters(compiled, layout, values);
@@ -224,6 +253,25 @@ int main()
         require(compiled.initial_couplings[f2_u1_term].real == 0.33
                     && compiled.initial_couplings[f2_u1_term].imag == -0.22,
                 "tensor coupling application is wrong");
+        require(
+            std::fabs(compiled.resonances[
+                          compiled.find_resonance("eta_1760")].mass
+                      - 1.80) < 1.0e-12
+                && std::fabs(compiled.resonances[
+                                  compiled.find_resonance("eta_1760")]
+                                  .pole_width
+                              - 0.25)
+                    < 1.0e-12
+                && std::fabs(compiled.resonances[
+                                  compiled.find_resonance("eta_2225")].mass
+                              - 2.222)
+                    < 1.0e-12
+                && std::fabs(compiled.resonances[
+                                  compiled.find_resonance("eta_2225")]
+                                  .pole_width
+                              - 0.190)
+                    < 1.0e-12,
+            "floating eta pole-parameter application is wrong");
 
         // Disabling one of two Terms sharing f0(1500) removes only that
         // coupling. The Resonance and its propagator coordinate stay active.
@@ -237,9 +285,9 @@ int main()
             gvv_compile_model(one_f0_1500_wave);
         const std::vector<GVVFitParameterBinding> one_f0_1500_layout =
             gvv_fit_parameter_layout(with_f0_1500_22_only);
-        require(with_f0_1500_22_only.resonances.size() == 8
+        require(with_f0_1500_22_only.resonances.size() == 9
                     && with_f0_1500_22_only.find_resonance("f0_1500") >= 0
-                    && with_f0_1500_22_only.terms.size() == 13
+                    && with_f0_1500_22_only.terms.size() == 14
                     && one_f0_1500_layout.size() == layout.size() - 2
                     && has_parameter(
                         one_f0_1500_layout, "log_Romega_f0_1500"),
@@ -259,9 +307,9 @@ int main()
             gvv_compile_model(no_f0_1500);
         const std::vector<GVVFitParameterBinding> without_f0_1500_layout =
             gvv_fit_parameter_layout(without_f0_1500);
-        require(without_f0_1500.resonances.size() == 7
+        require(without_f0_1500.resonances.size() == 8
                     && without_f0_1500.find_resonance("f0_1500") == -1
-                    && without_f0_1500.terms.size() == 12
+                    && without_f0_1500.terms.size() == 13
                     && without_f0_1500_layout.size() == layout.size() - 5
                     && !has_parameter(
                         without_f0_1500_layout, "log_Romega_f0_1500"),
@@ -286,7 +334,7 @@ int main()
             gvv_fit_parameter_layout(without_f2_1565);
         require(without_f2_1565.find_resonance("f2_1565") == -1
                     && without_f2_1565.find_resonance("f2_1810") >= 0
-                    && without_f2_1565.terms.size() == 11
+                    && without_f2_1565.terms.size() == 12
                     && without_f2_1565.active_wave_types.size() == 6
                     && without_f2_layout.size() == layout.size() - 7
                     && !has_parameter(
@@ -307,7 +355,7 @@ int main()
             gvv_fit_parameter_specs(shared_layout);
         require(
             shared_layout.size() == layout.size() + 2
-                && shared.propagator_fit_bindings.size() == 4,
+                && shared.propagator_fit_bindings.size() == 8,
             "one shared Resonance produced duplicate fit coordinates");
         const int shared_mass =
             find_parameter(shared_parameters, "mass_f2_1810");
