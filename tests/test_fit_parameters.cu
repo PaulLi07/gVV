@@ -82,16 +82,24 @@ int main()
         const std::vector<ctpwa::FitParameterSpec> parameters =
             gvv_fit_parameter_specs(layout);
 
-        // Six active legacy Terms contribute nine coupling coordinates. The six
-        // tensor Terms add twelve more, and the two threshold line shapes add
-        // one shared log-coupling coordinate each.
-        require(layout.size() == 23 && parameters.size() == layout.size(),
+        // Eight active non-tensor Terms contribute thirteen coupling
+        // coordinates. The six tensor Terms add twelve more, and the two
+        // threshold line shapes add one shared log-coupling coordinate each.
+        require(layout.size() == 27 && parameters.size() == layout.size(),
                 "runtime GVV fit parameter count is wrong");
         require(compiled.propagator_fit_bindings.size() == 2,
                 "free propagator parameter count is wrong");
 
         const int re_f0 = find_parameter(parameters, "Re_f0_1500_00");
         const int im_f0 = find_parameter(parameters, "Im_f0_1500_00");
+        const int re_f0_1500_22 =
+            find_parameter(parameters, "Re_f0_1500_22");
+        const int im_f0_1500_22 =
+            find_parameter(parameters, "Im_f0_1500_22");
+        const int re_f0_1710_22 =
+            find_parameter(parameters, "Re_f0_1710_22");
+        const int im_f0_1710_22 =
+            find_parameter(parameters, "Im_f0_1710_22");
         const int phase_reference =
             find_parameter(parameters, "log_rho_f0_1710_00");
         const int f0_ratio =
@@ -109,6 +117,15 @@ int main()
         require(parameters[im_f0].randomization
                     == ctpwa::ParameterRandomization::ComplexImaginary,
                 "Cartesian imaginary randomization policy is wrong");
+        require(parameters[re_f0_1500_22].randomization
+                    == ctpwa::ParameterRandomization::ComplexReal
+                    && parameters[im_f0_1500_22].randomization
+                        == ctpwa::ParameterRandomization::ComplexImaginary
+                    && parameters[re_f0_1710_22].randomization
+                        == ctpwa::ParameterRandomization::ComplexReal
+                    && parameters[im_f0_1710_22].randomization
+                        == ctpwa::ParameterRandomization::ComplexImaginary,
+                "scalar LS=22 randomization policy is wrong");
         require(parameters[phase_reference].randomization
                     == ctpwa::ParameterRandomization::LogMagnitude,
                 "phase-reference randomization policy is wrong");
@@ -123,6 +140,21 @@ int main()
                         && layout[ratio].propagator_target
                             == GVVPropagatorParameterTarget::FlatteRatio,
                     "threshold-line-shape parameter target is wrong");
+        }
+
+        const int f0_1500 = compiled.find_resonance("f0_1500");
+        const int f0_1710 = compiled.find_resonance("f0_1710");
+        require(f0_1500 >= 0 && f0_1710 >= 0 && f0_1500 != f0_1710,
+                "scalar Resonance indices are wrong");
+        for (const std::string& id : {"f0_1500_00", "f0_1500_22"}) {
+            require(compiled.terms[compiled.find_term(id)].resonance_index
+                        == f0_1500,
+                    "f0(1500) Terms do not share one propagator");
+        }
+        for (const std::string& id : {"f0_1710_00", "f0_1710_22"}) {
+            require(compiled.terms[compiled.find_term(id)].resonance_index
+                        == f0_1710,
+                    "f0(1710) Terms do not share one propagator");
         }
 
         const int f2_1565 = compiled.find_resonance("f2_1565");
@@ -151,6 +183,10 @@ int main()
         }
         values[re_f0] = 0.25;
         values[im_f0] = -0.50;
+        values[re_f0_1500_22] = -0.15;
+        values[im_f0_1500_22] = 0.20;
+        values[re_f0_1710_22] = 0.35;
+        values[im_f0_1710_22] = -0.10;
         values[phase_reference] = std::log(2.0);
         values[f0_ratio] = std::log(0.75);
         values[f2_ratio] = std::log(1.25);
@@ -159,11 +195,19 @@ int main()
         gvv_apply_fit_parameters(compiled, layout, values);
 
         const int f0_term = layout[re_f0].target_index;
+        const int f0_1500_22_term = layout[re_f0_1500_22].target_index;
+        const int f0_1710_22_term = layout[re_f0_1710_22].target_index;
         const int reference_term = layout[phase_reference].target_index;
         const int f2_u1_term = layout[re_f2_u1].target_index;
         require(compiled.initial_couplings[f0_term].real == 0.25
                     && compiled.initial_couplings[f0_term].imag == -0.50,
                 "Cartesian coupling application is wrong");
+        require(
+            compiled.initial_couplings[f0_1500_22_term].real == -0.15
+                && compiled.initial_couplings[f0_1500_22_term].imag == 0.20
+                && compiled.initial_couplings[f0_1710_22_term].real == 0.35
+                && compiled.initial_couplings[f0_1710_22_term].imag == -0.10,
+            "scalar LS=22 coupling application is wrong");
         require(std::fabs(
                     compiled.initial_couplings[reference_term].real - 2.0)
                     < 1.0e-12
@@ -181,18 +225,47 @@ int main()
                     && compiled.initial_couplings[f2_u1_term].imag == -0.22,
                 "tensor coupling application is wrong");
 
-        ctpwa::ModelDefinition reduced_definition = compiled.definition;
-        reduced_definition.terms[0].active = false;
-        const GVVCompiledModel reduced =
-            gvv_compile_model(reduced_definition);
-        const std::vector<GVVFitParameterBinding> reduced_layout =
-            gvv_fit_parameter_layout(reduced);
-        require(reduced.resonances.size() == 7
-                    && reduced.find_resonance("f0_1500") == -1
-                    && reduced_layout.size() == layout.size() - 3
+        // Disabling one of two Terms sharing f0(1500) removes only that
+        // coupling. The Resonance and its propagator coordinate stay active.
+        ctpwa::ModelDefinition one_f0_1500_wave = compiled.definition;
+        for (ctpwa::TermDefinition& term : one_f0_1500_wave.terms) {
+            if (term.id == "f0_1500_00") {
+                term.active = false;
+            }
+        }
+        const GVVCompiledModel with_f0_1500_22_only =
+            gvv_compile_model(one_f0_1500_wave);
+        const std::vector<GVVFitParameterBinding> one_f0_1500_layout =
+            gvv_fit_parameter_layout(with_f0_1500_22_only);
+        require(with_f0_1500_22_only.resonances.size() == 8
+                    && with_f0_1500_22_only.find_resonance("f0_1500") >= 0
+                    && with_f0_1500_22_only.terms.size() == 13
+                    && one_f0_1500_layout.size() == layout.size() - 2
+                    && has_parameter(
+                        one_f0_1500_layout, "log_Romega_f0_1500"),
+                "active shared Term did not retain its Resonance parameters");
+
+        // Disabling both f0(1500) Terms removes the shared Resonance and its
+        // one propagator coordinate from the runtime fit layout.
+        ctpwa::ModelDefinition no_f0_1500 = compiled.definition;
+        for (ctpwa::TermDefinition& term : no_f0_1500.terms) {
+            if (term.id.rfind("f0_1500_", 0) == 0) {
+                term.active = false;
+            }
+        }
+        mutable_resonance(no_f0_1500, "f0_1500").propagator =
+            "ignored_for_inactive_terms";
+        const GVVCompiledModel without_f0_1500 =
+            gvv_compile_model(no_f0_1500);
+        const std::vector<GVVFitParameterBinding> without_f0_1500_layout =
+            gvv_fit_parameter_layout(without_f0_1500);
+        require(without_f0_1500.resonances.size() == 7
+                    && without_f0_1500.find_resonance("f0_1500") == -1
+                    && without_f0_1500.terms.size() == 12
+                    && without_f0_1500_layout.size() == layout.size() - 5
                     && !has_parameter(
-                        reduced_layout, "log_Romega_f0_1500"),
-                "inactive Term leaked Resonance fit parameters");
+                        without_f0_1500_layout, "log_Romega_f0_1500"),
+                "inactive shared Resonance leaked into the fit layout");
 
         // Disabling all three f2(1565) Terms must remove its one shared
         // propagator coordinate while leaving the f2(1810) LS=02 basis active.
@@ -213,8 +286,8 @@ int main()
             gvv_fit_parameter_layout(without_f2_1565);
         require(without_f2_1565.find_resonance("f2_1565") == -1
                     && without_f2_1565.find_resonance("f2_1810") >= 0
-                    && without_f2_1565.terms.size() == 9
-                    && without_f2_1565.active_wave_types.size() == 5
+                    && without_f2_1565.terms.size() == 11
+                    && without_f2_1565.active_wave_types.size() == 6
                     && without_f2_layout.size() == layout.size() - 7
                     && !has_parameter(
                         without_f2_layout, "log_Romega_f2_1565"),

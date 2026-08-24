@@ -26,9 +26,9 @@ struct RgbColor {
 // ============================================================================
 // This figure shows individual component contributions. Interference between
 // distinct resonances is intentionally omitted, so the component curves are
-// not expected to sum to the coherent total. Each 2++ resonance is shown once
-// as the coherent sum of its tensor LS waves. Relative paths are interpreted
-// from the project root.
+// not expected to sum to the coherent total. Each Resonance is shown once as
+// the coherent sum of all of its active Wave Terms. Relative paths are
+// interpreted from the project root.
 //
 // Run with defaults:
 //   root post/plotting/macros/Draw_projection_components.cxx
@@ -145,20 +145,14 @@ struct ComponentStyle {
 struct DisplayComponent {
     std::string label;
     std::string resonance_id;
-    bool combines_tensor_waves = false;
     std::vector<std::size_t> source_indices;
 };
 
-bool IsTensorComponent(const gvvplot::ComponentInfo& component)
-{
-    return component.jpc == "2++";
-}
-
-std::string TensorResonanceLabel(
+std::string ResonanceLabel(
     const gvvplot::ComponentInfo& component)
 {
-    // Tensor Term labels append their LS-wave identifier after '~'. The
-    // combined curve represents the resonance, so retain only that prefix.
+    // Multi-Wave Term labels append their Wave identifier after '~'. The
+    // combined curve represents the Resonance, so retain only that prefix.
     const std::size_t separator = component.label.find('~');
     return separator == std::string::npos
         ? component.label
@@ -171,30 +165,19 @@ std::vector<DisplayComponent> BuildDisplayComponents(
     std::vector<DisplayComponent> display_components;
     for (std::size_t source = 0; source < components.size(); ++source) {
         const gvvplot::ComponentInfo& component = components[source];
-        if (!IsTensorComponent(component)) {
-            display_components.push_back({
-                component.label,
-                component.resonance_id,
-                false,
-                {source}});
-            continue;
-        }
-
-        // A tensor resonance can contain several LS waves. Keep one display
-        // curve and one legend entry for the resonance rather than for each
-        // individual tensor-wave basis amplitude.
+        // A Resonance can contain several Wave Terms. Keep one display curve
+        // and one legend entry for the Resonance rather than one for each
+        // individual basis amplitude.
         const auto existing = std::find_if(
             display_components.begin(),
             display_components.end(),
             [&component](const DisplayComponent& candidate) {
-                return candidate.combines_tensor_waves
-                    && candidate.resonance_id == component.resonance_id;
+                return candidate.resonance_id == component.resonance_id;
             });
         if (existing == display_components.end()) {
             display_components.push_back({
-                TensorResonanceLabel(component),
+                ResonanceLabel(component),
                 component.resonance_id,
-                true,
                 {source}});
         } else {
             existing->source_indices.push_back(source);
@@ -265,7 +248,7 @@ void BuildDisplayHistograms(
     panel.components = std::move(display_histograms);
 }
 
-void AddTensorWaveInterference(
+void AddInternalWaveInterference(
     gvvplot::PanelHistograms& panel,
     const gvvplot::ProjectionInput& input,
     const gvvplot::VariableSpec& variable,
@@ -282,13 +265,13 @@ void AddTensorWaveInterference(
             const DisplayComponent& component = display_components[display];
             const std::vector<std::size_t>& sources =
                 component.source_indices;
-            if (!component.combines_tensor_waves || sources.size() < 2) {
+            if (sources.size() < 2) {
                 continue;
             }
 
             // ProjectionWriter stores a symmetric matrix. Each non-diagonal
-            // entry already contains the complete K_ij + K_ji interference,
-            // so visit each unordered LS pair exactly once.
+            // entry already contains the complete K_ij + K_ji interference.
+            // Visit each unordered pair of Terms within this Resonance once.
             double internal_interference = 0.0;
             for (std::size_t first = 0; first < sources.size(); ++first) {
                 const int first_index = input.components[sources[first]].index;
@@ -453,7 +436,7 @@ void Draw_projection_components(
             true));
         projection_components::BuildDisplayHistograms(
             panels.back(), display_components, static_cast<int>(index));
-        projection_components::AddTensorWaveInterference(
+        projection_components::AddInternalWaveInterference(
             panels.back(),
             input,
             projection_components::kVariables[index],

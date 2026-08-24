@@ -3,7 +3,7 @@
   "process": "psi2s_to_gamma_omega_omega",
   "metadata": {
     "name": "nominal",
-    "description": "gVV nominal scalar, pseudoscalar, and LS=02 tensor amplitude model"
+    "description": "gVV nominal scalar LS=00/22, pseudoscalar LS=11, and tensor LS=02 amplitude model"
   },
   "resonances": [
     {
@@ -120,6 +120,19 @@
       }
     },
     {
+      "id": "f0_1500_22",
+      "label": "f_{0}(1500)~(22)",
+      "wave": "gvv.scalar_22",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f0_1500"
+      }
+    },
+    {
       "id": "f0_1710_00",
       "label": "f_{0}(1710)",
       "wave": "gvv.scalar_00",
@@ -127,6 +140,19 @@
         "mode": "positive_real",
         "reference": "phase",
         "initial": 0.1
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f0_1710"
+      }
+    },
+    {
+      "id": "f0_1710_22",
+      "label": "f_{0}(1710)~(22)",
+      "wave": "gvv.scalar_22",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
       },
       "dynamics": {
         "type": "gvv_x_to_omega_omega",

@@ -42,7 +42,7 @@ int main(int argc, char* argv[])
             model.process == "psi2s_to_gamma_omega_omega",
             "process id mismatch");
         require(model.resonances.size() == 9, "nominal resonance count mismatch");
-        require(model.terms.size() == 13, "nominal term count mismatch");
+        require(model.terms.size() == 15, "nominal term count mismatch");
         require(
             model.resonance("f0_1710").propagator
                 == "two_body_running_bw",
@@ -51,6 +51,10 @@ int main(int argc, char* argv[])
             model.term("f0_1710_00").coupling.mode
                 == ctpwa::CouplingMode::PositiveReal,
             "positive-parity phase-reference coupling mismatch");
+        require(
+            model.term("f0_1500_22").wave == "gvv.scalar_22"
+                && model.term("f0_1710_22").wave == "gvv.scalar_22",
+            "scalar LS=22 wave assignment mismatch");
         require(
             model.term("eta_1760_11").coupling.reference
                 == ctpwa::CouplingReference::ScaleAndPhase,

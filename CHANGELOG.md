@@ -2,6 +2,11 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Activated the existing scalar `0++(22)` Wave for both `f0(1500)` and
+  `f0(1710)` as ordinary complex Terms sharing each state's unchanged
+  Resonance denominator with its `0++(00)` Term. Component projections now
+  combine every same-Resonance multi-Wave contribution coherently, while
+  retaining the established plotting presentation.
 - Renamed the two Wave phase-reference metadata classes from the spin-specific
   `scalar`/`pseudoscalar` tokens to `positive_parity`/`negative_parity`.
   Stable Wave IDs, JPC labels, amplitudes, propagators, couplings, reference

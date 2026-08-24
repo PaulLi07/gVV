@@ -94,21 +94,25 @@ int main(int argc, char* argv[])
         const std::vector<double> widths = {
             0.108, 0.149, 0.240, 0.0300, 0.130, 0.0, 0.132, 0.197};
         const std::vector<std::string> term_ids = {
-            "f0_1500_00", "f0_1710_00", "eta_1760_11", "eta_c_11",
-            "X_1835_11", "NR_0mp_11",
+            "f0_1500_00", "f0_1500_22",
+            "f0_1710_00", "f0_1710_22",
+            "eta_1760_11", "eta_c_11", "X_1835_11", "NR_0mp_11",
             "f2_1565_02_u1", "f2_1565_02_u2", "f2_1565_02_u3",
             "f2_1810_02_u1", "f2_1810_02_u2", "f2_1810_02_u3"};
         const std::vector<int> term_resonances = {
-            0, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 7};
+            0, 0, 1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 7};
         const std::vector<int> term_waves = {
-            GVV_SCALAR_00, GVV_SCALAR_00,
+            GVV_SCALAR_00, GVV_SCALAR_22,
+            GVV_SCALAR_00, GVV_SCALAR_22,
             GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
             GVV_PSEUDOSCALAR_11, GVV_PSEUDOSCALAR_11,
             GVV_TENSOR_02_U1, GVV_TENSOR_02_U2, GVV_TENSOR_02_U3,
             GVV_TENSOR_02_U1, GVV_TENSOR_02_U2, GVV_TENSOR_02_U3};
         const std::vector<int> coupling_policies = {
             COUPLING_COMPLEX,
+            COUPLING_COMPLEX,
             COUPLING_POSITIVE_REAL,
+            COUPLING_COMPLEX,
             COUPLING_FIXED_SCALE_AND_PHASE,
             COUPLING_COMPLEX,
             COUPLING_COMPLEX,
@@ -126,15 +130,15 @@ int main(int argc, char* argv[])
                 "compiled Term count mismatch");
         require(model.initial_couplings.size() == term_ids.size(),
                 "coupling count mismatch");
-        require(model.active_wave_types.size() == 5,
+        require(model.active_wave_types.size() == 6,
                 "active Wave count mismatch");
         require(model.find_resonance("X_2370") == -1,
                 "inactive X(2370) Resonance entered the compiled model");
         require(model.find_resonance("f0_1710") == 1,
                 "resonance lookup mismatch");
-        require(model.find_term("eta_1760_11") == 2,
+        require(model.find_term("eta_1760_11") == 4,
                 "Term lookup mismatch");
-        require(model.find_term("f2_1810_02_u3") == 11,
+        require(model.find_term("f2_1810_02_u3") == 13,
                 "tensor Term lookup mismatch");
 
         for (std::size_t index = 0; index < resonance_ids.size(); ++index) {
@@ -183,19 +187,23 @@ int main(int argc, char* argv[])
                 "global reference initial value mismatch");
 
         // Runtime dimensions must follow active Terms rather than the nominal
-        // fixture. An inactive-only Resonance is omitted before its propagator
-        // is compiled.
+        // fixture. A Resonance is omitted only after all Terms using it are
+        // inactive.
         ctpwa::ModelDefinition reduced_definition = model.definition;
-        reduced_definition.terms[0].active = false;
+        for (ctpwa::TermDefinition& term : reduced_definition.terms) {
+            if (term.id.rfind("f0_1500_", 0) == 0) {
+                term.active = false;
+            }
+        }
         reduced_definition.resonances[0].propagator =
-            "ignored_for_inactive_term";
+            "ignored_for_inactive_terms";
         const GVVCompiledModel reduced =
             gvv_compile_model(reduced_definition);
         require(reduced.resonances.size() == 7,
                 "inactive-only Resonance was not removed");
-        require(reduced.terms.size() == 11,
-                "disabled Term was not removed from runtime layout");
-        require(reduced.active_wave_types.size() == 5,
+        require(reduced.terms.size() == 12,
+                "disabled Terms were not removed from runtime layout");
+        require(reduced.active_wave_types.size() == 6,
                 "reduced active Wave layout mismatch");
         require(reduced.find_resonance("f0_1500") == -1,
                 "inactive-only Resonance remained addressable");
@@ -237,9 +245,9 @@ int main(int argc, char* argv[])
             gvv_compile_model(expanded_definition);
         require(expanded.resonances.size() == 9,
                 "expanded resonance layout mismatch");
-        require(expanded.terms.size() == 13,
+        require(expanded.terms.size() == 15,
                 "expanded Term layout mismatch");
-        require(expanded.find_term("NR_extra_11") == 12,
+        require(expanded.find_term("NR_extra_11") == 14,
                 "expanded stable Term id mismatch");
 
         ctpwa::ModelDefinition bad_parameter = model.definition;

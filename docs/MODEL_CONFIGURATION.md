@@ -609,6 +609,11 @@ Both Terms remain in the `positive_parity` coherence class and interfere. Note
 again that `gvv.scalar_22` is the scalar \(0^{++}\), \(L=S=2\) basis; it is
 not a spin-two \(2^{++}\) Wave.
 
+The nominal `f0(1500)` and `f0(1710)` models also activate both scalar
+Wave Terms, but deliberately retain their existing Resonance-wide denominator
+hypotheses. Selecting `gvv.scalar_22` adds the D-wave numerator and its
+barrier factor; it does not implicitly change the Resonance propagator.
+
 ### Disable an ordinary Term
 
 For a reversible scan, add or change only:
@@ -617,10 +622,12 @@ For a reversible scan, add or change only:
 "active": false
 ```
 
-For example, disabling `f0_1500_00` removes its coupling. Because no other
-nominal Term uses `f0_1500`, the `f0_1500` propagator and its free
-`log_Romega_f0_1500` parameter are also removed. The Resonance object may
-remain in the JSON for later reuse.
+For example, disabling `f0_1500_00` removes only that coupling because
+`f0_1500_22` still uses the same Resonance. The `f0_1500` propagator and its
+free `log_Romega_f0_1500` parameter remain active. Disable both
+`f0_1500_00` and `f0_1500_22` to remove the shared propagator and its free
+parameter from the runtime model. The Resonance object may remain in the JSON
+for later reuse.
 
 Do not replace this operation with an initial coupling of `[0.0, 0.0]`; that
 would leave two free parameters in Minuit and would not disable the Term.

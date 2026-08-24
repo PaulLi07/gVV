@@ -142,11 +142,13 @@ in the same class and share one arbitrary phase convention. A future Wave must
 be classified from its event-level Gram-matrix cross terms, not from parity
 alone.
 
-`gvv.scalar_22` remains the scalar `0++(22)` basis; it is not a spin-two
-Wave. The nominal model currently activates only the three `LS=02` tensor
-covariants, for `f2(1565)` and `f2(1810)`. The higher-orbital tensor Waves are
-registered for explicit future model tests but do not enter a Fit until selected
-by an active Term in `config/model.json`.
+`gvv.scalar_22` is the scalar `0++(22)` basis; it is not a spin-two Wave.
+The nominal model activates both `gvv.scalar_00` and `gvv.scalar_22` for
+`f0(1500)` and `f0(1710)`, with the two Terms of each state sharing its
+Resonance denominator. Within the tensor sector, the nominal model activates
+only the three `LS=02` covariants for `f2(1565)` and `f2(1810)`. The
+higher-orbital tensor Waves are registered for explicit future model tests but
+do not enter a Fit until selected by an active Term in `config/model.json`.
 
 ### Accepted-MC normalization and signed likelihood
 
