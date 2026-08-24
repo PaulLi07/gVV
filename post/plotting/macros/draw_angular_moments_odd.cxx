@@ -49,14 +49,12 @@ constexpr double kPadGap = 0.002;
 constexpr const char* kXAxisTitle =
     "M(#omega#omega) (GeV/#font[12]{c}^{2})";
 constexpr const char* kYAxisTitleFormat =
-    "#sum P_{%d}(cos#theta_{#omega_{1}}^{(X hel.)}) / "
-    "(%.1f MeV/#font[12]{c}^{2})";
-constexpr double kGeVToMeV = 1000.0;
+    "#LT P_{%d}(cos#theta_{#omega}) #GT / 50 MeV";
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.35;
 constexpr double kPositiveRangeScale = 1.35;
-// The first panel contains the shared legend and diagnostic note. Its larger
-// headroom keeps the complete histogram envelope in the lower 58% of its
+// The first panel contains the shared legend. Its larger headroom keeps the
+// complete histogram envelope in the lower 58% of its
 // numerical y range, including when the moment has sizable negative content.
 constexpr double kLegendPanelEnvelopeFraction = 0.58;
 
@@ -68,17 +66,18 @@ constexpr int kDataLineWidth = 1;
 constexpr int kModelColor = kBlue + 1;
 constexpr int kModelLineWidth = 2;
 
-// One compact legend in the first panel applies to all three moment orders.
-constexpr double kLegendX1 = 0.37;
-constexpr double kLegendY1 = 0.70;
-constexpr double kLegendX2 = 0.94;
-constexpr double kLegendY2 = 0.82;
+// One compact legend in the first-panel upper-right corner applies to all
+// three moment orders.
+constexpr double kLegendX1 = 0.49;
+constexpr double kLegendY1 = 0.59;
+constexpr double kLegendX2 = 0.93;
+constexpr double kLegendY2 = 0.74;
 constexpr int kLegendColumns = 1;
 constexpr int kLegendFont = 22;
-constexpr double kLegendTextSize = 0.030;
+constexpr double kLegendTextSize = 0.043;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
-constexpr const char* kDataLegendLabel = "Data - signed background";
+constexpr const char* kDataLegendLabel = "Data-signed BKG";
 constexpr const char* kModelLegendLabel = "Fitted signal MC";
 
 // Zero reference for signed odd moments.
@@ -86,19 +85,13 @@ constexpr int kZeroLineColor = kGray + 1;
 constexpr int kZeroLineStyle = 3;
 constexpr int kZeroLineWidth = 1;
 
-// Per-panel chi-square and ordered-omega diagnostic annotations.
+// Per-panel chi-square annotations.
 constexpr int kAnnotationFont = 22;
 constexpr double kAnnotationSize = 0.050;
 constexpr double kAnnotationX = 0.18;
 constexpr double kAnnotationY = 0.84;
-constexpr double kLegendPanelAnnotationY = 0.87;
 constexpr const char* kAnnotationFormat =
     "P_{%d}: #chi^{2}/N_{bin}=%.1f/%d";
-constexpr double kDiagnosticSize = 0.034;
-constexpr double kDiagnosticX = 0.18;
-constexpr double kDiagnosticY = 0.67;
-constexpr const char* kDiagnosticText =
-    "ordered #omega_{1}; not exchange symmetric";
 
 // ROOT draw options and layer order used by DrawPanel().
 constexpr const char* kDataDrawOption = "E1";
@@ -122,10 +115,8 @@ void FormatPanel(
     histograms.model->SetLineColor(kModelColor);
     histograms.model->SetLineWidth(kModelLineWidth);
     histograms.data->GetXaxis()->SetTitle(kXAxisTitle);
-    const double mass_bin_width_mev =
-        kGeVToMeV * (kMassUpper - kMassLower) / kMassBins;
     histograms.data->GetYaxis()->SetTitle(
-        Form(kYAxisTitleFormat, order, mass_bin_width_mev));
+        Form(kYAxisTitleFormat, order));
     histograms.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     histograms.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
 
@@ -168,7 +159,7 @@ void DrawPanel(
     label.SetTextSize(kAnnotationSize);
     label.DrawLatex(
         kAnnotationX,
-        panel_index == 0 ? kLegendPanelAnnotationY : kAnnotationY,
+        kAnnotationY,
         Form(kAnnotationFormat,
              order,
              chi_square.first,
@@ -216,15 +207,6 @@ void draw_angular_moments_odd(
         odd_moments::DrawPanel(histograms, order, panel);
 
         if (panel == 0) {
-            TLatex diagnostic;
-            diagnostic.SetNDC();
-            diagnostic.SetTextFont(odd_moments::kAnnotationFont);
-            diagnostic.SetTextSize(odd_moments::kDiagnosticSize);
-            diagnostic.DrawLatex(
-                odd_moments::kDiagnosticX,
-                odd_moments::kDiagnosticY,
-                odd_moments::kDiagnosticText);
-
             TLegend* legend = new TLegend(
                 odd_moments::kLegendX1,
                 odd_moments::kLegendY1,

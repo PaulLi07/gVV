@@ -8,22 +8,27 @@
 #include "TPad.h"
 
 #include <algorithm>
-#include <array>
-#include <cstdint>
 #include <iostream>
-#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace projection_components {
 
+struct RgbColor {
+    int red;
+    int green;
+    int blue;
+};
+
 // ============================================================================
 // User configuration
 // ============================================================================
-// This figure shows diagonal |A_i|^2 terms only. Interference is intentionally
-// omitted, so the component curves are not expected to sum to the coherent
-// total. Relative paths are interpreted from the project root.
+// This figure shows individual component contributions. Interference between
+// distinct resonances is intentionally omitted, so the component curves are
+// not expected to sum to the coherent total. Each 2++ resonance is shown once
+// as the coherent sum of its tensor LS waves. Relative paths are interpreted
+// from the project root.
 //
 // Run with defaults:
 //   root post/plotting/macros/Draw_projection_components.cxx
@@ -58,8 +63,8 @@ constexpr int kCanvasHeight = 800;
 constexpr int kCanvasColumns = 3;
 constexpr int kCanvasRows = 2;
 constexpr double kPadGap = 0.002;
-constexpr double kPlotRegionXMax = 0.79;
-constexpr double kLegendRegionXMin = 0.79;
+constexpr double kPlotRegionXMax = 0.90;
+constexpr double kLegendRegionXMin = 0.90;
 constexpr const char* kPlotPadName = "gvv_component_plot_pad";
 constexpr const char* kLegendPadName = "gvv_component_legend_pad";
 
@@ -74,18 +79,15 @@ constexpr int kBackgroundLineColor = kGray + 2;
 constexpr int kTotalColor = kBlue + 1;
 constexpr int kTotalLineWidth = 2;
 constexpr int kComponentLineWidth = 1;
+constexpr int kComponentLineStyle = 1;
 constexpr int kComponentMarkerStyle = 0;
 constexpr double kComponentMarkerSize = 0.0;
 constexpr int kComponentFillStyle = 0;
-// This qualitative palette deliberately excludes the Total-fit blue, the
-// neutral Background gray, and Data black. A stable metadata key chooses the
-// starting color; probing is used only to keep the active Terms distinct.
-const std::array<const char*, 20> kComponentColorHex = {
-    "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#7B2CBF",
-    "#8C564B", "#6B8E23", "#00A6A6", "#E41A1C", "#4DAF4A",
-    "#984EA3", "#FF7F00", "#A65628", "#F781BF", "#8A8A00",
-    "#00A087", "#DC0000", "#7E6148", "#B09C85", "#6A3D9A"};
-const std::array<int, 4> kComponentLineStyles = {1, 7, 9, 10};
+// Components are listed in the legend from blue through green to yellow.
+// The continuous gradient remains ordered when the active model changes size.
+constexpr RgbColor kComponentColorStart = {53, 88, 177};
+constexpr RgbColor kComponentColorMiddle = {0, 158, 115};
+constexpr RgbColor kComponentColorEnd = {253, 231, 37};
 
 // Axes and automatic vertical range.
 constexpr int kAxisDivisions = 505;
@@ -115,22 +117,15 @@ constexpr const char* kDataRedrawOption = "E1 SAME";
 
 // Legend box and text.
 constexpr double kLegendX1 = 0.02;
-constexpr double kLegendY1 = 0.31;
+constexpr double kLegendY1 = 0.50;
 constexpr double kLegendX2 = 0.98;
-constexpr double kLegendY2 = 0.70;
-constexpr int kLegendColumns = 2;
+constexpr double kLegendY2 = 0.85;
+constexpr int kLegendColumns = 1;
 constexpr int kLegendFont = 42;
-constexpr double kLegendTextSize = 0.038;
-constexpr double kLegendMargin = 0.14;
-constexpr double kLegendColumnSeparation = 0.03;
+constexpr double kLegendTextSize = 0.092;
+constexpr double kLegendMargin = 0.34;
 constexpr int kLegendBorderSize = 0;
 constexpr int kLegendFillStyle = 0;
-constexpr int kLegendNoteFont = 42;
-constexpr double kLegendNoteSize = 0.032;
-constexpr double kLegendNoteX = 0.50;
-constexpr double kLegendNoteY = 0.75;
-constexpr const char* kLegendNote =
-    "Diagonal |A_{i}|^{2}; interference omitted";
 constexpr const char* kDataLegendLabel = "Data";
 constexpr const char* kBackgroundLegendLabel = "Background";
 constexpr const char* kTotalLegendLabel = "Total fit";
@@ -145,102 +140,175 @@ constexpr const char* kLineLegendOption = "l";
 
 struct ComponentStyle {
     int color = kBlack;
-    int line_style = 1;
 };
 
-std::uint64_t StableHash(const std::string& text)
+struct DisplayComponent {
+    std::string label;
+    std::string resonance_id;
+    bool combines_tensor_waves = false;
+    std::vector<std::size_t> source_indices;
+};
+
+bool IsTensorComponent(const gvvplot::ComponentInfo& component)
 {
-    // FNV-1a makes the mapping independent of the order in model.json.
-    std::uint64_t hash = 14695981039346656037ULL;
-    for (unsigned char character : text) {
-        hash ^= character;
-        hash *= 1099511628211ULL;
+    return component.jpc == "2++";
+}
+
+std::string TensorResonanceLabel(
+    const gvvplot::ComponentInfo& component)
+{
+    // Tensor Term labels append their LS-wave identifier after '~'. The
+    // combined curve represents the resonance, so retain only that prefix.
+    const std::size_t separator = component.label.find('~');
+    return separator == std::string::npos
+        ? component.label
+        : component.label.substr(0, separator);
+}
+
+std::vector<DisplayComponent> BuildDisplayComponents(
+    const std::vector<gvvplot::ComponentInfo>& components)
+{
+    std::vector<DisplayComponent> display_components;
+    for (std::size_t source = 0; source < components.size(); ++source) {
+        const gvvplot::ComponentInfo& component = components[source];
+        if (!IsTensorComponent(component)) {
+            display_components.push_back({
+                component.label,
+                component.resonance_id,
+                false,
+                {source}});
+            continue;
+        }
+
+        // A tensor resonance can contain several LS waves. Keep one display
+        // curve and one legend entry for the resonance rather than for each
+        // individual tensor-wave basis amplitude.
+        const auto existing = std::find_if(
+            display_components.begin(),
+            display_components.end(),
+            [&component](const DisplayComponent& candidate) {
+                return candidate.combines_tensor_waves
+                    && candidate.resonance_id == component.resonance_id;
+            });
+        if (existing == display_components.end()) {
+            display_components.push_back({
+                TensorResonanceLabel(component),
+                component.resonance_id,
+                true,
+                {source}});
+        } else {
+            existing->source_indices.push_back(source);
+        }
     }
-    return hash;
+    return display_components;
 }
 
-std::string StyleKey(const gvvplot::ComponentInfo& component)
+int InterpolateChannel(int first, int second, double fraction)
 {
-    return component.resonance_id + "\x1f" + component.wave_id
-        + "\x1f" + component.name;
+    return static_cast<int>(
+        first + (second - first) * fraction + 0.5);
 }
 
-int PreferredLineStyle(const gvvplot::ComponentInfo& component)
+int GradientColor(double fraction)
 {
-    if (component.wave_id.find("_u2") != std::string::npos) return 7;
-    if (component.wave_id.find("_u3") != std::string::npos) return 9;
-    if (component.wave_id.find("_u4") != std::string::npos) return 10;
-    return 1;
-}
-
-std::vector<int> ComponentColors()
-{
-    std::vector<int> colors(kComponentColorHex.size(), kBlack);
-    for (std::size_t index = 0; index < colors.size(); ++index) {
-        colors[index] = TColor::GetColor(kComponentColorHex[index]);
-    }
-    return colors;
+    const RgbColor& first = fraction <= 0.5
+        ? kComponentColorStart
+        : kComponentColorMiddle;
+    const RgbColor& second = fraction <= 0.5
+        ? kComponentColorMiddle
+        : kComponentColorEnd;
+    const double local_fraction = fraction <= 0.5
+        ? 2.0 * fraction
+        : 2.0 * fraction - 1.0;
+    return TColor::GetColor(
+        InterpolateChannel(first.red, second.red, local_fraction),
+        InterpolateChannel(first.green, second.green, local_fraction),
+        InterpolateChannel(first.blue, second.blue, local_fraction));
 }
 
 std::vector<ComponentStyle> BuildComponentStyles(
-    const std::vector<gvvplot::ComponentInfo>& components)
+    std::size_t number_components)
 {
-    const std::vector<int> colors = ComponentColors();
-    std::vector<ComponentStyle> styles(components.size());
-    std::vector<std::size_t> ordered_indices(components.size());
-    std::iota(ordered_indices.begin(), ordered_indices.end(), 0);
-    std::sort(
-        ordered_indices.begin(), ordered_indices.end(),
-        [&components](std::size_t first, std::size_t second) {
-            return StyleKey(components[first]) < StyleKey(components[second]);
-        });
-
-    std::vector<int> color_use_count(colors.size(), 0);
-    std::vector<std::pair<int, int>> used_pairs;
-    for (std::size_t component_index : ordered_indices) {
-        const gvvplot::ComponentInfo& component = components[component_index];
-        const std::uint64_t hash = StableHash(StyleKey(component));
-        const std::size_t first_color = hash % colors.size();
-
-        // Prefer an unused color. If the model outgrows the palette, reuse the
-        // least-used available color with a distinct line style.
-        std::size_t color_index = first_color;
-        int best_use_count = color_use_count[color_index];
-        for (std::size_t step = 0; step < colors.size(); ++step) {
-            const std::size_t candidate = (first_color + step) % colors.size();
-            if (color_use_count[candidate] == 0) {
-                color_index = candidate;
-                best_use_count = 0;
-                break;
-            }
-            if (color_use_count[candidate] < best_use_count) {
-                color_index = candidate;
-                best_use_count = color_use_count[candidate];
-            }
-        }
-
-        int line_style = PreferredLineStyle(component);
-        for (std::size_t offset = 0;
-             offset < kComponentLineStyles.size();
-             ++offset) {
-            const int candidate = kComponentLineStyles[
-                (hash + offset) % kComponentLineStyles.size()];
-            const int requested = offset == 0 ? line_style : candidate;
-            const std::pair<int, int> style_pair = {
-                colors[color_index], requested};
-            if (std::find(
-                    used_pairs.begin(), used_pairs.end(), style_pair)
-                == used_pairs.end()) {
-                line_style = requested;
-                break;
-            }
-        }
-
-        styles[component_index] = {colors[color_index], line_style};
-        ++color_use_count[color_index];
-        used_pairs.push_back({colors[color_index], line_style});
+    std::vector<ComponentStyle> styles(number_components);
+    for (std::size_t index = 0; index < number_components; ++index) {
+        const double fraction = number_components <= 1
+            ? 0.0
+            : static_cast<double>(index)
+                / static_cast<double>(number_components - 1);
+        styles[index] = {GradientColor(fraction)};
     }
     return styles;
+}
+
+void BuildDisplayHistograms(
+    gvvplot::PanelHistograms& panel,
+    const std::vector<DisplayComponent>& display_components,
+    int serial)
+{
+    std::vector<TH1D*> display_histograms;
+    display_histograms.reserve(display_components.size());
+    for (std::size_t display = 0;
+         display < display_components.size();
+         ++display) {
+        const std::vector<std::size_t>& sources =
+            display_components[display].source_indices;
+        TH1D* histogram = dynamic_cast<TH1D*>(
+            panel.components[sources.front()]->Clone(
+                Form("gvv_display_component_%d_%zu", serial, display)));
+        histogram->SetDirectory(nullptr);
+        histogram->Reset("ICES");
+        for (std::size_t source : sources) {
+            histogram->Add(panel.components[source]);
+        }
+        display_histograms.push_back(histogram);
+    }
+    panel.components = std::move(display_histograms);
+}
+
+void AddTensorWaveInterference(
+    gvvplot::PanelHistograms& panel,
+    const gvvplot::ProjectionInput& input,
+    const gvvplot::VariableSpec& variable,
+    const std::vector<DisplayComponent>& display_components)
+{
+    const std::size_t matrix_size = input.components.size();
+    gvvplot::Branches mc_values;
+    mc_values.Bind(input.mc, true, false);
+    for (Long64_t event = 0; event < input.mc->GetEntries(); ++event) {
+        input.mc->GetEntry(event);
+        for (std::size_t display = 0;
+             display < display_components.size();
+             ++display) {
+            const DisplayComponent& component = display_components[display];
+            const std::vector<std::size_t>& sources =
+                component.source_indices;
+            if (!component.combines_tensor_waves || sources.size() < 2) {
+                continue;
+            }
+
+            // ProjectionWriter stores a symmetric matrix. Each non-diagonal
+            // entry already contains the complete K_ij + K_ji interference,
+            // so visit each unordered LS pair exactly once.
+            double internal_interference = 0.0;
+            for (std::size_t first = 0; first < sources.size(); ++first) {
+                const int first_index = input.components[sources[first]].index;
+                for (std::size_t second = first + 1;
+                     second < sources.size();
+                     ++second) {
+                    const int second_index =
+                        input.components[sources[second]].index;
+                    internal_interference += mc_values.weight_component->at(
+                        static_cast<std::size_t>(first_index) * matrix_size
+                        + second_index);
+                }
+            }
+            gvvplot::FillObservable(
+                panel.components[display],
+                mc_values,
+                variable.variable,
+                internal_interference);
+        }
+    }
 }
 
 void FormatPanel(
@@ -258,8 +326,7 @@ void FormatPanel(
          ++component) {
         panel.components[component]->SetLineColor(
             component_styles[component].color);
-        panel.components[component]->SetLineStyle(
-            component_styles[component].line_style);
+        panel.components[component]->SetLineStyle(kComponentLineStyle);
         panel.components[component]->SetLineWidth(kComponentLineWidth);
         panel.components[component]->SetMarkerStyle(kComponentMarkerStyle);
         panel.components[component]->SetMarkerSize(kComponentMarkerSize);
@@ -345,9 +412,12 @@ void Draw_projection_components(
 
     gvvplot::SetBESIIIStyle();
     gvvplot::ProjectionInput input = gvvplot::LoadProjection(input_path.c_str());
+    const std::vector<projection_components::DisplayComponent>
+        display_components =
+            projection_components::BuildDisplayComponents(input.components);
     const std::vector<projection_components::ComponentStyle>
         component_styles =
-            projection_components::BuildComponentStyles(input.components);
+            projection_components::BuildComponentStyles(display_components.size());
     TCanvas* canvas = new TCanvas(
         projection_components::kCanvasName,
         projection_components::kCanvasTitle,
@@ -381,6 +451,13 @@ void Draw_projection_components(
             projection_components::kVariables[index],
             static_cast<int>(index),
             true));
+        projection_components::BuildDisplayHistograms(
+            panels.back(), display_components, static_cast<int>(index));
+        projection_components::AddTensorWaveInterference(
+            panels.back(),
+            input,
+            projection_components::kVariables[index],
+            display_components);
         projection_components::DrawPanel(
             panels.back(),
             projection_components::kVariables[index],
@@ -403,16 +480,6 @@ void Draw_projection_components(
     legend_pad->Draw();
     legend_pad->cd();
 
-    TLatex legend_note;
-    legend_note.SetNDC();
-    legend_note.SetTextAlign(22);
-    legend_note.SetTextFont(projection_components::kLegendNoteFont);
-    legend_note.SetTextSize(projection_components::kLegendNoteSize);
-    legend_note.DrawLatex(
-        projection_components::kLegendNoteX,
-        projection_components::kLegendNoteY,
-        projection_components::kLegendNote);
-
     TLegend* legend = new TLegend(
         projection_components::kLegendX1,
         projection_components::kLegendY1,
@@ -424,8 +491,6 @@ void Draw_projection_components(
     legend->SetTextSize(projection_components::kLegendTextSize);
     legend->SetNColumns(projection_components::kLegendColumns);
     legend->SetMargin(projection_components::kLegendMargin);
-    legend->SetColumnSeparation(
-        projection_components::kLegendColumnSeparation);
     legend->AddEntry(
         panels[0].data,
         projection_components::kDataLegendLabel,
@@ -439,11 +504,11 @@ void Draw_projection_components(
         projection_components::kTotalLegendLabel,
         projection_components::kLineLegendOption);
     for (std::size_t component = 0;
-         component < input.components.size();
+         component < display_components.size();
          ++component) {
         legend->AddEntry(
             panels[0].components[component],
-            gvvplot::RootLabel(input.components[component].label).c_str(),
+            gvvplot::RootLabel(display_components[component].label).c_str(),
             projection_components::kLineLegendOption);
     }
     legend->Draw();

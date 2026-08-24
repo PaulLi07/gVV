@@ -37,11 +37,11 @@ constexpr const char* kDefaultOutput =
 // Polarization observables, binning, ranges, and x-axis titles.
 const std::vector<gvvplot::VariableSpec> kVariables = {
     {gvvplot::kCosThetaDecayPlaneOmega, 40, -1.0, 1.0,
-     "cos#theta_{#hat{n}_{#omega}}^{(#omega hel.)}", false},
+     "cos#theta^{#omega}_{decay plane}", false},
     {gvvplot::kPhiDecayPlaneOmega, 40, -TMath::Pi(), TMath::Pi(),
-     "#phi_{#hat{n}_{#omega}}^{(#omega hel.)} (rad)", false},
+     "#phi^{#omega}_{decay plane} (rad)", false},
     {gvvplot::kDeltaPhiDecayPlanes, 40, -TMath::Pi(), TMath::Pi(),
-     "#Delta#phi(#hat{n}_{1},#hat{n}_{2}) (rad)", false}};
+     "#Delta#phi^{#omega}_{decay plane} (rad)", false}};
 
 constexpr const char* kCanvasName = "gvv_polarization";
 constexpr const char* kCanvasTitle = "GVV polarization observables";
@@ -74,7 +74,7 @@ constexpr const char* kDimensionlessYAxisFormat = "Events / %.3g";
 constexpr const char* kAzimuthYAxisFormat = "Events / (%.3g rad)";
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.25;
-constexpr double kPositiveRangeScale = 1.45;
+constexpr double kPositiveRangeScale = 1.35;
 // The first panel holds the one shared legend. Its larger headroom keeps every
 // plotted curve and data error in the lower 48% of its numerical y range.
 constexpr double kLegendPanelEnvelopeFraction = 0.48;
@@ -95,8 +95,8 @@ constexpr const char* kTotalDrawOption = "HIST SAME";
 constexpr const char* kDataRedrawOption = "E1 SAME";
 
 // Legend box and text.
-constexpr double kLegendX1 = 0.54;
-constexpr double kLegendY1 = 0.54;
+constexpr double kLegendX1 = 0.64;
+constexpr double kLegendY1 = 0.60;
 constexpr double kLegendX2 = 0.94;
 constexpr double kLegendY2 = 0.89;
 constexpr int kLegendColumns = 1;

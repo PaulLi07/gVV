@@ -34,11 +34,11 @@ constexpr const char* kDefaultOutput =
 // Check observables, binning, ranges, and x-axis titles.
 const std::vector<gvvplot::VariableSpec> kVariables = {
     {gvvplot::kCosThetaPipOmega, 40, -1.0, 1.0,
-     "cos#theta_{#pi^{+}}^{(#omega hel.)}", false},
+     "cos#theta_{#pi^{+}}^{#omega}", false},
     {gvvplot::kCosThetaPimOmega, 40, -1.0, 1.0,
-     "cos#theta_{#pi^{-}}^{(#omega hel.)}", false},
+     "cos#theta_{#pi^{-}}^{#omega}", false},
     {gvvplot::kCosThetaPi0Omega, 40, -1.0, 1.0,
-     "cos#theta_{#pi^{0}}^{(#omega hel.)}", false},
+     "cos#theta_{#pi^{0}}^{#omega}", false},
     {gvvplot::kMassPipPimOmega, 45, 0.25, 0.70,
      "M(#pi^{+}#pi^{-}) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kMassPipPi0Omega, 45, 0.25, 0.70,

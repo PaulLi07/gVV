@@ -32,16 +32,16 @@ const std::vector<gvvplot::VariableSpec> kVariables = {
     {gvvplot::kMassOmegaOmega, 60, 1.50, 3.20,
      "M(#omega#omega) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kMassGammaOmega, 60, 0.85, 2.95,
-     "M(#gamma#omega_{i}) (GeV/#font[12]{c}^{2}), i=1,2", true},
+     "M(#gamma#omega) (GeV/#font[12]{c}^{2})", true},
     {gvvplot::kCosThetaGamma, 40, -1.0, 1.0,
-     "cos#theta_{#gamma}^{(#psi(2S) rest)}", false},
+     "cos#theta_{#gamma}^{#psi(3686)}", false},
     {gvvplot::kCosThetaOmega, 40, -1.0, 1.0,
-     "cos#theta_{#omega}^{(X hel.; sym.)}", false},
+     "cos#theta_{#omega}^{#omega#omega}", false},
     {gvvplot::kPhiOmega, 40, -TMath::Pi(), TMath::Pi(),
-     "#phi_{#omega}^{(X hel.; sym.)} (rad)", false},
+     "#phi_{#omega}^{#omega#omega} (rad)", false},
     {gvvplot::kMassOmega, 42, 0.740, 0.824,
-     "M(#pi^{+}_{i}#pi^{-}_{i}#pi^{0}_{i}) "
-     "(GeV/#font[12]{c}^{2}), i=1,2", true}};
+     "M(#pi^{+}#pi^{-}#pi^{0}) "
+     "(GeV/#font[12]{c}^{2})", true}};
 
 constexpr const char* kCanvasName = "gvv_projection_main";
 constexpr const char* kCanvasTitle = "GVV main projections";

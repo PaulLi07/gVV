@@ -49,9 +49,7 @@ constexpr int kLegendPad = 1;
 constexpr const char* kXAxisTitle =
     "M(#omega#omega) (GeV/#font[12]{c}^{2})";
 constexpr const char* kYAxisTitleFormat =
-    "#sum P_{%d}(cos#theta_{#omega}^{(X hel.)}) / "
-    "(%.1f MeV/#font[12]{c}^{2})";
-constexpr double kGeVToMeV = 1000.0;
+    "#LT P_{%d}(cos#theta_{#omega}) #GT / 50 MeV";
 constexpr bool kCenterAxisTitles = true;
 constexpr double kNegativeRangeScale = 1.35;
 constexpr double kPositiveRangeScale = 1.35;
@@ -114,10 +112,8 @@ void FormatPanel(
     histograms.model->SetLineColor(kModelColor);
     histograms.model->SetLineWidth(kModelLineWidth);
     histograms.data->GetXaxis()->SetTitle(kXAxisTitle);
-    const double mass_bin_width_mev =
-        kGeVToMeV * (kMassUpper - kMassLower) / kMassBins;
     histograms.data->GetYaxis()->SetTitle(
-        Form(kYAxisTitleFormat, order, mass_bin_width_mev));
+        Form(kYAxisTitleFormat, order));
     histograms.data->GetXaxis()->CenterTitle(kCenterAxisTitles);
     histograms.data->GetYaxis()->CenterTitle(kCenterAxisTitles);
 
