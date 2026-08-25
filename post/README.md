@@ -403,9 +403,9 @@ first subplot, which alone receives extra vertical headroom.
 
 ### Projection contract consumed
 
-`GVVPlotUtils.h` requires projection schema version 3. It reads:
+`GVVPlotUtils.h` requires projection schema version 4. It reads:
 
-- `data`: unweighted selected data observables;
+- `Data`: unweighted selected data observables;
 - `MC`: accepted normalization-MC observables, total fitted `weight`, coherent
   `weight_group`, and symmetric `weight_component`;
 - `bg`: background observables, zero-based `background_index`, and signed

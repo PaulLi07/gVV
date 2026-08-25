@@ -580,19 +580,19 @@ schema-v2 state instead of pairing old state with a mutable external model.
 ### 6.10 Projection ROOT contract
 
 `ProjectionWriter` is part of the GVV process boundary. It computes derived
-GVV observables on the host and serializes projection schema version 3.
+GVV observables on the host and serializes projection schema version 4.
 
 | Tree | Contents |
 |---|---|
 | `MC` | Accepted normalization-MC event kinematics, total fitted `weight`, coherent `weight_group`, full symmetric `weight_component` matrix |
-| `data` | Selected data event kinematics and derived observables |
+| `Data` | Selected data event kinematics and derived observables |
 | `bg` | All configured background events with zero-based `background_index` and signed `weight_bg` |
 | `component_map` | Term index, IDs/labels, Resonance, Wave, Wave label, JPC |
 | `group_map` | Dynamic JPC group index and display label |
 | `background_map` | Dynamic background label, size, likelihood coefficient, projection weight |
 | `metadata` | Schema, tag, model signature, counts, effective yield, best fit, closure diagnostic |
 
-Every event tree carries the complete schema-v3 polarization coordinates.
+Every event tree carries the complete schema-v4 polarization coordinates.
 In the X rest frame, `z_X` points opposite the radiative photon,
 `y_X` follows `z_beam cross z_X`, and `x_X = y_X cross z_X`.
 `cos_theta_omega1` and `phi_omega1` locate omega1 in this basis; omega2 is
@@ -779,7 +779,7 @@ the tagged TXT and ROOT products. It never submits a fit or runs plotting.
 
 ### 7.6 Post Plotting
 
-Plotting reads only projection schema version 3. It discovers the active Terms,
+Plotting reads only projection schema version 4. It discovers the active Terms,
 JPC groups, and configured backgrounds from the map trees; it does not compile
 a nominal resonance list.
 

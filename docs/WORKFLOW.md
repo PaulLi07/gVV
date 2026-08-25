@@ -395,12 +395,12 @@ JSON manually.
 
 #### 7.3 Projection ROOT schema
 
-`projection-TAG.root` uses projection schema version 3. It contains:
+`projection-TAG.root` uses projection schema version 4. It contains:
 
 | ROOT object | Content |
 |---|---|
 | `MC` tree | Accepted normalization-MC events, derived GVV observables, total fitted `weight`, dynamic `weight_group`, and symmetric `weight_component` vectors |
-| `data` tree | Selected data events and the same kinematic observables, without model weights |
+| `Data` tree | Selected data events and the same kinematic observables, without model weights |
 | `bg` tree | All configured background events plus zero-based `background_index` and plotting weight `weight_bg = -likelihood_coefficient` |
 | `component_map` tree | Dynamic Term index, ID, label, Resonance, Wave ID/label, registered device type, and JPC |
 | `group_map` tree | Dynamic JPC group index and display label |
@@ -688,7 +688,7 @@ with half weight each for the three pion helicity cosines and for
 `M(pi+ pi-)`, `M(pi+ pi0)`, and `M(pi- pi0)`. It does not add an artificial
 `+/-cos(theta_pi)` reflection.
 
-The projection utilities require projection schema version 3 and discover
+The projection utilities require projection schema version 4 and discover
 Terms, JPC groups, and background samples dynamically from `component_map`,
 `group_map`, and `background_map`. The main plots compare data with fitted
 signal plus signed background. Data are black markers, Background is a gray

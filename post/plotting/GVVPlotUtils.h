@@ -452,7 +452,7 @@ inline void ValidateProjectionContract(TFile& input)
     metadata->SetBranchAddress(
         "n_background_samples", &number_background_samples);
     metadata->GetEntry(0);
-    if (schema_version != 3) {
+    if (schema_version != 4) {
         throw std::runtime_error(
             "unsupported projection schema version "
             + std::to_string(schema_version));
@@ -493,13 +493,13 @@ inline ProjectionInput LoadProjection(const char* input_file)
             std::string("cannot open projection file ") + input_file);
     }
     ValidateProjectionContract(*result.file);
-    result.file->GetObject("data", result.data);
+    result.file->GetObject("Data", result.data);
     result.file->GetObject("MC", result.mc);
     result.file->GetObject("bg", result.background);
     if (result.data == nullptr || result.mc == nullptr
         || result.background == nullptr) {
         throw std::runtime_error(
-            "projection file is missing data/MC/bg tree");
+            "projection file is missing Data/MC/bg tree");
     }
     result.components = ReadComponentMap(*result.file);
     result.groups = ReadGroupMap(*result.file);

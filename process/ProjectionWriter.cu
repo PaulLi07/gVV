@@ -713,7 +713,7 @@ void write_gvv_projection(
     // 4. Serialize selected data and dynamic signed-background samples
     // -------------------------------------------------------------------------
 
-    TTree tree_data("data", "selected data");
+    TTree tree_data("Data", "selected data");
     event_values.Book(tree_data);
     for (int event = 0; event < data.Entries(); ++event) {
         event_values.Load(data, event);
@@ -838,7 +838,7 @@ void write_gvv_projection(
     // -------------------------------------------------------------------------
 
     TTree metadata("metadata", "GVV projection provenance");
-    int projection_schema_version = 3;
+    int projection_schema_version = 4;
     int n_terms = number_terms;
     int n_groups = static_cast<int>(group_ids.size());
     int n_data = data.Entries();

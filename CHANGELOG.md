@@ -2,6 +2,10 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Renamed the selected-data tree in `projection-<tag>.root` from `data` to
+  `Data` to avoid clashes with `std::data` in ROOT sessions. Projection schema
+  version 4 records the contract change, and Post Plotting now reads the new
+  tree name.
 - Added active `f0(2020)` scalar LS=00 and LS=22 Terms sharing one reusable
   `two_body_running_bw` Resonance. Its Breit-Wigner mass and width start from
   the PDG 2025 summary values and float within broad configurable physical
