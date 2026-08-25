@@ -144,17 +144,19 @@ alone.
 
 `gvv.scalar_22` is the scalar `0++(22)` basis; it is not a spin-two Wave.
 The nominal model activates both `gvv.scalar_00` and `gvv.scalar_22` for
-`f0(1500)` and `f0(1710)`, with the two Terms of each state sharing its
-Resonance denominator. Within the tensor sector, the nominal model activates
-only the three `LS=02` covariants for `f2(1565)` and `f2(1810)`. The
+`f0(1500)`, `f0(1710)`, and `f0(2020)`, with the two Terms of each state
+sharing its Resonance denominator. The `f0(2020)` Breit-Wigner mass and width
+start from the PDG 2025 summary values and float inside the configurable
+physical ranges in `config/model.json`. Within the tensor sector, the nominal
+model activates only the three `LS=02` covariants for `f2(1565)` and
+`f2(1810)`. The
 higher-orbital tensor Waves are registered for explicit future model tests but
 do not enter a Fit until selected by an active Term in `config/model.json`.
 
-The nominal negative-parity sector also includes an active `eta(2225)` Term
-using `gvv.pseudoscalar_11`. Its mass and width start from the PDG 2025 average
-and float inside the quoted asymmetric one-standard-deviation intervals.
-The existing `eta(1760)` mass and width are likewise configured as free model
-parameters, with their user-selected ranges kept in `config/model.json`.
+The `eta(2225)` Resonance and Term remain available in the negative-parity
+sector, but the Term is inactive in the nominal configuration. Consequently,
+its coupling, mass, and width do not enter Minuit. The active `eta(1760)` mass
+and width remain free with their user-selected ranges in `config/model.json`.
 
 ### Accepted-MC normalization and signed likelihood
 

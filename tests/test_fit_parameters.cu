@@ -82,11 +82,11 @@ int main()
         const std::vector<ctpwa::FitParameterSpec> parameters =
             gvv_fit_parameter_specs(layout);
 
-        // Nine active non-tensor Terms contribute fifteen coupling
+        // Ten active non-tensor Terms contribute seventeen coupling
         // coordinates. The six tensor Terms add twelve more, the two
         // threshold line shapes add one log-ratio each, and the floating
-        // eta(1760)/eta(2225) pole parameters add four coordinates.
-        require(layout.size() == 33 && parameters.size() == layout.size(),
+        // eta(1760)/f0(2020) pole parameters add four coordinates.
+        require(layout.size() == 35 && parameters.size() == layout.size(),
                 "runtime GVV fit parameter count is wrong");
         require(compiled.propagator_fit_bindings.size() == 6,
                 "free propagator parameter count is wrong");
@@ -101,6 +101,14 @@ int main()
             find_parameter(parameters, "Re_f0_1710_22");
         const int im_f0_1710_22 =
             find_parameter(parameters, "Im_f0_1710_22");
+        const int re_f0_2020_00 =
+            find_parameter(parameters, "Re_f0_2020_00");
+        const int im_f0_2020_00 =
+            find_parameter(parameters, "Im_f0_2020_00");
+        const int re_f0_2020_22 =
+            find_parameter(parameters, "Re_f0_2020_22");
+        const int im_f0_2020_22 =
+            find_parameter(parameters, "Im_f0_2020_22");
         const int phase_reference =
             find_parameter(parameters, "log_rho_f0_1710_00");
         const int f0_ratio =
@@ -111,10 +119,10 @@ int main()
             find_parameter(parameters, "mass_eta_1760");
         const int eta_1760_width =
             find_parameter(parameters, "width_eta_1760");
-        const int eta_2225_mass =
-            find_parameter(parameters, "mass_eta_2225");
-        const int eta_2225_width =
-            find_parameter(parameters, "width_eta_2225");
+        const int f0_2020_mass =
+            find_parameter(parameters, "mass_f0_2020");
+        const int f0_2020_width =
+            find_parameter(parameters, "width_f0_2020");
         const int re_f2_u1 =
             find_parameter(parameters, "Re_f2_1565_02_u1");
         const int im_f2_u1 =
@@ -133,8 +141,16 @@ int main()
                     && parameters[re_f0_1710_22].randomization
                         == ctpwa::ParameterRandomization::ComplexReal
                     && parameters[im_f0_1710_22].randomization
+                        == ctpwa::ParameterRandomization::ComplexImaginary
+                    && parameters[re_f0_2020_00].randomization
+                        == ctpwa::ParameterRandomization::ComplexReal
+                    && parameters[im_f0_2020_00].randomization
+                        == ctpwa::ParameterRandomization::ComplexImaginary
+                    && parameters[re_f0_2020_22].randomization
+                        == ctpwa::ParameterRandomization::ComplexReal
+                    && parameters[im_f0_2020_22].randomization
                         == ctpwa::ParameterRandomization::ComplexImaginary,
-                "scalar LS=22 randomization policy is wrong");
+                "scalar coupling randomization policy is wrong");
         require(parameters[phase_reference].randomization
                     == ctpwa::ParameterRandomization::LogMagnitude,
                 "phase-reference randomization policy is wrong");
@@ -151,25 +167,32 @@ int main()
                     "threshold-line-shape parameter target is wrong");
         }
         require(
-            parameters[eta_2225_mass].lower_bound == 2.211
-                && parameters[eta_2225_mass].upper_bound == 2.234
-                && parameters[eta_2225_width].lower_bound == 0.165
-                && parameters[eta_2225_width].upper_bound == 0.225,
-            "eta(2225) PDG parameter bounds are wrong");
+            parameters[f0_2020_mass].lower_bound == 1.80
+                && parameters[f0_2020_mass].upper_bound == 2.20
+                && parameters[f0_2020_width].lower_bound == 0.20
+                && parameters[f0_2020_width].upper_bound == 0.80,
+            "f0(2020) parameter bounds are wrong");
+        require(
+            !has_parameter(layout, "mass_eta_2225")
+                && !has_parameter(layout, "width_eta_2225"),
+            "inactive eta(2225) pole parameters entered Minuit");
         for (const int pole_parameter : {
                  eta_1760_mass, eta_1760_width,
-                 eta_2225_mass, eta_2225_width}) {
+                 f0_2020_mass, f0_2020_width}) {
             require(
                 parameters[pole_parameter].has_lower_bound
                     && parameters[pole_parameter].has_upper_bound
                     && layout[pole_parameter].target
                         == GVVFitParameterTarget::PropagatorParameter,
-                "floating eta pole-parameter binding is wrong");
+                "floating pole-parameter binding is wrong");
         }
 
         const int f0_1500 = compiled.find_resonance("f0_1500");
         const int f0_1710 = compiled.find_resonance("f0_1710");
-        require(f0_1500 >= 0 && f0_1710 >= 0 && f0_1500 != f0_1710,
+        const int f0_2020 = compiled.find_resonance("f0_2020");
+        require(f0_1500 >= 0 && f0_1710 >= 0 && f0_2020 >= 0
+                    && f0_1500 != f0_1710 && f0_1500 != f0_2020
+                    && f0_1710 != f0_2020,
                 "scalar Resonance indices are wrong");
         for (const std::string& id : {"f0_1500_00", "f0_1500_22"}) {
             require(compiled.terms[compiled.find_term(id)].resonance_index
@@ -180,6 +203,11 @@ int main()
             require(compiled.terms[compiled.find_term(id)].resonance_index
                         == f0_1710,
                     "f0(1710) Terms do not share one propagator");
+        }
+        for (const std::string& id : {"f0_2020_00", "f0_2020_22"}) {
+            require(compiled.terms[compiled.find_term(id)].resonance_index
+                        == f0_2020,
+                    "f0(2020) Terms do not share one propagator");
         }
 
         const int f2_1565 = compiled.find_resonance("f2_1565");
@@ -212,13 +240,17 @@ int main()
         values[im_f0_1500_22] = 0.20;
         values[re_f0_1710_22] = 0.35;
         values[im_f0_1710_22] = -0.10;
+        values[re_f0_2020_00] = 0.40;
+        values[im_f0_2020_00] = -0.30;
+        values[re_f0_2020_22] = -0.20;
+        values[im_f0_2020_22] = 0.15;
         values[phase_reference] = std::log(2.0);
         values[f0_ratio] = std::log(0.75);
         values[f2_ratio] = std::log(1.25);
         values[eta_1760_mass] = 1.80;
         values[eta_1760_width] = 0.25;
-        values[eta_2225_mass] = 2.222;
-        values[eta_2225_width] = 0.190;
+        values[f0_2020_mass] = 2.01;
+        values[f0_2020_width] = 0.46;
         values[re_f2_u1] = 0.33;
         values[im_f2_u1] = -0.22;
         gvv_apply_fit_parameters(compiled, layout, values);
@@ -226,6 +258,8 @@ int main()
         const int f0_term = layout[re_f0].target_index;
         const int f0_1500_22_term = layout[re_f0_1500_22].target_index;
         const int f0_1710_22_term = layout[re_f0_1710_22].target_index;
+        const int f0_2020_00_term = layout[re_f0_2020_00].target_index;
+        const int f0_2020_22_term = layout[re_f0_2020_22].target_index;
         const int reference_term = layout[phase_reference].target_index;
         const int f2_u1_term = layout[re_f2_u1].target_index;
         require(compiled.initial_couplings[f0_term].real == 0.25
@@ -237,6 +271,12 @@ int main()
                 && compiled.initial_couplings[f0_1710_22_term].real == 0.35
                 && compiled.initial_couplings[f0_1710_22_term].imag == -0.10,
             "scalar LS=22 coupling application is wrong");
+        require(
+            compiled.initial_couplings[f0_2020_00_term].real == 0.40
+                && compiled.initial_couplings[f0_2020_00_term].imag == -0.30
+                && compiled.initial_couplings[f0_2020_22_term].real == -0.20
+                && compiled.initial_couplings[f0_2020_22_term].imag == 0.15,
+            "f0(2020) coupling application is wrong");
         require(std::fabs(
                     compiled.initial_couplings[reference_term].real - 2.0)
                     < 1.0e-12
@@ -262,16 +302,11 @@ int main()
                                   .pole_width
                               - 0.25)
                     < 1.0e-12
-                && std::fabs(compiled.resonances[
-                                  compiled.find_resonance("eta_2225")].mass
-                              - 2.222)
+                && std::fabs(compiled.resonances[f0_2020].mass - 2.01)
                     < 1.0e-12
-                && std::fabs(compiled.resonances[
-                                  compiled.find_resonance("eta_2225")]
-                                  .pole_width
-                              - 0.190)
+                && std::fabs(compiled.resonances[f0_2020].pole_width - 0.46)
                     < 1.0e-12,
-            "floating eta pole-parameter application is wrong");
+            "floating eta/scalar pole-parameter application is wrong");
 
         // Disabling one of two Terms sharing f0(1500) removes only that
         // coupling. The Resonance and its propagator coordinate stay active.
@@ -287,7 +322,7 @@ int main()
             gvv_fit_parameter_layout(with_f0_1500_22_only);
         require(with_f0_1500_22_only.resonances.size() == 9
                     && with_f0_1500_22_only.find_resonance("f0_1500") >= 0
-                    && with_f0_1500_22_only.terms.size() == 14
+                    && with_f0_1500_22_only.terms.size() == 15
                     && one_f0_1500_layout.size() == layout.size() - 2
                     && has_parameter(
                         one_f0_1500_layout, "log_Romega_f0_1500"),
@@ -309,7 +344,7 @@ int main()
             gvv_fit_parameter_layout(without_f0_1500);
         require(without_f0_1500.resonances.size() == 8
                     && without_f0_1500.find_resonance("f0_1500") == -1
-                    && without_f0_1500.terms.size() == 13
+                    && without_f0_1500.terms.size() == 14
                     && without_f0_1500_layout.size() == layout.size() - 5
                     && !has_parameter(
                         without_f0_1500_layout, "log_Romega_f0_1500"),
@@ -334,7 +369,7 @@ int main()
             gvv_fit_parameter_layout(without_f2_1565);
         require(without_f2_1565.find_resonance("f2_1565") == -1
                     && without_f2_1565.find_resonance("f2_1810") >= 0
-                    && without_f2_1565.terms.size() == 12
+                    && without_f2_1565.terms.size() == 13
                     && without_f2_1565.active_wave_types.size() == 6
                     && without_f2_layout.size() == layout.size() - 7
                     && !has_parameter(

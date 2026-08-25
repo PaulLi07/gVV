@@ -41,8 +41,8 @@ int main(int argc, char* argv[])
         require(
             model.process == "psi2s_to_gamma_omega_omega",
             "process id mismatch");
-        require(model.resonances.size() == 10, "nominal resonance count mismatch");
-        require(model.terms.size() == 16, "nominal term count mismatch");
+        require(model.resonances.size() == 11, "nominal resonance count mismatch");
+        require(model.terms.size() == 18, "nominal term count mismatch");
         require(
             model.resonance("f0_1710").propagator
                 == "two_body_running_bw",
@@ -53,8 +53,17 @@ int main(int argc, char* argv[])
             "positive-parity phase-reference coupling mismatch");
         require(
             model.term("f0_1500_22").wave == "gvv.scalar_22"
-                && model.term("f0_1710_22").wave == "gvv.scalar_22",
+                && model.term("f0_1710_22").wave == "gvv.scalar_22"
+                && model.term("f0_2020_22").wave == "gvv.scalar_22",
             "scalar LS=22 wave assignment mismatch");
+        const ctpwa::ResonanceDefinition& f0_2020 =
+            model.resonance("f0_2020");
+        require(
+            f0_2020.propagator == "two_body_running_bw"
+                && !f0_2020.parameters.at("mass").fixed
+                && !f0_2020.parameters.at("width").fixed
+                && model.term("f0_2020_00").wave == "gvv.scalar_00",
+            "f0(2020) floating scalar configuration mismatch");
         require(
             model.term("eta_1760_11").coupling.reference
                 == ctpwa::CouplingReference::ScaleAndPhase,
@@ -67,8 +76,9 @@ int main(int argc, char* argv[])
                 && !eta_2225.parameters.at("width").fixed,
             "eta(2225) floating line-shape configuration mismatch");
         require(
-            model.term("eta_2225_11").wave == "gvv.pseudoscalar_11",
-            "eta(2225) Wave assignment mismatch");
+            model.term("eta_2225_11").wave == "gvv.pseudoscalar_11"
+                && !model.term("eta_2225_11").active,
+            "inactive eta(2225) configuration mismatch");
         require(
             model.resonance("f2_1565").propagator
                 == "subtracted_effective_flatte",

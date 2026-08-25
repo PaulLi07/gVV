@@ -33,12 +33,22 @@
       }
     },
     {
+      "id": "f0_2020",
+      "label": "f0(2020)",
+      "propagator": "two_body_running_bw",
+      "parameters": {
+        "mass": {"value": 1.982, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [1.80, 2.20]},
+        "width": {"value": 0.440, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [0.20, 0.80]},
+        "orbital_l": {"value": 0, "fixed": true}
+      }
+    },
+    {
       "id": "eta_1760",
       "label": "eta(1760)",
       "propagator": "two_body_running_bw",
       "parameters": {
         "mass": {"value": 1.751, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [1.60, 1.95]},
-        "width": {"value": 0.240, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [0.05, 0.60]},
+        "width": {"value": 0.240, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [0.05, 0.50]},
         "orbital_l": {"value": 1, "fixed": true}
       }
     },
@@ -67,8 +77,8 @@
       "label": "eta(2225)",
       "propagator": "two_body_running_bw",
       "parameters": {
-        "mass": {"value": 2.221, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [2.211, 2.234]},
-        "width": {"value": 0.185, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [0.165, 0.225]},
+        "mass": {"value": 2.221, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [2.00, 2.24]},
+        "width": {"value": 0.185, "fixed": false, "transform": "identity", "step": 0.001, "bounds": [0.16, 0.60]},
         "orbital_l": {"value": 1, "fixed": true}
       }
     },
@@ -170,6 +180,32 @@
       }
     },
     {
+      "id": "f0_2020_00",
+      "label": "f_{0}(2020)",
+      "wave": "gvv.scalar_00",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f0_2020"
+      }
+    },
+    {
+      "id": "f0_2020_22",
+      "label": "f_{0}(2020)~(22)",
+      "wave": "gvv.scalar_22",
+      "coupling": {
+        "mode": "complex_cartesian",
+        "initial": [0.1, 0.0]
+      },
+      "dynamics": {
+        "type": "gvv_x_to_omega_omega",
+        "resonance": "f0_2020"
+      }
+    },
+    {
       "id": "eta_1760_11",
       "label": "\\eta(1760)",
       "wave": "gvv.pseudoscalar_11",
@@ -213,6 +249,7 @@
       "id": "eta_2225_11",
       "label": "\\eta(2225)",
       "wave": "gvv.pseudoscalar_11",
+      "active": false,
       "coupling": {
         "mode": "complex_cartesian",
         "initial": [0.1, 0.0]
