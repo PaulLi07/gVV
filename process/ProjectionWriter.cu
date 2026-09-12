@@ -887,6 +887,10 @@ void write_gvv_projection(
         "maximum_component_closure_residual",
         &maximum_closure_residual,
         "maximum_component_closure_residual/D");
+    double omega_resolution_sigma = model.omega_resolution_sigma;
+    metadata.Branch("omega_resolution_sigma", &omega_resolution_sigma, "omega_resolution_sigma/D");
+    double omega_resolution_mean = 0.0;
+    metadata.Branch("omega_resolution_mean", &omega_resolution_mean, "omega_resolution_mean/D");
     fill_tree(metadata);
 
     // -------------------------------------------------------------------------

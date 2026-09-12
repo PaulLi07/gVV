@@ -64,6 +64,9 @@ struct ModelDefinition {
     std::string process;
     std::string name;
     std::string description;
+    // Shared process parameters reuse the ordinary parameter contract.
+    // Their names and physical meaning are validated by the process compiler.
+    std::unordered_map<std::string, ParameterDefinition> process_parameters;
     std::vector<ResonanceDefinition> resonances;
     std::vector<TermDefinition> terms;
     std::string canonical_json;

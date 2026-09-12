@@ -17,6 +17,10 @@
         "description": {"type": "string"}
       }
     },
+    "process_parameters": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/parameter"}
+    },
     "resonances": {
       "type": "array",
       "minItems": 1,

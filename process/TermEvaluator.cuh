@@ -9,6 +9,11 @@
 #include "process/ProcessEvent.cuh"
 #include "process/ProcessModel.h"
 
+// Cache the complete common omega factor, including the unchanged rho factors.
+void CalGVVOmegaFactors(
+    GVVDeviceMomenta momenta, ctpwa::TabulatedFunctionView width_table,
+    double sigma, DeviceComplex* factors, int number_events);
+
 // F is compact and model-dependent: [event][active wave][active wave].
 // active_wave_types maps each dense slot back to the registered GVV wave.
 void CalGVVFmatrix(
@@ -31,7 +36,8 @@ void CalGVVPDF(
     double* intensity,
     int number_terms,
     int number_active_waves,
-    int number_events);
+    int number_events,
+    const DeviceComplex* omega_factors = nullptr);
 
 // Evaluate a contiguous event batch into packed upper-triangle Term-pair
 // components. coefficient_workspace is [batch event][Term], while
@@ -49,7 +55,8 @@ void CalGVVComponentBatch(
     int number_terms,
     int number_active_waves,
     int first_event,
-    int number_batch_events);
+    int number_batch_events,
+    const DeviceComplex* omega_factors = nullptr);
 
 // Integrate all packed Term-pair components without materializing an
 // event-by-pair matrix. coefficient_workspace has capacity
@@ -66,6 +73,7 @@ void CalGVVComponentIntegrals(
     int batch_capacity,
     int number_terms,
     int number_active_waves,
-    int number_events);
+    int number_events,
+    const DeviceComplex* omega_factors = nullptr);
 
 #endif // CTPWA_PROCESS_TERM_EVALUATOR_CUH

@@ -44,6 +44,10 @@ public:
         const std::vector<int>& active_wave_types,
         int number_terms);
 
+    // The width table is immutable after Prepare. Only sigma changes this cache.
+    void UpdateOmegaFactors(ctpwa::TabulatedFunctionView width_table, double sigma);
+    const DeviceComplex* OmegaFactorBuffer() const;
+
     const std::string& Label() const;
     int Entries() const;
     const double* HostMomentum(int particle, int event) const;
@@ -62,6 +66,8 @@ private:
     double* F_matrix_;
     DeviceComplex* wave_coefficients_;
     double* amp2_;
+    DeviceComplex* omega_factors_;
+    double omega_factor_sigma_;
     int number_active_waves_;
     int number_terms_;
 };

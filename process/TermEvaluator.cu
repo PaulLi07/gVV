@@ -2,6 +2,8 @@
 // Runtime dimensions come from the compiled model, never nominal model counts.
 #include "process/TermEvaluator.cuh"
 #include "process/ProcessAmplitude.cuh"
+#include "process/OmegaResolution.cuh"
+#include <cmath>
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -114,14 +116,38 @@ void CalGVVFmatrix(
 
 __device__ DeviceComplex gvv_common_omega_factor(
     const GVVEventKinematics& event,
-    ctpwa::TabulatedFunctionView omega_width_table)
+    ctpwa::TabulatedFunctionView omega_width_table,
+    double sigma = 0.0)
 {
     const double s_omega1 = event.omega1 * event.omega1;
     const double s_omega2 = event.omega2 * event.omega2;
     return event.omega_current1.rho_factor
            * event.omega_current2.rho_factor
-           * gvv_omega_propagator(s_omega1, omega_width_table)
-           * gvv_omega_propagator(s_omega2, omega_width_table);
+           * gvv_smeared_omega_propagator(s_omega1, omega_width_table, sigma)
+           * gvv_smeared_omega_propagator(s_omega2, omega_width_table, sigma);
+}
+
+__global__ void CalGVVOmegaFactors_device(
+    GVVDeviceMomenta momenta, ctpwa::TabulatedFunctionView width_table,
+    double sigma, DeviceComplex* factors, int number_events)
+{
+    const int event = blockIdx.x * blockDim.x + threadIdx.x;
+    if (event < number_events) {
+        factors[event] = gvv_common_omega_factor(read_event(momenta, event), width_table, sigma);
+    }
+}
+
+void CalGVVOmegaFactors(
+    GVVDeviceMomenta momenta, ctpwa::TabulatedFunctionView width_table,
+    double sigma, DeviceComplex* factors, int number_events)
+{
+    if (!std::isfinite(sigma) || sigma < 0.0 || sigma > GVV_OMEGA_RESOLUTION_MAX_SIGMA * (1.0 + 1.e-12))
+        throw std::invalid_argument("omega resolution sigma is outside [0,0.05] GeV");
+    if (number_events == 0) return;
+    CalGVVOmegaFactors_device<<<(number_events + 255) / 256, 256>>>(
+        momenta, width_table, sigma, factors, number_events);
+    check_cuda(cudaGetLastError(), "launch CalGVVOmegaFactors_device");
+    check_cuda(cudaDeviceSynchronize(), "synchronize omega resolution factors");
 }
 
 __device__ DeviceComplex gvv_term_coefficient(
@@ -146,7 +172,8 @@ __global__ void CalGVVWaveCoefficients_device(
     DeviceComplex* wave_coefficients,
     int number_terms,
     int number_active_waves,
-    int number_events)
+    int number_events,
+    const DeviceComplex* omega_factors)
 {
     const int event_index = blockIdx.x * blockDim.x + threadIdx.x;
     if (event_index >= number_events) {
@@ -156,7 +183,8 @@ __global__ void CalGVVWaveCoefficients_device(
     const GVVEventKinematics event = read_event(momenta, event_index);
     const double s_x = event.X * event.X;
     const DeviceComplex common_omega =
-        gvv_common_omega_factor(event, omega_width_table);
+        omega_factors ? omega_factors[event_index]
+                      : gvv_common_omega_factor(event, omega_width_table);
 
     const int output_offset = event_index * number_active_waves;
     for (int wave = 0; wave < number_active_waves; ++wave) {
@@ -184,7 +212,8 @@ __global__ void CalGVVTermCoefficients_device(
     DeviceComplex* coefficients,
     int number_terms,
     int first_event,
-    int number_batch_events)
+    int number_batch_events,
+    const DeviceComplex* omega_factors)
 {
     const int local_event = blockIdx.x * blockDim.x + threadIdx.x;
     if (local_event >= number_batch_events) {
@@ -195,7 +224,8 @@ __global__ void CalGVVTermCoefficients_device(
     const GVVEventKinematics event = read_event(momenta, event_index);
     const double s_x = event.X * event.X;
     const DeviceComplex common_omega =
-        gvv_common_omega_factor(event, omega_width_table);
+        omega_factors ? omega_factors[event_index]
+                      : gvv_common_omega_factor(event, omega_width_table);
     const int output_offset = local_event * number_terms;
     for (int term = 0; term < number_terms; ++term) {
         coefficients[output_offset + term] = gvv_term_coefficient(
@@ -239,7 +269,8 @@ void CalGVVPDF(
     double* intensity,
     int number_terms,
     int number_active_waves,
-    int number_events)
+    int number_events,
+    const DeviceComplex* omega_factors)
 {
     require_layout(number_terms, number_active_waves, number_events);
     if (number_events == 0) {
@@ -256,7 +287,8 @@ void CalGVVPDF(
         wave_coefficient_workspace,
         number_terms,
         number_active_waves,
-        number_events);
+        number_events,
+        omega_factors);
     check_cuda(cudaGetLastError(), "launch CalGVVWaveCoefficients_device");
     CalWaveCoherentIntensity_device<<<blocks, threads>>>(
         wave_coefficient_workspace,
@@ -384,7 +416,8 @@ static void launch_term_coefficients(
     DeviceComplex* coefficient_workspace,
     int number_terms,
     int first_event,
-    int number_batch_events)
+    int number_batch_events,
+    const DeviceComplex* omega_factors)
 {
     if (number_batch_events == 0) {
         return;
@@ -400,7 +433,8 @@ static void launch_term_coefficients(
         coefficient_workspace,
         number_terms,
         first_event,
-        number_batch_events);
+        number_batch_events,
+        omega_factors);
     check_cuda(cudaGetLastError(), "launch CalGVVTermCoefficients_device");
 }
 
@@ -416,7 +450,8 @@ void CalGVVComponentBatch(
     int number_terms,
     int number_active_waves,
     int first_event,
-    int number_batch_events)
+    int number_batch_events,
+    const DeviceComplex* omega_factors)
 {
     require_layout(number_terms, number_active_waves, number_batch_events);
     if (first_event < 0) {
@@ -434,7 +469,8 @@ void CalGVVComponentBatch(
         coefficient_workspace,
         number_terms,
         first_event,
-        number_batch_events);
+        number_batch_events,
+        omega_factors);
     const int threads = 256;
     const int blocks = (number_batch_events + threads - 1) / threads;
     CalGVVComponentBatch_device<<<blocks, threads>>>(
@@ -464,7 +500,8 @@ void CalGVVComponentIntegrals(
     int batch_capacity,
     int number_terms,
     int number_active_waves,
-    int number_events)
+    int number_events,
+    const DeviceComplex* omega_factors)
 {
     require_layout(number_terms, number_active_waves, number_events);
     if (batch_capacity <= 0) {
@@ -493,7 +530,8 @@ void CalGVVComponentIntegrals(
             coefficient_workspace,
             number_terms,
             first_event,
-            batch_events);
+            batch_events,
+            omega_factors);
         CalGVVComponentIntegrals_device<<<number_pairs, 256>>>(
             terms,
             coefficient_workspace,

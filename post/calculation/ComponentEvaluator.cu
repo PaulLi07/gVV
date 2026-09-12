@@ -104,6 +104,8 @@ void GVVComponentEvaluator::Upload(const GVVCompiledModel& state)
         device_couplings_, state.initial_couplings.data(),
         state.initial_couplings.size() * sizeof(DeviceComplex),
         cudaMemcpyHostToDevice), "cudaMemcpy Post couplings");
+    truth_.UpdateOmegaFactors(omega_width_table_.DeviceView(), state.omega_resolution_sigma);
+    selected_.UpdateOmegaFactors(omega_width_table_.DeviceView(), state.omega_resolution_sigma);
 }
 
 std::vector<double> GVVComponentEvaluator::EvaluateSample(GVVSample& sample)
@@ -113,7 +115,8 @@ std::vector<double> GVVComponentEvaluator::EvaluateSample(GVVSample& sample)
         omega_width_table_.DeviceView(), sample.FMatrix(),
         coefficient_workspace_, integrated_components_,
         component_batch_capacity_, NumberTerms(),
-        static_cast<int>(model_.active_wave_types.size()), sample.Entries());
+        static_cast<int>(model_.active_wave_types.size()), sample.Entries(),
+        sample.OmegaFactorBuffer());
 
     std::vector<double> integrated(
         integrated_components_, integrated_components_ + NumberPairs());
@@ -142,7 +145,8 @@ void GVVComponentEvaluator::ValidateSample(
         sample.Momenta(), device_resonances_, device_terms_, device_couplings_,
         omega_width_table_.DeviceView(), sample.FMatrix(),
         sample.WaveCoefficientBuffer(), sample.IntensityBuffer(), NumberTerms(),
-        static_cast<int>(model_.active_wave_types.size()), sample.Entries());
+        static_cast<int>(model_.active_wave_types.size()), sample.Entries(),
+        sample.OmegaFactorBuffer());
     double direct_sum = 0.0;
     for (int event = 0; event < sample.Entries(); ++event) {
         direct_sum += sample.IntensityBuffer()[event];

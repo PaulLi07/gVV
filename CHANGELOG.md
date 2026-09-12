@@ -2,6 +2,16 @@
 
 ## gVV v1.1.0-dev — modular architecture refactor
 
+- Added the optional shared process parameter `omega_resolution_sigma`. The
+  nominal model fits its log coordinate, convolving both complex omega
+  propagators in mass with a zero-mean Gaussian while preserving the omega
+  running width and X dynamics. Per-sample caches feed Fit, normalization,
+  signed sidebands, Projection and Post. Saved models distinguish the new
+  implementation and retain legacy unsmeared compatibility; projection metadata
+  records sigma. The default output tag is `omega_res_v1`. Added independent
+  CPU integration/model-state tests and a GPU likelihood/Projection/Post
+  regression. See [Omega resolution](docs/OMEGA_RESOLUTION.md).
+
 - Renamed the selected-data tree in `projection-<tag>.root` from `data` to
   `Data` to avoid clashes with `std::data` in ROOT sessions. Projection schema
   version 4 records the contract change, and Post Plotting now reads the new

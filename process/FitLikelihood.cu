@@ -144,6 +144,12 @@ void FitLikelihood::SynchronizeModel()
             model_.initial_couplings.size() * sizeof(DeviceComplex),
             cudaMemcpyHostToDevice),
         "cudaMemcpy GVV couplings");
+    if (prepared_) {
+        normalization_mc_->UpdateOmegaFactors(omega_width_table_.DeviceView(), model_.omega_resolution_sigma);
+        data_->UpdateOmegaFactors(omega_width_table_.DeviceView(), model_.omega_resolution_sigma);
+        for (auto& background : backgrounds_)
+            background.sample->UpdateOmegaFactors(omega_width_table_.DeviceView(), model_.omega_resolution_sigma);
+    }
 }
 
 void FitLikelihood::Prepare()
@@ -194,7 +200,8 @@ double FitLikelihood::EvaluateSample(
         sample.IntensityBuffer(),
         NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()),
-        sample.Entries());
+        sample.Entries(),
+        sample.OmegaFactorBuffer());
 
     return ctpwa::log_likelihood_contribution(
         sample.IntensityBuffer(),
@@ -221,7 +228,8 @@ double FitLikelihood::LogLikelihood()
         normalization_mc_->IntensityBuffer(),
         NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()),
-        normalization_mc_->Entries());
+        normalization_mc_->Entries(),
+        normalization_mc_->OmegaFactorBuffer());
 
     const double normalization = ctpwa::monte_carlo_normalization(
         normalization_mc_->IntensityBuffer(),
@@ -263,7 +271,8 @@ std::vector<double> FitLikelihood::EvaluateNormalizationMCIntensity()
         normalization_mc_->IntensityBuffer(),
         NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()),
-        normalization_mc_->Entries());
+        normalization_mc_->Entries(),
+        normalization_mc_->OmegaFactorBuffer());
 
     std::vector<double> intensity(
         static_cast<std::size_t>(normalization_mc_->Entries()), 0.0);
@@ -342,7 +351,8 @@ std::vector<double> FitLikelihood::EvaluateNormalizationMCComponentBatch(
         NumberTerms(),
         static_cast<int>(model_.active_wave_types.size()),
         first_event,
-        number_events);
+        number_events,
+        normalization_mc_->OmegaFactorBuffer());
 
     const std::size_t value_count =
         static_cast<std::size_t>(number_events)

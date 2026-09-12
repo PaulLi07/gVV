@@ -23,7 +23,7 @@ int main()
         const ctpwa::ModelDefinition nominal =
             ctpwa::load_model_definition("config/model.json");
         const std::string implementation =
-            gvv_amplitude_implementation_signature();
+            gvv_model_implementation_signature(nominal);
         const std::string definition_signature =
             ctpwa::model_definition_signature(nominal);
         const std::string combined = gvv_model_signature(nominal);

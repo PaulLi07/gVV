@@ -29,6 +29,6 @@
   "output": {
     "directory": "results",
     "log_directory": "runlog",
-    "tag": "initial"
+    "tag": "omega_res_v1"
   }
 }

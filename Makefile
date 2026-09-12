@@ -58,6 +58,8 @@ POST_OBJECTS = \
 ALL_OBJECTS = $(sort $(FIT_OBJECTS) $(POST_OBJECTS))
 
 TESTS = \
+	$(TEST_BIN_DIR)/test_omega_resolution.exe \
+	$(TEST_BIN_DIR)/test_omega_resolution_model.exe \
 	$(TEST_BIN_DIR)/test_dynamics.exe \
 	$(TEST_BIN_DIR)/test_gvv_amplitude.exe \
 	$(TEST_BIN_DIR)/test_propagator_registry.exe \
@@ -72,6 +74,7 @@ TESTS = \
 	$(TEST_BIN_DIR)/test_wave_registry.exe \
 	$(TEST_BIN_DIR)/test_likelihood.exe
 GPU_TESTS = \
+	$(TEST_BIN_DIR)/test_omega_resolution_gpu.exe \
 	$(TEST_BIN_DIR)/test_tensor_building_blocks.exe \
 	$(TEST_BIN_DIR)/test_gvv_wave_numerics.exe \
 	$(TEST_BIN_DIR)/test_intensity_equivalence.exe
@@ -154,6 +157,14 @@ $(BIN_DIR)/Post.exe: $(POST_OBJECTS) | $(BIN_DIR)
 	$(NVCC) $(POST_OBJECTS) $(ROOT_LIBS) $(RPATH) $(ROOT_INCLUDES) \
 		$(COMPILE_FLAGS) -o $@
 
+$(TEST_BIN_DIR)/test_omega_resolution.exe: tests/test_omega_resolution.cu $(OBJ_DIR)/OmegaWidthTable.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/OmegaWidthTable.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_omega_resolution_model.exe: tests/test_omega_resolution_model.cu $(OBJ_DIR)/ParameterMapping.o $(OBJ_DIR)/ModelCompiler.o $(OBJ_DIR)/PropagatorCompiler.o $(OBJ_DIR)/WaveRegistry.o $(OBJ_DIR)/Model.o $(OBJ_DIR)/FitState.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(OBJ_DIR)/ParameterMapping.o $(OBJ_DIR)/ModelCompiler.o \
+		$(OBJ_DIR)/PropagatorCompiler.o $(OBJ_DIR)/WaveRegistry.o \
+		$(OBJ_DIR)/Model.o $(OBJ_DIR)/FitState.o $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
+
 $(TEST_BIN_DIR)/test_dynamics.exe: tests/test_dynamics.cu | $(TEST_BIN_DIR)
 	$(NVCC) $< $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
@@ -210,6 +221,10 @@ $(TEST_BIN_DIR)/test_tensor_building_blocks.exe: tests/test_tensor_building_bloc
 $(TEST_BIN_DIR)/test_intensity_equivalence.exe: tests/test_intensity_equivalence.cu $(OBJ_DIR)/TermEvaluator.o | $(TEST_BIN_DIR)
 	$(NVCC) $< $(OBJ_DIR)/TermEvaluator.o $(PROJECT_INCLUDES) \
 		$(COMPILE_FLAGS) -o $@
+
+$(TEST_BIN_DIR)/test_omega_resolution_gpu.exe: tests/test_omega_resolution_gpu.cu $(PROCESS_OBJECTS) $(OBJ_DIR)/Model.o $(OBJ_DIR)/ComponentEvaluator.o | $(TEST_BIN_DIR)
+	$(NVCC) $< $(PROCESS_OBJECTS) $(OBJ_DIR)/Model.o $(OBJ_DIR)/ComponentEvaluator.o \
+		$(ROOT_LIBS) $(RPATH) $(ROOT_INCLUDES) $(PROJECT_INCLUDES) $(COMPILE_FLAGS) -o $@
 
 tests: $(TESTS)
 

@@ -372,7 +372,7 @@ ModelDefinition parse_model_definition(
     }
     reject_unknown_members(
         document,
-        {"schema_version", "process", "metadata", "resonances", "terms"},
+        {"schema_version", "process", "metadata", "process_parameters", "resonances", "terms"},
         source_name,
         "$");
 
@@ -411,6 +411,16 @@ ModelDefinition parse_model_definition(
                 fail(source_name, "$.metadata.description", "expected a string");
             }
             result.description = description->get<std::string>();
+        }
+    }
+
+    if (document.contains("process_parameters")) {
+        const Json& parameters = require_object_member(
+            document, "process_parameters", source_name, "$");
+        for (const auto& item : parameters.items()) {
+            validate_id(item.key(), source_name, "$.process_parameters");
+            result.process_parameters.emplace(item.key(), parse_parameter(
+                item.value(), source_name, "$.process_parameters." + item.key()));
         }
     }
 

@@ -463,7 +463,7 @@ GVVCompiledModel compile_embedded_model(
     }
 
     const std::string implementation_signature =
-        gvv_amplitude_implementation_signature();
+        gvv_model_implementation_signature(definition);
     if (implementation_signature != fit.model_implementation_signature) {
         throw std::runtime_error(
             "fit state requires GVV amplitude implementation '"

@@ -86,7 +86,8 @@ int main()
         // coordinates. The six tensor Terms add twelve more, the two
         // threshold line shapes add one log-ratio each, and the floating
         // eta(1760)/f0(2020) pole parameters add four coordinates.
-        require(layout.size() == 35 && parameters.size() == layout.size(),
+        // One shared omega resolution adds the final log-sigma coordinate.
+        require(layout.size() == 36 && parameters.size() == layout.size(),
                 "runtime GVV fit parameter count is wrong");
         require(compiled.propagator_fit_bindings.size() == 6,
                 "free propagator parameter count is wrong");
@@ -166,11 +167,12 @@ int main()
                             == GVVPropagatorParameterTarget::FlatteRatio,
                     "threshold-line-shape parameter target is wrong");
         }
+        const auto& configured_f0 = compiled.definition.resonance("f0_2020");
         require(
-            parameters[f0_2020_mass].lower_bound == 1.80
-                && parameters[f0_2020_mass].upper_bound == 2.20
-                && parameters[f0_2020_width].lower_bound == 0.20
-                && parameters[f0_2020_width].upper_bound == 0.80,
+            parameters[f0_2020_mass].lower_bound == configured_f0.parameters.at("mass").lower_bound
+                && parameters[f0_2020_mass].upper_bound == configured_f0.parameters.at("mass").upper_bound
+                && parameters[f0_2020_width].lower_bound == configured_f0.parameters.at("width").lower_bound
+                && parameters[f0_2020_width].upper_bound == configured_f0.parameters.at("width").upper_bound,
             "f0(2020) parameter bounds are wrong");
         require(
             !has_parameter(layout, "mass_eta_2225")

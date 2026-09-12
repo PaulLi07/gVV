@@ -1,25 +1,38 @@
-// Contract test for the nominal fit.json and unified output-name derivation.
+// Contract test with controlled minimizer/output settings, independent of user tuning.
 #include "framework/fit/FitConfig.h"
 
 #include <iostream>
+#include <fstream>
+#include <cstdio>
+#include <unistd.h>
+#include <nlohmann/json.hpp>
 
 int main()
 {
-    const ctpwa::FitRunConfig config =
-        ctpwa::load_fit_run_config("config/fit.json");
+    std::ifstream input("config/fit.json");
+    nlohmann::json fixture;
+    input >> fixture;
+    fixture["minimizer"]["n_starts"] = 7;
+    fixture["output"]["tag"] = "omega_config_test";
+    const std::string path = "/tmp/gvv-fit-config-" + std::to_string(getpid()) + ".json";
+    { std::ofstream output(path); output << fixture.dump(); }
+    ctpwa::FitRunConfig config;
+    try { config = ctpwa::load_fit_run_config(path); }
+    catch (...) { std::remove(path.c_str()); throw; }
+    std::remove(path.c_str());
     if (config.schema_version != 1
         || config.model_file != "config/model.json"
         || config.inputs.backgrounds.size() != 2
         || config.inputs.backgrounds[0].likelihood_coefficient != -0.5
         || config.inputs.backgrounds[1].likelihood_coefficient != 0.25
-        || config.minimizer.number_starts != 10
+        || config.minimizer.number_starts != 7
         || config.output.result_file()
-               != "results/fit_result-initial.txt"
+               != "results/fit_result-omega_config_test.txt"
         || config.output.state_file()
-               != "results/fit_state-initial.json"
+               != "results/fit_state-omega_config_test.json"
         || config.output.projection_file()
-               != "results/projection-initial.root"
-        || config.output.log_file() != "runlog/fit-initial.log") {
+               != "results/projection-omega_config_test.root"
+        || config.output.log_file() != "runlog/fit-omega_config_test.log") {
         std::cerr << "fit configuration contract is wrong\n";
         return 1;
     }

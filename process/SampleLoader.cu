@@ -40,6 +40,8 @@ GVVSample::GVVSample(const std::string& label)
       F_matrix_(nullptr),
       wave_coefficients_(nullptr),
       amp2_(nullptr),
+      omega_factors_(nullptr),
+      omega_factor_sigma_(-1.0),
       number_active_waves_(0),
       number_terms_(0)
 {
@@ -48,6 +50,7 @@ GVVSample::GVVSample(const std::string& label)
 
 GVVSample::~GVVSample()
 {
+    if (omega_factors_ != nullptr) cudaFree(omega_factors_);
     for (double* pointer : device_p4_) {
         if (pointer != nullptr) {
             cudaFree(pointer);
@@ -273,4 +276,23 @@ int GVVSample::NumberActiveWaves() const
 int GVVSample::NumberTerms() const
 {
     return number_terms_;
+}
+
+void GVVSample::UpdateOmegaFactors(ctpwa::TabulatedFunctionView width_table, double sigma)
+{
+    if (sigma == omega_factor_sigma_) return;
+    if (sigma != 0.0) {
+        if (omega_factors_ == nullptr) {
+            check_cuda(cudaMallocManaged(&omega_factors_,
+                static_cast<std::size_t>(entries_) * sizeof(DeviceComplex)),
+                "cudaMallocManaged common omega factors");
+        }
+        CalGVVOmegaFactors(Momenta(), width_table, sigma, omega_factors_, entries_);
+    }
+    omega_factor_sigma_ = sigma;
+}
+
+const DeviceComplex* GVVSample::OmegaFactorBuffer() const
+{
+    return omega_factor_sigma_ > 0.0 ? omega_factors_ : nullptr;
 }

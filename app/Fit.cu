@@ -174,7 +174,7 @@ int main(int argc, char* argv[])
         state.model_definition_signature =
             ctpwa::model_definition_signature(likelihood.Model().definition);
         state.model_implementation_signature =
-            gvv_amplitude_implementation_signature();
+            gvv_model_implementation_signature(likelihood.Model().definition);
         state.model_signature = context.model_signature;
         state.best = summary.best;
         state.parameters = parameters;

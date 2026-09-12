@@ -49,6 +49,13 @@ Breit-Wigner denominator used by the other line shapes. One shared host/device
 rho-isobar implementation is used by both the event current and the omega-width
 integration.
 
+The nominal model now convolves each **complex omega propagator in mass**
+with a zero-mean Gaussian, sharing one fitted `log_sigma_omega` coordinate.
+X propagators are unchanged. The default sigma starts at 5 MeV and floats
+within 0.1–30 MeV; these are initial fit settings. See
+[Omega resolution](docs/OMEGA_RESOLUTION.md) for the exact definition,
+configuration, legacy mode, caching, saved-state contract and validation.
+
 All pion masses used by the scalar rho-isobar dynamics are nominal particle
 masses. For `rho0`, `rho+`, and `rho-`, the shared decay helper selects the
 corresponding nominal daughter pair and nominal bachelor pion. Only `s_omega`
@@ -360,7 +367,7 @@ make check
 | `make` or `make fit` | Build `bin/Fit.exe` |
 | `make post` | Build `bin/Post.exe` separately |
 | `make tests` | Build the ordinary test executables |
-| `make check` | Run the 13 login-node-safe tests |
+| `make check` | Run the 15 login-node-safe tests |
 | `make gpu-tests` | Compile the three explicit GPU runtime regressions |
 | `make check-gpu` | Execute those regressions on an allocated CUDA device |
 | `make clean` | Remove generated objects, executables, and dependency files |

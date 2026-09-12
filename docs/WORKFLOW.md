@@ -1,5 +1,12 @@
 # Build and analysis workflow
 
+The nominal `main` model includes a shared Gaussian convolution of the complex
+omega propagators and uses output tag `omega_res_v1`. Read
+[Omega resolution](OMEGA_RESOLUTION.md) for the 36-parameter fit, resolution
+settings, consistent Fit/Projection/Post evaluation and CPU/GPU validation.
+Older `initial` output names below remain examples; plotting the new result
+requires its explicit tagged projection path.
+
 This guide describes how to build, configure, run, inspect, and hand off a
 gVV analysis. It is intentionally operational: the design boundaries are
 described in [Architecture and data flow](ARCHITECTURE.md), the complete model

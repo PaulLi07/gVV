@@ -85,6 +85,8 @@ struct GVVTermMetadata {
 
 struct GVVCompiledModel {
     ctpwa::ModelDefinition definition;
+    // One effective mass resolution is shared by both omega lines and all Terms.
+    double omega_resolution_sigma = 0.0;
     std::vector<ctpwa::PropagatorParameters> resonances;
     std::vector<TermSpec> terms;
     std::vector<DeviceComplex> initial_couplings;

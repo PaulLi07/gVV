@@ -4,6 +4,8 @@
 
 #include "process/PropagatorCompiler.h"
 #include "process/WaveRegistry.cuh"
+#include "process/OmegaResolution.cuh"
+#include <cmath>
 
 #include <nlohmann/json.hpp>
 
@@ -90,6 +92,29 @@ GVVCompiledModel gvv_compile_model(
 
     GVVCompiledModel result;
     result.definition = definition;
+    for (const auto& entry : definition.process_parameters) {
+        if (entry.first != "omega_resolution_sigma") {
+            throw std::runtime_error("unknown GVV process parameter '" + entry.first + "'");
+        }
+        const auto& sigma = entry.second;
+        if (!std::isfinite(sigma.value) || sigma.value < 0.0
+            || (!sigma.fixed && sigma.transform != "log")) {
+            throw std::runtime_error(
+                "omega_resolution_sigma must be nonnegative; a free sigma requires transform=log");
+        }
+        // Explicit finite log bounds keep every Minuit trial within the
+        // supported convolution range; fixed zero is the exact legacy mode.
+        if (!sigma.fixed && (!sigma.has_lower_bound || !sigma.has_upper_bound
+            || !(std::exp(sigma.lower_bound) > 0.0)
+            || !std::isfinite(std::exp(sigma.upper_bound)))) {
+            throw std::runtime_error("free omega_resolution_sigma requires finite physical log bounds");
+        }
+        const double maximum_sigma = sigma.fixed ? sigma.value : std::exp(sigma.upper_bound);
+        if (maximum_sigma > GVV_OMEGA_RESOLUTION_MAX_SIGMA * (1.0 + 1.e-12)) {
+            throw std::runtime_error("omega_resolution_sigma exceeds the supported 0.05 GeV range");
+        }
+        result.omega_resolution_sigma = sigma.value;
+    }
 
     // Only active Terms define runtime Resonance dependencies. An invalid or
     // unsupported Resonance used exclusively by inactive Terms is irrelevant
@@ -193,9 +218,17 @@ const char* gvv_amplitude_implementation_signature()
     return kGVVAmplitudeImplementationSignature;
 }
 
+std::string gvv_model_implementation_signature(
+    const ctpwa::ModelDefinition& definition)
+{
+    return definition.process_parameters.count("omega_resolution_sigma")
+        ? GVV_OMEGA_RESOLUTION_IMPLEMENTATION
+        : gvv_amplitude_implementation_signature();
+}
+
 std::string gvv_model_signature(
     const ctpwa::ModelDefinition& definition)
 {
-    return std::string(gvv_amplitude_implementation_signature()) + ':'
+    return gvv_model_implementation_signature(definition) + ':'
            + ctpwa::model_definition_signature(definition);
 }

@@ -2,6 +2,7 @@
 // Minuit vector: layout construction, state application, and TXT details.
 #include "process/ParameterMapping.h"
 #include "process/WaveRegistry.cuh"
+#include "process/OmegaResolution.cuh"
 
 #include <algorithm>
 #include <cmath>
@@ -114,6 +115,19 @@ std::vector<GVVFitParameterBinding> gvv_fit_parameter_layout(
         parameter.transform = source.transform;
         layout.push_back(parameter);
     }
+    const auto omega_sigma = model.definition.process_parameters.find("omega_resolution_sigma");
+    if (omega_sigma != model.definition.process_parameters.end() && !omega_sigma->second.fixed) {
+        const auto& source = omega_sigma->second;
+        GVVFitParameterBinding parameter;
+        parameter.fit = make_fit_spec("log_sigma_omega", std::log(source.value), source.step);
+        parameter.fit.has_lower_bound = source.has_lower_bound;
+        parameter.fit.has_upper_bound = source.has_upper_bound;
+        parameter.fit.lower_bound = source.lower_bound;
+        parameter.fit.upper_bound = source.upper_bound;
+        parameter.target = GVVFitParameterTarget::OmegaResolutionSigma;
+        parameter.transform = GVVFitTransform::LogPositive;
+        layout.push_back(parameter);
+    }
     return layout;
 }
 
@@ -153,6 +167,13 @@ void gvv_apply_fit_parameters(
                     GVVFitTransform::LogPositive,
                     "log coupling magnitude"),
                 0.0);
+        } else if (parameter.target == GVVFitParameterTarget::OmegaResolutionSigma) {
+            const double sigma = physical_value(
+                values[cursor], GVVFitTransform::LogPositive, parameter.fit.name);
+            if (sigma > GVV_OMEGA_RESOLUTION_MAX_SIGMA * (1.0 + 1.e-12)) {
+                throw std::invalid_argument("omega resolution sigma exceeds 0.05 GeV");
+            }
+            model.omega_resolution_sigma = sigma;
         } else {
             gvv_set_propagator_parameter(
                 model.resonances[parameter.target_index],
@@ -287,4 +308,16 @@ void gvv_write_fit_details(
             }
         }
     }
+    output << "\n# SHARED OMEGA EFFECTIVE RESOLUTION\n"
+           << "omega_resolution_sigma=" << model.omega_resolution_sigma
+           << " GeV; gaussian_mean=0; convolution=complex_amplitude_in_mass\n";
+    for (std::size_t index = 0; index < layout.size(); ++index) {
+        if (layout[index].target == GVVFitParameterTarget::OmegaResolutionSigma) {
+            output << "  fitted_parameter " << layout[index].fit.name
+                   << " value=" << best.values[index] << " error=" << best.errors[index]
+                   << " physical_sigma_error=" << model.omega_resolution_sigma * best.errors[index]
+                   << " GeV (linear error propagation)\n";
+        }
+    }
+
 }

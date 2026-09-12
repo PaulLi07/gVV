@@ -5,6 +5,15 @@
     "name": "nominal",
     "description": "gVV nominal scalar LS=00/22, pseudoscalar LS=11, and tensor LS=02 amplitude model"
   },
+  "process_parameters": {
+    "omega_resolution_sigma": {
+      "value": 0.005,
+      "fixed": false,
+      "transform": "log",
+      "step": 0.05,
+      "bounds": [-9.210340371976182, -3.506557897319982]
+    }
+  },
   "resonances": [
     {
       "id": "f0_1500",

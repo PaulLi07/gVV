@@ -34,7 +34,7 @@ omega decay factors are common to all current GVV Waves. A Resonance can be
 used by more than one Term, and any number of Resonances can reuse the same
 Wave.
 
-The fixed daughter factors are not additional `resonances` entries. The rho
+The daughter factors are not additional `resonances` entries. The rho
 subchannel uses the reusable two-body P-wave BWR, while the omega uses the
 shared Breit-Wigner denominator with a process-built tabulated three-pion
 running width. Their common `omega -> rho pi -> 3pi` implementation belongs to
@@ -62,6 +62,7 @@ The accepted top-level fields are:
     "name": "nominal",
     "description": "GVV nominal amplitude model"
   },
+  "process_parameters": {},
   "resonances": [],
   "terms": []
 }
@@ -80,7 +81,13 @@ to the ID when omitted.
 
 Array order is meaningful for reproducibility. Active Terms retain their JSON
 order in the compiled coupling vector. Free coupling parameters are emitted in
-that order, followed by free propagator parameters in active Resonance order.
+that order, followed by free propagator parameters in active Resonance order,
+then any free process parameter. GVV currently supports one optional process
+parameter, `omega_resolution_sigma`, shared by both omega propagators.
+Omitting it preserves the legacy unsmeared amplitude and parameter layout.
+The nominal model floats it as `log_sigma_omega`, giving 36 free coordinates.
+Its JSON form, mass convolution, units and saved-state behavior are described
+in [Omega resolution](OMEGA_RESOLUTION.md).
 
 ## Resonance objects
 

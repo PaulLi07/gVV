@@ -13,7 +13,8 @@ enum class GVVFitParameterTarget {
     CouplingReal,
     CouplingImaginary,
     CouplingLogMagnitude,
-    PropagatorParameter
+    PropagatorParameter,
+    OmegaResolutionSigma
 };
 
 struct GVVFitParameterBinding {

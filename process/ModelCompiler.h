@@ -14,6 +14,10 @@ GVVCompiledModel gvv_load_compiled_model(const std::string& file_name);
 // of a registered Wave, Resonance propagator, Term assembly, or fit binding.
 const char* gvv_amplitude_implementation_signature();
 
+// Preserve the legacy key for models without an explicit resolution setting.
+std::string gvv_model_implementation_signature(
+    const ctpwa::ModelDefinition& definition);
+
 // Combined compatibility key for one declarative model and this GVV amplitude
 // implementation. Fit and Post Calculation must agree on this value.
 std::string gvv_model_signature(
