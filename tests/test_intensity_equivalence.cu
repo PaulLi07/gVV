@@ -1,8 +1,8 @@
 // Runtime GPU closure checks for the optimized Fit intensity and the batched
 // Projection/Post component interfaces.
-#include "framework/amplitude/IntensityEngine.cuh"
-#include "process/ProcessAmplitude.cuh"
-#include "process/TermEvaluator.cuh"
+#include "core/AmplitudeKernels.cuh"
+#include "core/physics/Waves.cuh"
+#include "core/AmplitudeKernels.cuh"
 
 #include <cuda_runtime.h>
 

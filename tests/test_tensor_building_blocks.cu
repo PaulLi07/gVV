@@ -1,7 +1,7 @@
 // Runtime CUDA regression for process-neutral Lorentz tensor building blocks.
 // It is separate from `make check` because FV and tensor algebra is device-only.
-#include "framework/tensors/OrbitalTensor.cuh"
-#include "framework/tensors/TensorContraction.cuh"
+#include "core/math/OrbitalTensor.cuh"
+#include "core/math/TensorOps.cuh"
 
 #include <cuda_runtime.h>
 

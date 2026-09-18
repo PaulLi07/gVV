@@ -1,6 +1,6 @@
 // Unit regression for reusable two-body dynamics plus compilation of the
 // complete device-side omega decay-current path.
-#include "process/ProcessKinematics.cuh"
+#include "core/physics/Event.cuh"
 
 #include <cmath>
 #include <iostream>

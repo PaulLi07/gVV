@@ -1,7 +1,9 @@
+#define GVV_FIT_NO_MAIN
+#include "fit/Fit.cu"
 // Process parameter validation, legacy compatibility and saved-fit recovery.
-#include "process/ModelCompiler.h"
-#include "process/ParameterMapping.h"
-#include "framework/fit/FitState.h"
+#include "core/Model.h"
+#include "core/Model.h"
+#include "core/IO.h"
 #include <nlohmann/json.hpp>
 #include <cmath>
 #include <cstdio>
@@ -40,7 +42,7 @@ int main()
         Json legacy = nominal;
         legacy.erase("process_parameters");
         const auto old = compile(legacy);
-        require(old.omega_resolution_sigma == 0.0 && gvv_fit_parameter_layout(old).size() == 35,
+        require(old.initial_parameters.omega_resolution_sigma == 0.0 && gvv_fit_parameter_layout(old).size() == 35,
                 "missing process parameter must preserve legacy layout");
         require(gvv_model_implementation_signature(old.definition) == gvv_amplitude_implementation_signature()
                     && gvv_model_signature(old.definition) != gvv_model_signature(model.definition),
@@ -56,7 +58,7 @@ int main()
             fixed["process_parameters"]["omega_resolution_sigma"] = {
                 {"value", sigma}, {"fixed", true}, {"transform", "identity"}};
             const auto state = compile(fixed);
-            require(state.omega_resolution_sigma == sigma && gvv_fit_parameter_layout(state).size() == 35,
+            require(state.initial_parameters.omega_resolution_sigma == sigma && gvv_fit_parameter_layout(state).size() == 35,
                     "fixed sigma added a free parameter");
         }
         Json bad = nominal;
@@ -93,33 +95,33 @@ int main()
         const auto read = ctpwa::read_fit_state(path);
         auto restored = gvv_compile_model(ctpwa::parse_model_definition(read.model_json, "restored"));
         const auto restored_layout = gvv_fit_parameter_layout(restored);
-        gvv_apply_fit_parameters(restored, restored_layout, read.best.values);
-        require(std::fabs(restored.omega_resolution_sigma-0.007)<1.e-15
+        gvv_apply_fit_parameters(restored.initial_parameters, restored_layout, read.best.values);
+        require(std::fabs(restored.initial_parameters.omega_resolution_sigma-0.007)<1.e-15
                     && read.best.covariance == saved.best.covariance
                     && read.model_signature == gvv_model_signature(restored.definition),
                 "saved fit did not recover sigma, covariance or signature");
         // Sigma has no binding into any X propagator or complex coupling.
-        for (std::size_t i=0; i<model.resonances.size(); ++i) {
+        for (std::size_t i=0; i<model.initial_parameters.resonances.size(); ++i) {
             for (const auto& parameter : model.resonance_metadata[i].parameters) {
-                require(gvv_propagator_parameter_value(model.resonances[i], parameter.target)
-                            == gvv_propagator_parameter_value(restored.resonances[i], parameter.target),
+                require(gvv_propagator_parameter_value(model.initial_parameters.resonances[i], parameter.target)
+                            == gvv_propagator_parameter_value(restored.initial_parameters.resonances[i], parameter.target),
                         "varying sigma changed an X propagator parameter");
             }
         }
-        for (std::size_t i=0; i<model.initial_couplings.size(); ++i) {
-            require(std::fabs(model.initial_couplings[i].real-restored.initial_couplings[i].real)<1.e-15
-                        && std::fabs(model.initial_couplings[i].imag-restored.initial_couplings[i].imag)<1.e-15,
+        for (std::size_t i=0; i<model.initial_parameters.couplings.size(); ++i) {
+            require(std::fabs(model.initial_parameters.couplings[i].real-restored.initial_parameters.couplings[i].real)<1.e-15
+                        && std::fabs(model.initial_parameters.couplings[i].imag-restored.initial_parameters.couplings[i].imag)<1.e-15,
                     "varying sigma changed a coupling");
         }
         auto invalid_values = read.best.values;
         invalid_values.back() = std::log(0.06);
         bool rejected = false;
-        try { gvv_apply_fit_parameters(restored, restored_layout, invalid_values); }
+        try { gvv_apply_fit_parameters(restored.initial_parameters, restored_layout, invalid_values); }
         catch (const std::exception&) { rejected = true; }
         require(rejected, "out-of-range restored sigma was accepted");
-        gvv_apply_fit_parameters(restored, restored_layout, read.best.values);
+        gvv_apply_fit_parameters(restored.initial_parameters, restored_layout, read.best.values);
         std::ostringstream details;
-        gvv_write_fit_details(details, restored, restored_layout, read.best);
+        gvv_write_fit_details(details, restored, restored.initial_parameters, restored_layout, read.best);
         require(details.str().find("log_sigma_omega") != std::string::npos,
                 "human-readable result omitted sigma");
         std::remove(path.c_str());

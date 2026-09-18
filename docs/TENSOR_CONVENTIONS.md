@@ -1,3 +1,5 @@
+> Current structure: see [Architecture](ARCHITECTURE.md). Model compilation and parameter binding now live together in `core/Model.cu`; Fit policy is local to `fit/Fit.cu`.
+
 # Lorentz tensor and angular-momentum conventions
 
 This document fixes the conventions used by the reusable tensor building
@@ -34,7 +36,7 @@ A^{\mu\nu}v_\nu
 \]
 
 and every tensor-tensor contraction must explicitly lower the contracted
-indices. `framework/tensors/TensorContraction.cuh` provides named operations
+indices. `core/math/TensorOps.cuh` provides named operations
 for that purpose:
 
 | Function | Mathematical operation |

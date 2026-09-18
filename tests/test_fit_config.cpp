@@ -1,5 +1,5 @@
 // Contract test with controlled minimizer/output settings, independent of user tuning.
-#include "framework/fit/FitConfig.h"
+#include "core/IO.h"
 
 #include <iostream>
 #include <fstream>

@@ -1,3 +1,5 @@
+> Current structure: see [Architecture](ARCHITECTURE.md). Model compilation and parameter binding now live together in `core/Model.cu`; Fit policy is local to `fit/Fit.cu`.
+
 # Model configuration
 
 `config/model.json` is the single user-written description of an amplitude
@@ -6,9 +8,9 @@ combines them into active Terms. No generated source file and no hard-coded
 model size is involved.
 
 This document describes the contract implemented by
-`framework/model/Model.cpp`, `process/ModelCompiler.cu`,
-`process/PropagatorCompiler.cu`, and
-`process/ParameterMapping.cu`. `config/model.schema.json` is useful for editor
+`core/ModelIO.cpp`, `core/Model.cu`,
+`core/Model.cu`, and
+`core/Model.cu`. `config/model.schema.json` is useful for editor
 completion and basic JSON validation, but the C++ loaders remain authoritative
 for process-specific rules that JSON Schema does not express.
 
@@ -334,10 +336,10 @@ represent zero exactly.
 Adding a new line shape is intentionally independent of Wave registration:
 
 1. Implement the identity-free host/device formula in
-   `framework/dynamics/Propagators.cuh`.
-2. Add only the numerical enum/fields and dispatch needed by that formula in
-   `framework/dynamics/PropagatorRegistry.cuh`.
-3. Add one exact JSON compiler branch in `process/PropagatorCompiler.cu`.
+   `core/physics/Propagators.cuh`.
+2. Add the numerical enum/fields in `core/physics/AmplitudeTypes.h` and
+   dispatch in `core/physics/Propagators.cuh`.
+3. Add one exact JSON compiler branch in `core/Model.cu`.
    Compile nominal daughter masses, barrier radius, and every other channel
    constant into the descriptor at this boundary.
 4. Emit human-readable parameter metadata and, for each supported free
@@ -348,12 +350,12 @@ Adding a new line shape is intentionally independent of Wave registration:
 6. Document the required JSON fields, units, physical domain, threshold
    policy, and whether a parameter may float.
 7. If the new formula or compiler semantics change numerical amplitudes, bump
-   `kGVVAmplitudeImplementationSignature` in `process/ModelCompiler.cu` in the
+   `kGVVAmplitudeImplementationSignature` in `core/Model.cu` in the
    same commit. This explicit contract is combined with the canonical model
    signature in every fitted state and checked by Post Calculation.
 
-No propagator-specific edit should be needed in `WaveRegistry`,
-`ParameterMapping`, `FitLikelihood`, `ProjectionWriter`, or Post Calculation.
+No propagator-specific edit should be needed in the Wave registry, shared
+amplitude evaluator, nominal fit script, projection writer, or Post workflow.
 Do not infer denominator orbital momentum from a Wave ID: the Resonance total
 width hypothesis remains an explicit propagator contract.
 
@@ -389,7 +391,7 @@ dynamics fields on an active Term:
 }
 ```
 
-The Wave ID must exist in the registry in `process/WaveRegistry.cu`, and the
+The Wave ID must exist in the registry in `core/physics/Waves.cu`, and the
 Resonance ID must resolve after active dependency pruning.
 
 ## Couplings and phase conventions
@@ -476,7 +478,7 @@ selected state instead of reading the current `config/model.json`.
 
 ## Parameter mapping into Minuit
 
-`process/ParameterMapping.cu` is the only translation between the compiled
+`core/Model.cu` is the only translation between the compiled
 model and the flat fit vector.
 
 For active Terms, in JSON order:
@@ -743,15 +745,15 @@ recoverable from that model document.
 Validation is intentionally split at ownership boundaries:
 
 1. `model.schema.json` checks basic document shape in compatible editors.
-2. `framework/model/Model.cpp` checks strict JSON structure, IDs, parameter
+2. `core/ModelIO.cpp` checks strict JSON structure, IDs, parameter
    syntax, coupling modes, nonzero global reference, and the global reference
    count.
-3. `process/ModelCompiler.cu` checks the process ID, active dynamics, Wave
+3. `core/Model.cu` checks the process ID, active dynamics, Wave
    registration, Resonance references, pruning, and one reference per active
    coherence class.
-4. `process/PropagatorCompiler.cu` checks exact propagator fields, positive
+4. `core/Model.cu` checks exact propagator fields, positive
    width, pole threshold, transforms, and supported \(L\).
-5. `process/ParameterMapping.cu` creates the runtime-sized Minuit layout from
+5. `core/Model.cu` creates the runtime-sized Minuit layout from
    coupling bindings and compiler-produced propagator bindings.
 6. GPU tests check the numerical equivalence of the Term and Wave intensity
    paths and the registered Wave physics invariants.

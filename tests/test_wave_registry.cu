@@ -1,8 +1,8 @@
 // Process-compiler regression: validates nominal migration, dynamic model
 // sizing, and strict rejection of misspelled process fields.
-#include "process/ModelCompiler.h"
-#include "process/OmegaDecayModel.cuh"
-#include "process/WaveRegistry.cuh"
+#include "core/Model.h"
+#include "core/physics/OmegaDecay.cuh"
+#include "core/physics/Waves.cuh"
 
 #include <algorithm>
 #include <cmath>
@@ -132,11 +132,11 @@ int main(int argc, char* argv[])
             COUPLING_COMPLEX,
             COUPLING_COMPLEX};
 
-        require(model.resonances.size() == resonance_ids.size(),
+        require(model.initial_parameters.resonances.size() == resonance_ids.size(),
                 "compiled resonance count mismatch");
         require(model.terms.size() == term_ids.size(),
                 "compiled Term count mismatch");
-        require(model.initial_couplings.size() == term_ids.size(),
+        require(model.initial_parameters.couplings.size() == term_ids.size(),
                 "coupling count mismatch");
         require(model.active_wave_types.size() == 6,
                 "active Wave count mismatch");
@@ -154,21 +154,21 @@ int main(int argc, char* argv[])
         for (std::size_t index = 0; index < resonance_ids.size(); ++index) {
             require(model.resonance_metadata[index].id == resonance_ids[index],
                     "resonance id migration mismatch");
-            require(model.resonances[index].propagator_model
+            require(model.initial_parameters.resonances[index].propagator_model
                         == propagators[index],
                     "propagator migration mismatch");
-            require(model.resonances[index].orbital_l == orbital_l[index],
+            require(model.initial_parameters.resonances[index].orbital_l == orbital_l[index],
                     "propagator orbital-L migration mismatch");
-            require(close(model.resonances[index].mass, masses[index]),
+            require(close(model.initial_parameters.resonances[index].mass, masses[index]),
                     "mass migration mismatch");
-            require(close(model.resonances[index].pole_width, widths[index]),
+            require(close(model.initial_parameters.resonances[index].pole_width, widths[index]),
                     "width migration mismatch");
             if (propagators[index] != ctpwa::PROP_NONRESONANT) {
                 require(close(
-                            model.resonances[index].daughter_mass1,
+                            model.initial_parameters.resonances[index].daughter_mass1,
                             GVV_OMEGA_MASS)
                             && close(
-                                model.resonances[index].daughter_mass2,
+                                model.initial_parameters.resonances[index].daughter_mass2,
                                 GVV_OMEGA_MASS),
                         "compiled omega-omega channel masses mismatch");
             }
@@ -192,7 +192,7 @@ int main(int argc, char* argv[])
                 "Term Wave latex metadata mismatch");
         }
         require(close(
-                    model.initial_couplings[model.find_term("eta_1760_11")].real,
+                    model.initial_parameters.couplings[model.find_term("eta_1760_11")].real,
                     1.0),
                 "global reference initial value mismatch");
 
@@ -209,7 +209,7 @@ int main(int argc, char* argv[])
             "ignored_for_inactive_terms";
         const GVVCompiledModel reduced =
             gvv_compile_model(reduced_definition);
-        require(reduced.resonances.size() == 8,
+        require(reduced.initial_parameters.resonances.size() == 8,
                 "inactive-only Resonance was not removed");
         require(reduced.terms.size() == 14,
                 "disabled Terms were not removed from runtime layout");
@@ -248,12 +248,11 @@ int main(int argc, char* argv[])
         ctpwa::TermDefinition extra_term = *nr_term;
         extra_term.id = "NR_extra_11";
         extra_term.label = "extra test Term";
-        extra_term.dynamics_json =
-            R"({"type":"gvv_x_to_omega_omega","resonance":"NR_extra"})";
+        extra_term.dynamics.resonance = "NR_extra";
         expanded_definition.terms.push_back(extra_term);
         const GVVCompiledModel expanded =
             gvv_compile_model(expanded_definition);
-        require(expanded.resonances.size() == 10,
+        require(expanded.initial_parameters.resonances.size() == 10,
                 "expanded resonance layout mismatch");
         require(expanded.terms.size() == 17,
                 "expanded Term layout mismatch");
@@ -269,7 +268,7 @@ int main(int argc, char* argv[])
         d_wave_propagator.resonances[1].parameters.at("orbital_l").value = 2.0;
         const GVVCompiledModel d_wave_compiled =
             gvv_compile_model(d_wave_propagator);
-        require(d_wave_compiled.resonances[1].orbital_l == 2,
+        require(d_wave_compiled.initial_parameters.resonances[1].orbital_l == 2,
                 "two-body running BW did not preserve orbital L=2");
 
         ctpwa::ModelDefinition unsupported_l = model.definition;
@@ -285,8 +284,7 @@ int main(int argc, char* argv[])
         require_compile_invalid(closed_pole, "above the nominal omega-omega");
 
         ctpwa::ModelDefinition bad_dynamics = model.definition;
-        bad_dynamics.terms[0].dynamics_json =
-            R"({"type":"gvv_x_to_omega_omega","resonance":"f0_1500","extra":1})";
+        bad_dynamics.terms[0].dynamics.unknown_fields.push_back("extra");
         require_compile_invalid(bad_dynamics, "unknown dynamics field");
 
         std::cout << "GVV process-model compilation tests passed\n";

@@ -1,4 +1,5 @@
-#include "framework/fit/FitOutput.h"
+#define GVV_FIT_NO_MAIN
+#include "fit/Fit.cu"
 
 #include <cstdio>
 #include <fstream>

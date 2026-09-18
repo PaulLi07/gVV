@@ -1,3 +1,5 @@
+> Current structure: see [Architecture](ARCHITECTURE.md). Model compilation and parameter binding now live together in `core/Model.cu`; Fit policy is local to `fit/Fit.cu`.
+
 # Developing and registering a GVV Wave
 
 This guide covers a source-level extension of the existing
@@ -7,7 +9,7 @@ complete covariant numerator basis after its physics formula has been derived.
 The current catalogue includes twelve \(2^{++}\) Waves: four decay couplings
 (`02`, `20`, `22`, and `42`) times three independent production covariants.
 The nominal model uses only `gvv.tensor_02_u1/u2/u3`. In contrast,
-`gvv.scalar_22` and `process/waves/Scalar22.cuh` are the scalar \(0^{++}\)
+`gvv.scalar_22` and `core/physics/waves/Scalar.cuh` are the scalar \(0^{++}\)
 basis with \(L=S=2\); the `22` label alone does not mean spin two.
 
 ## What a registered Wave represents
@@ -59,7 +61,7 @@ The following boundaries are part of the present GVV physics model.
 
 ### Event and omega-current construction
 
-`process/ProcessEvent.cuh` builds `GVVEventKinematics` from the seven final
+`core/physics/Event.cuh` builds `GVVEventKinematics` from the seven final
 four-vectors. It supplies:
 
 - the bachelor photon, both omega candidates, \(X=\omega_1+\omega_2\), and
@@ -67,7 +69,7 @@ four-vectors. It supplies:
 - `relative_omega_momentum = omega1 - omega2`;
 - one `OmegaDecayCurrent` for each \(\omega\to\pi^+\pi^-\pi^0\) decay.
 
-`process/ProcessKinematics.cuh` separates each omega current into:
+`core/physics/Event.cuh` separates each omega current into:
 
 - a real Levi-Civita geometric vector used by the Wave tensor; and
 - a common complex rho-isobar factor applied in `TermEvaluator.cu`.
@@ -79,7 +81,7 @@ would require an explicit redesign of the process amplitude representation.
 
 ### Process-wide polarization contraction
 
-`process/ProcessAmplitude.cuh` owns the photon projector and the common
+`core/physics/Waves.cuh` owns the photon projector and the common
 Wave-pair contraction. The first tensor index is contracted with the two
 transverse \(\psi\) polarizations used by the project, and the second index is
 contracted through the photon projector. The factor and beam-axis convention
@@ -91,7 +93,7 @@ and then revalidate every registered Wave.
 
 ### Term and intensity evaluation
 
-`process/TermEvaluator.cu`:
+`core/AmplitudeKernels.cu`:
 
 1. constructs `GVVEventKinematics`;
 2. caches \(F_{ab}\) for all active Wave slots;
@@ -132,23 +134,23 @@ Use the narrowest existing layer that owns the operation.
 
 | Layer | Available building blocks |
 |---|---|
-| `framework/math/` | `FV`, `DeviceComplex`, metric signs, Levi-Civita convention |
-| `framework/tensors/Tensor.cuh` | Rank-two tensor algebra, metric tensor, epsilon tensor |
-| `framework/tensors/TensorContraction.cuh` | Named one-index, two-index, double, trace, and symmetrization operations |
-| `framework/tensors/SpinProjector.cuh` | Spin-1 transverse metric and direct spin-2 projection of a rank-two source |
-| `framework/tensors/OrbitalTensor.cuh` | Bare covariant P/D tensors and direct bare G-wave contraction with a rank-two source |
-| `framework/tensors/BarrierFactor.cuh` | Blatt-Weisskopf \(B_L\) for \(L=0,1,2,3,4\) |
-| `framework/dynamics/Kinematics.cuh` | Process-independent two-body breakup momentum |
-| `framework/dynamics/Propagators.cuh` | Process-independent line shapes; not part of a Wave |
-| `process/ProcessKinematics.cuh` | GVV masses and \(\omega\to3\pi\) current model |
-| `process/ProcessEvent.cuh` | Complete GVV event view and barrier parameters |
+| `core/math/` | `FV`, `DeviceComplex`, metric signs, Levi-Civita convention |
+| `core/math/Tensor.cuh` | Rank-two tensor algebra, metric tensor, epsilon tensor |
+| `core/math/TensorOps.cuh` | Named one-index, two-index, double, trace, and symmetrization operations |
+| `core/math/TensorOps.cuh` | Spin-1 transverse metric and direct spin-2 projection of a rank-two source |
+| `core/math/OrbitalTensor.cuh` | Bare covariant P/D tensors and direct bare G-wave contraction with a rank-two source |
+| `core/math/BarrierFactor.cuh` | Blatt-Weisskopf \(B_L\) for \(L=0,1,2,3,4\) |
+| `core/physics/Propagators.cuh` | Process-independent two-body breakup momentum |
+| `core/physics/Propagators.cuh` | Process-independent line shapes; not part of a Wave |
+| `core/physics/Event.cuh` | GVV masses and \(\omega\to3\pi\) current model |
+| `core/physics/Event.cuh` | Complete GVV event view and barrier parameters |
 
 If a missing tensor or kinematic operation is genuinely independent of the
-final state, add a small tested building block under `framework/`. Such a file
+final state, add a small tested building block under `core/math/`. Such a file
 must not include a GVV header or know an omega, pion ordering, Wave ID, or
-Resonance. Keep a GVV-only construction under `process/`.
+Resonance. Keep a GVV-only construction under `core/physics/`.
 
-Never call a Resonance propagator from `process/waves/`. The propagator library
+Never call a Resonance propagator from `core/physics/waves/`. The propagator library
 is reusable because it accepts explicit physical parameters; the Wave library
 is process-specific because it knows the complete event and polarization
 structure.
@@ -193,13 +195,13 @@ contain several partial waves. Select its physical model explicitly in
 
 ## Step 2: implement one complete Wave file
 
-Create one descriptively named header under `process/waves/`, following the
+Create one descriptively named header under `core/physics/waves/`, following the
 existing files:
 
 ```text
-process/waves/Scalar00.cuh
-process/waves/Scalar22.cuh
-process/waves/Pseudoscalar11.cuh
+core/physics/waves/Scalar.cuh
+core/physics/waves/Scalar.cuh
+core/physics/waves/Pseudoscalar.cuh
 ```
 
 Use an include guard and expose one small pure device function. This skeleton
@@ -209,9 +211,9 @@ shows the interface, not a physics formula:
 #ifndef CTPWA_PROCESS_WAVES_EXAMPLE_CUH
 #define CTPWA_PROCESS_WAVES_EXAMPLE_CUH
 
-#include "framework/tensors/BarrierFactor.cuh"
-#include "framework/tensors/OrbitalTensor.cuh"
-#include "process/ProcessEvent.cuh"
+#include "core/math/BarrierFactor.cuh"
+#include "core/math/OrbitalTensor.cuh"
+#include "core/physics/Event.cuh"
 
 __device__ inline tensor gvv_example_tensor(
     const GVVEventKinematics& event,
@@ -250,13 +252,13 @@ of a new \(J^{PC}\).
 
 ## Step 3: register it at the sole Wave boundary
 
-The exact registration boundary is the `process/WaveRegistry.*` pair. CUDA
+The exact registration boundary is the `core/physics/Waves.*` pair. CUDA
 requires a device-dispatch half and a host-metadata half, but there is no other
 Wave registry elsewhere in the project.
 
-### Device half: `process/WaveRegistry.cuh`
+### Device half: `core/physics/Waves.cuh`
 
-1. Include the new `process/waves/*.cuh` file.
+1. Include the new `core/physics/waves/*.cuh` file.
 2. Append one unique enum value before `GVV_NBASIS` and update
    `GVV_NBASIS`.
 3. Add exactly one dispatch branch to `gvv_wave_tensor`.
@@ -281,7 +283,7 @@ Keep enum values contiguous because device/test indexing uses `GVV_NBASIS` as
 the explicit registered-basis count. The host registry itself iterates over
 its metadata vector and must contain the matching rows.
 
-### Host half: `process/WaveRegistry.cu`
+### Host half: `core/physics/Waves.cu`
 
 Append one `GVVWaveMetadata` row to `gvv_wave_registry()`:
 
@@ -298,8 +300,8 @@ Choose each field deliberately:
 - `coherence_class`: phase-reference block, described below;
 - `wave_type`: the unique device enum just added.
 
-Do not add mappings in `FitLikelihood`, `ParameterMapping`, `TermEvaluator`,
-Projection, Post, or plotting. They consume the compiled runtime metadata.
+Do not add Wave-ID mappings in the fit script, parameter application,
+Amplitude kernels, Projection, Post, or plotting. They consume the compiled runtime metadata.
 
 ## Step 4: choose coherence metadata from the Gram matrix
 
@@ -463,13 +465,13 @@ Before accepting a new Wave, confirm all of the following:
 - the reviewed analytic formula has stated \(J^{PC}\), \(L\), \(S\), parity,
   and index conventions;
 - the complete Wave has the correct identical-omega exchange symmetry;
-- the source is one pure function under `process/waves/`;
+- the source is one pure function under `core/physics/waves/`;
 - no Resonance propagator, coupling, Term index, or model count appears in the
   Wave;
 - common omega complex dynamics is not double-counted;
-- reusable additions under `framework/` contain no GVV dependency;
+- reusable additions under `core/math/` contain no GVV dependency;
 - the only registration edits are the device and host halves of
-  `process/WaveRegistry.*`;
+  `core/physics/Waves.*`;
 - enum, dispatch, stable ID, JPC, label, coherence class, and type agree;
 - coherence-class decisions are supported by event-level cross-Wave tests;
 - the model contains exactly one reference in each active class and one global
@@ -490,6 +492,7 @@ these GVV classes. It should replace or reimplement the process layer:
 - process polarization contraction;
 - Term coefficient construction and projection observables.
 
-It can directly reuse the process-neutral math, tensor, propagator, amplitude,
-likelihood, fit, and result infrastructure under `framework/`. This is the
-intended portability boundary.
+A separate channel can reuse suitable math and Minuit code. The main branch
+remains dedicated to GVV; it does not provide a generic channel abstraction.
+Sample, Model, Amplitude and projection contracts must be assessed explicitly
+when copying code into another channel.

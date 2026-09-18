@@ -1,7 +1,7 @@
 // Host regression for the process-owned propagator compiler. Every supported
 // model is exercised without loading samples or launching a CUDA kernel.
-#include "process/PropagatorCompiler.h"
-#include "process/OmegaDecayModel.cuh"
+#include "core/Model.h"
+#include "core/physics/OmegaDecay.cuh"
 
 #include <cmath>
 #include <iostream>
@@ -89,7 +89,7 @@ void require_invalid(
 }
 
 void require_identity_binding(
-    const GVVPropagatorFitBinding& binding,
+    const GVVFitParameterBinding& binding,
     const std::string& fit_name,
     GVVPropagatorParameterTarget target,
     double initial,
@@ -99,15 +99,15 @@ void require_identity_binding(
     const char* message)
 {
     require(
-        binding.fit_name == fit_name
-            && binding.target == target
+        binding.fit.name == fit_name
+            && binding.propagator_target == target
             && binding.transform == GVVFitTransform::Identity
-            && std::fabs(binding.initial_coordinate - initial) < 1.0e-14
-            && std::fabs(binding.step - step) < 1.0e-14
-            && binding.has_lower_bound
-            && binding.has_upper_bound
-            && std::fabs(binding.lower_bound - lower) < 1.0e-14
-            && std::fabs(binding.upper_bound - upper) < 1.0e-14,
+            && std::fabs(binding.fit.initial_value - initial) < 1.0e-14
+            && std::fabs(binding.fit.step - step) < 1.0e-14
+            && binding.fit.has_lower_bound
+            && binding.fit.has_upper_bound
+            && std::fabs(binding.fit.lower_bound - lower) < 1.0e-14
+            && std::fabs(binding.fit.upper_bound - upper) < 1.0e-14,
         message);
 }
 
@@ -202,7 +202,7 @@ int main()
             compiled_sd.propagator.propagator_model
                     == ctpwa::PROP_SCALAR_SD_BWR
                 && compiled_sd.fit_bindings.size() == 1
-                && compiled_sd.fit_bindings[0].target
+                && compiled_sd.fit_bindings[0].propagator_target
                     == GVVPropagatorParameterTarget::SDRatio,
             "S/D running-width fit binding was not compiled");
 
@@ -219,11 +219,11 @@ int main()
             compiled_flatte.propagator.propagator_model
                     == ctpwa::PROP_SUBTRACTED_FLATTE
                 && compiled_flatte.fit_bindings.size() == 3
-                && compiled_flatte.fit_bindings[0].fit_name
+                && compiled_flatte.fit_bindings[0].fit.name
                     == "mass_flatte"
-                && compiled_flatte.fit_bindings[1].fit_name
+                && compiled_flatte.fit_bindings[1].fit.name
                     == "width_flatte"
-                && compiled_flatte.fit_bindings[2].fit_name
+                && compiled_flatte.fit_bindings[2].fit.name
                     == "log_Romega_flatte",
             "Flatte fit binding was not compiled");
 

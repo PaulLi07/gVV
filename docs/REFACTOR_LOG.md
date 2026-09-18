@@ -1,3 +1,40 @@
+# Concentrated-script migration, 2026-09-18
+
+Production C++/CUDA files were consolidated from 67 to 37, with five public
+modules and two substantial application scripts. The migration groups related
+Waves and math helpers, combines model parsing/compilation/binding interfaces,
+separates immutable topology from numeric state, and shares amplitude device
+state and component evaluation between Fit, Projection, and Post.
+
+Existing JSON, signatures, physics formulas, parameter ordering, minimizer
+policy, output schemas/paths and plotting scripts are preserved. User-edited
+fit/model settings are not replaced. See ARCHITECTURE.md and WORKFLOW.md for
+current guidance. Verification results are recorded below.
+
+## Verification (2026-09-19)
+
+- CUDA 12.9 / ROOT 6.32.02: Fit, Post, 15 host tests, and 4 GPU tests compile.
+- `make check`: all 15 host tests pass. The omega-convolution independent CPU
+  comparison reports maximum relative error 5.03218e-10.
+- A separate driver compiled against both the pre-refactor snapshot and new
+  sources compared nominal, legacy/no-sigma, and inactive-dependency models.
+  Canonical JSON/signatures, dense Terms, ordered fit bindings and metadata,
+  three applied parameter vectors, X propagators at seven masses, and complex
+  omega convolution at four sigmas/seven masses produced byte-identical
+  17-digit output in all three cases.
+- Source-token comparisons preserve the numerical bodies in 27 relocated
+  math/Wave/omega/kernel sources, plus Minuit, run/state IO, sample caches,
+  likelihood arithmetic, report serialization, and Post observable/covariance
+  functions. Projection changes are limited to the shared-engine interface.
+- No cluster job was submitted. GPU execution, projection ROOT runtime closure,
+  and a production-fit comparison are not claimed. Run `make check-gpu` on an
+  allocated GPU, then use a distinct fit output tag for production validation.
+
+## Earlier development history
+
+The following entries describe earlier layouts and are retained as history.
+Their old source paths are not the current navigation guide.
+
 # Modular refactor work log
 
 Canonical repository:

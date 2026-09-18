@@ -1,5 +1,6 @@
+#define GVV_FIT_NO_MAIN
 // Unit test for generic MC normalization and signed sample contributions.
-#include "framework/likelihood/Likelihood.h"
+#include "fit/Fit.cu"
 
 #include <cmath>
 #include <iostream>

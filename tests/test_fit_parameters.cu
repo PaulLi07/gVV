@@ -1,8 +1,8 @@
 // Verifies that the model-generated Minuit layout follows active Terms and
 // shares each Resonance parameter set across every Wave that uses it.
-#include "process/ParameterMapping.h"
-#include "process/ModelCompiler.h"
-#include "process/TermEvaluator.cuh"
+#include "core/Model.h"
+#include "core/Model.h"
+#include "core/AmplitudeKernels.cuh"
 
 #include <cmath>
 #include <iostream>
@@ -89,7 +89,8 @@ int main()
         // One shared omega resolution adds the final log-sigma coordinate.
         require(layout.size() == 36 && parameters.size() == layout.size(),
                 "runtime GVV fit parameter count is wrong");
-        require(compiled.propagator_fit_bindings.size() == 6,
+        require(std::count_if(compiled.parameters.begin(), compiled.parameters.end(),
+            [](const GVVFitParameterBinding& b) { return b.target == GVVFitParameterTarget::PropagatorParameter; }) == 6,
                 "free propagator parameter count is wrong");
 
         const int re_f0 = find_parameter(parameters, "Re_f0_1500_00");
@@ -255,7 +256,7 @@ int main()
         values[f0_2020_width] = 0.46;
         values[re_f2_u1] = 0.33;
         values[im_f2_u1] = -0.22;
-        gvv_apply_fit_parameters(compiled, layout, values);
+        gvv_apply_fit_parameters(compiled.initial_parameters, layout, values);
 
         const int f0_term = layout[re_f0].target_index;
         const int f0_1500_22_term = layout[re_f0_1500_22].target_index;
@@ -264,49 +265,49 @@ int main()
         const int f0_2020_22_term = layout[re_f0_2020_22].target_index;
         const int reference_term = layout[phase_reference].target_index;
         const int f2_u1_term = layout[re_f2_u1].target_index;
-        require(compiled.initial_couplings[f0_term].real == 0.25
-                    && compiled.initial_couplings[f0_term].imag == -0.50,
+        require(compiled.initial_parameters.couplings[f0_term].real == 0.25
+                    && compiled.initial_parameters.couplings[f0_term].imag == -0.50,
                 "Cartesian coupling application is wrong");
         require(
-            compiled.initial_couplings[f0_1500_22_term].real == -0.15
-                && compiled.initial_couplings[f0_1500_22_term].imag == 0.20
-                && compiled.initial_couplings[f0_1710_22_term].real == 0.35
-                && compiled.initial_couplings[f0_1710_22_term].imag == -0.10,
+            compiled.initial_parameters.couplings[f0_1500_22_term].real == -0.15
+                && compiled.initial_parameters.couplings[f0_1500_22_term].imag == 0.20
+                && compiled.initial_parameters.couplings[f0_1710_22_term].real == 0.35
+                && compiled.initial_parameters.couplings[f0_1710_22_term].imag == -0.10,
             "scalar LS=22 coupling application is wrong");
         require(
-            compiled.initial_couplings[f0_2020_00_term].real == 0.40
-                && compiled.initial_couplings[f0_2020_00_term].imag == -0.30
-                && compiled.initial_couplings[f0_2020_22_term].real == -0.20
-                && compiled.initial_couplings[f0_2020_22_term].imag == 0.15,
+            compiled.initial_parameters.couplings[f0_2020_00_term].real == 0.40
+                && compiled.initial_parameters.couplings[f0_2020_00_term].imag == -0.30
+                && compiled.initial_parameters.couplings[f0_2020_22_term].real == -0.20
+                && compiled.initial_parameters.couplings[f0_2020_22_term].imag == 0.15,
             "f0(2020) coupling application is wrong");
         require(std::fabs(
-                    compiled.initial_couplings[reference_term].real - 2.0)
+                    compiled.initial_parameters.couplings[reference_term].real - 2.0)
                     < 1.0e-12
-                    && compiled.initial_couplings[reference_term].imag == 0.0,
+                    && compiled.initial_parameters.couplings[reference_term].imag == 0.0,
                 "positive-real coupling application is wrong");
-        require(std::fabs(compiled.resonances[
+        require(std::fabs(compiled.initial_parameters.resonances[
                               layout[f0_ratio].target_index].flatte_ratio
                           - 0.75)
                     < 1.0e-12
-                    && std::fabs(compiled.resonances[f2_1565].flatte_ratio
+                    && std::fabs(compiled.initial_parameters.resonances[f2_1565].flatte_ratio
                                  - 1.25)
                         < 1.0e-12,
                 "shared propagator parameter application is wrong");
-        require(compiled.initial_couplings[f2_u1_term].real == 0.33
-                    && compiled.initial_couplings[f2_u1_term].imag == -0.22,
+        require(compiled.initial_parameters.couplings[f2_u1_term].real == 0.33
+                    && compiled.initial_parameters.couplings[f2_u1_term].imag == -0.22,
                 "tensor coupling application is wrong");
         require(
-            std::fabs(compiled.resonances[
+            std::fabs(compiled.initial_parameters.resonances[
                           compiled.find_resonance("eta_1760")].mass
                       - 1.80) < 1.0e-12
-                && std::fabs(compiled.resonances[
+                && std::fabs(compiled.initial_parameters.resonances[
                                   compiled.find_resonance("eta_1760")]
                                   .pole_width
                               - 0.25)
                     < 1.0e-12
-                && std::fabs(compiled.resonances[f0_2020].mass - 2.01)
+                && std::fabs(compiled.initial_parameters.resonances[f0_2020].mass - 2.01)
                     < 1.0e-12
-                && std::fabs(compiled.resonances[f0_2020].pole_width - 0.46)
+                && std::fabs(compiled.initial_parameters.resonances[f0_2020].pole_width - 0.46)
                     < 1.0e-12,
             "floating eta/scalar pole-parameter application is wrong");
 
@@ -322,7 +323,7 @@ int main()
             gvv_compile_model(one_f0_1500_wave);
         const std::vector<GVVFitParameterBinding> one_f0_1500_layout =
             gvv_fit_parameter_layout(with_f0_1500_22_only);
-        require(with_f0_1500_22_only.resonances.size() == 9
+        require(with_f0_1500_22_only.initial_parameters.resonances.size() == 9
                     && with_f0_1500_22_only.find_resonance("f0_1500") >= 0
                     && with_f0_1500_22_only.terms.size() == 15
                     && one_f0_1500_layout.size() == layout.size() - 2
@@ -344,7 +345,7 @@ int main()
             gvv_compile_model(no_f0_1500);
         const std::vector<GVVFitParameterBinding> without_f0_1500_layout =
             gvv_fit_parameter_layout(without_f0_1500);
-        require(without_f0_1500.resonances.size() == 8
+        require(without_f0_1500.initial_parameters.resonances.size() == 8
                     && without_f0_1500.find_resonance("f0_1500") == -1
                     && without_f0_1500.terms.size() == 14
                     && without_f0_1500_layout.size() == layout.size() - 5
@@ -392,7 +393,8 @@ int main()
             gvv_fit_parameter_specs(shared_layout);
         require(
             shared_layout.size() == layout.size() + 2
-                && shared.propagator_fit_bindings.size() == 8,
+                && std::count_if(shared.parameters.begin(), shared.parameters.end(),
+            [](const GVVFitParameterBinding& b) { return b.target == GVVFitParameterTarget::PropagatorParameter; }) == 8,
             "one shared Resonance produced duplicate fit coordinates");
         const int shared_mass =
             find_parameter(shared_parameters, "mass_f2_1810");
@@ -423,14 +425,14 @@ int main()
         }
         shared_values[shared_mass] = 1.84;
         shared_values[shared_width] = 0.21;
-        gvv_apply_fit_parameters(shared, shared_layout, shared_values);
+        gvv_apply_fit_parameters(shared.initial_parameters, shared_layout, shared_values);
         require(
             std::fabs(gvv_propagator_parameter_value(
-                          shared.resonances[shared_resonance_index],
+                          shared.initial_parameters.resonances[shared_resonance_index],
                           GVVPropagatorParameterTarget::Mass)
                       - 1.84) < 1.0e-12
                 && std::fabs(gvv_propagator_parameter_value(
-                                 shared.resonances[shared_resonance_index],
+                                 shared.initial_parameters.resonances[shared_resonance_index],
                                  GVVPropagatorParameterTarget::PoleWidth)
                              - 0.21)
                     < 1.0e-12,
@@ -472,15 +474,15 @@ int main()
         independent_values[f0_mass] = 1.71;
         independent_values[f2_mass] = 1.84;
         gvv_apply_fit_parameters(
-            independent, independent_layout, independent_values);
+            independent.initial_parameters, independent_layout, independent_values);
         require(
             std::fabs(gvv_propagator_parameter_value(
-                          independent.resonances[
+                          independent.initial_parameters.resonances[
                               independent.find_resonance("f0_1710")],
                           GVVPropagatorParameterTarget::Mass)
                       - 1.71) < 1.0e-12
                 && std::fabs(gvv_propagator_parameter_value(
-                                 independent.resonances[
+                                 independent.initial_parameters.resonances[
                                      independent.find_resonance("f2_1810")],
                                  GVVPropagatorParameterTarget::Mass)
                              - 1.84)

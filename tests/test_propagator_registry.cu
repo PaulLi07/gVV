@@ -1,7 +1,7 @@
 // Reusable propagator-dispatch regression plus the process-owned omega width
 // table normalization check.
-#include "framework/dynamics/PropagatorRegistry.cuh"
-#include "process/OmegaWidthTable.h"
+#include "core/physics/Propagators.cuh"
+#include "core/physics/OmegaWidth.h"
 
 #include <algorithm>
 #include <cmath>

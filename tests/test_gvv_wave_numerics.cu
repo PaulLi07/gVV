@@ -1,9 +1,9 @@
 // Runtime GPU checks for the complete registered gVV Wave tensors. This test
 // is intentionally separate from login-node compile checks.
-#include "framework/tensors/OrbitalTensor.cuh"
-#include "framework/tensors/SpinProjector.cuh"
-#include "process/ProcessAmplitude.cuh"
-#include "process/WaveRegistry.cuh"
+#include "core/math/OrbitalTensor.cuh"
+#include "core/math/TensorOps.cuh"
+#include "core/physics/Waves.cuh"
+#include "core/physics/Waves.cuh"
 
 #include <cuda_runtime.h>
 

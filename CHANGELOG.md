@@ -1,5 +1,20 @@
 # GVV release changelog
 
+## 2026-09-19 — concentrated fit scripts
+
+- Consolidated 67 production C++/CUDA files into 37, with the complete nominal
+  fit in `fit/Fit.cu`, numerical Post in `post/Post.cu`, and five public modules:
+  Model, Sample, Amplitude, Minuit, IO. Related Wave/math files are grouped.
+- Separated immutable model topology/metadata from numerical parameter state;
+  build one final Minuit binding layout and parse Term dynamics once.
+- Shared amplitude buffers and omega caches across Fit, Projection, and Post;
+  upload immutable Terms once and avoid copying full models in finite differences.
+- Preserved physics formulas, parameter order, signatures, JSON/ROOT schemas,
+  minimizer policy, plotting and output paths. Rewrote operational/architecture
+  documentation and annotated the scripts' user settings and main workflow.
+- Fit/Post and all 19 regression executables compile; 15 host tests pass.
+  GPU runtime tests and a production fit remain separate user-run validation.
+
 ## gVV v1.1.0-dev — modular architecture refactor
 
 - Added the optional shared process parameter `omega_resolution_sigma`. The

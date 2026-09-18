@@ -1,5 +1,5 @@
 // Generic model-parser test: nominal document plus strict invalid-input cases.
-#include "framework/model/Model.h"
+#include "core/Model.h"
 
 #include <iostream>
 #include <stdexcept>

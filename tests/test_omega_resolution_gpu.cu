@@ -1,10 +1,12 @@
+#define GVV_POST_NO_MAIN
+#define GVV_FIT_NO_MAIN
 // End-to-end GPU regression: cache invalidation, signed likelihood,
 // projection components and Post integration share the same omega factors.
-#include "process/FitLikelihood.h"
-#include "process/ModelCompiler.h"
-#include "process/OmegaResolution.cuh"
-#include "process/ProjectionWriter.h"
-#include "post/calculation/ComponentEvaluator.h"
+#include "fit/Fit.cu"
+#include "core/Model.h"
+#include "core/physics/OmegaResolution.cuh"
+#include "core/IO.h"
+#include "post/Post.cu"
 #include <TFile.h>
 #include <TTree.h>
 #include <algorithm>
@@ -88,19 +90,30 @@ int main()
         fit.AddBackground(input,-0.5,"SB1");
         fit.AddBackground(input,0.25,"SB2");
         fit.Prepare();
-        fit.MutableModel().omega_resolution_sigma=0.0;
-        const auto baseline=fit.EvaluateNormalizationMCIntensity();
-        const auto baseline_pairs=fit.EvaluateNormalizationMCComponentBatch(0,kEvents);
+        GVVSample norm("test normalization");
+        norm.Load(input, GVVBranchConfig{});
+        GVVAmplitude amplitude(model);
+        amplitude.Prepare(norm);
+        auto parameters = model.initial_parameters;
+        auto intensity = [&]() {
+            amplitude.SetParameters(parameters);
+            const double* values = amplitude.EvaluateIntensity(norm);
+            return std::vector<double>(values, values + kEvents);
+        };
+        parameters.omega_resolution_sigma=0.0;
+        const auto baseline=intensity();
+        const auto baseline_pairs=amplitude.EvaluateComponentBatch(norm,0,kEvents);
         const int pairs=baseline_pairs.size()/kEvents;
         OmegaWidthTable table;
         table.Build();
         GVVComponentEvaluator post(input,input,GVVBranchConfig(),model,layout);
         for(double sigma:{0.0,0.0001,0.005,0.009,0.005,0.0}) {
-            fit.MutableModel().omega_resolution_sigma=sigma;
+            fit.Parameters().omega_resolution_sigma=sigma;
+            parameters.omega_resolution_sigma=sigma;
             const double ll=fit.LogLikelihood();
-            const auto actual=fit.EvaluateNormalizationMCIntensity();
-            const auto components=fit.EvaluateNormalizationMCComponentBatch(0,kEvents);
-            const auto subset=fit.EvaluateNormalizationMCComponentBatch(2,3);
+            const auto actual=intensity();
+            const auto components=amplitude.EvaluateComponentBatch(norm,0,kEvents);
+            const auto subset=amplitude.EvaluateComponentBatch(norm,2,3);
             std::vector<double> expected(kEvents),integrals(pairs,0.0);
             for(int e=0;e<kEvents;++e) {
                 double ratio=1.0;
@@ -126,7 +139,7 @@ int main()
             double expected_ll=0.0;
             for(double intensity:expected) expected_ll+=0.75*std::log(intensity/mean);
             require(close(ll,expected_ll),"data/background/normalization sigma update is inconsistent");
-            require((fit.NormalizationMCSample().OmegaFactorBuffer()==nullptr)==(sigma==0.0),
+            require((norm.OmegaFactorBuffer()==nullptr)==(sigma==0.0),
                 "cache did not switch between legacy and smeared paths");
             if(sigma>0.0) {
                 values.back()=std::log(sigma);
@@ -138,8 +151,9 @@ int main()
                 for(int e=0;e<kEvents;++e) require(actual[e]==baseline[e],"sigma=0 restoration is not exact");
             }
         }
-        fit.MutableModel().omega_resolution_sigma=0.007;
-        write_gvv_projection(fit,projection,"omega-test",gvv_model_signature(model.definition),0,1,0.0);
+        fit.Parameters().omega_resolution_sigma=0.007;
+        ctpwa::FitAttempt best; best.start_index=0; best.seed=1; best.minimum=0.0;
+        fit.WriteProjection(projection,"omega-test",gvv_model_signature(model.definition),best);
         TFile file(projection.c_str(),"READ");
         auto* metadata=dynamic_cast<TTree*>(file.Get("metadata"));
         require(metadata!=nullptr,"projection metadata missing");

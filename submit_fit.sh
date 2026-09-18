@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Usage: bash submit_fit.sh config/fit.json
+# USER SETTINGS: scheduler resources are grouped in the SBATCH block below.
+# Physics and minimizer settings belong in JSON; no source edit is needed.
+
 # Slurm submission and worker entry point for amplitude fitting only.
 # Post Calculation is submitted independently through submit_post.sh.
 #SBATCH --partition=gpupwa

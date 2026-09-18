@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Usage: bash submit_post.sh results/fit_state-TAG.json /path/to/truth.root RootSet/normalization_mc.root
+# USER SETTINGS: scheduler resources are grouped in the SBATCH block below.
+# Physics and minimizer settings belong in JSON; no source edit is needed.
+
 # Slurm submission and worker entry point for Post Calculation only.
 # Projection plotting remains a login-node ROOT task driven by
 # post/plotting/draw.sh.

@@ -1,3 +1,5 @@
+> Current structure: see [Architecture](ARCHITECTURE.md). Model compilation and parameter binding now live together in `core/Model.cu`; Fit policy is local to `fit/Fit.cu`.
+
 # Effective Gaussian convolution of the omega propagator
 
 The nominal `main` model fits one shared omega resolution width. It convolves
@@ -90,7 +92,7 @@ positive sigma below floating-point mass spacing also uses the zero limit.
 
 ## Numerical evaluation and cache lifecycle
 
-`process/OmegaResolution.cuh` implements a host/device quadrature. It truncates
+`core/physics/OmegaResolution.cuh` implements a host/device quadrature. It truncates
 the Gaussian at eight standard deviations (the full Gaussian omitted tail is
 less than `1.3e-15`) and retains positive true mass. It uses 16-point
 Gauss-Legendre panels of width at most `min(2 sigma, Gamma_omega)`, split at

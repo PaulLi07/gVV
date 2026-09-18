@@ -1,8 +1,8 @@
 // Device compile test for all registered gVV Waves and coherent contraction.
-#include "framework/amplitude/IntensityEngine.cuh"
-#include "process/ProcessAmplitude.cuh"
-#include "process/ProcessModel.h"
-#include "process/WaveRegistry.cuh"
+#include "core/AmplitudeKernels.cuh"
+#include "core/physics/Waves.cuh"
+#include "core/Model.h"
+#include "core/physics/Waves.cuh"
 
 #include <iostream>
 

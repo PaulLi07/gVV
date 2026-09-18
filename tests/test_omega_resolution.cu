@@ -1,5 +1,5 @@
 // Independent CPU quadrature checks for the complex mass convolution.
-#include "process/OmegaResolution.cuh"
+#include "core/physics/OmegaResolution.cuh"
 #include <algorithm>
 #include <cmath>
 #include <complex>

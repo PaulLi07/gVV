@@ -1,6 +1,6 @@
 // Verifies the process-owned compatibility key shared by Fit and Post.
-#include "framework/model/Model.h"
-#include "process/ModelCompiler.h"
+#include "core/Model.h"
+#include "core/Model.h"
 
 #include <nlohmann/json.hpp>
 

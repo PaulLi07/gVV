@@ -38,10 +38,8 @@ Fit-to-Post operational sequence.
 ```text
 post/
 ├── README.md
+├── Post.cu                      complete numerical Post workflow
 ├── calculation/
-│   ├── ComponentEvaluator.cu
-│   ├── ComponentEvaluator.h
-│   ├── PostCalculation.cu
 │   └── results/                 generated, not source-controlled
 └── plotting/
     ├── GVVAngularMoments.h
@@ -147,11 +145,12 @@ the current executable to produce a schema-version-2 state.
 
 ### Numerical algorithm
 
-`post/calculation/ComponentEvaluator.*` owns the GPU-backed integration:
+The local evaluator in `post/Post.cu` assigns truth/selected roles and uses
+`core/Amplitude.*` for the shared GPU evaluation:
 
 1. load truth and selected samples;
 2. cache their registered-Wave Gram matrices and the omega-width lookup table;
-3. apply the requested fitted coordinate vector to a compiled model copy;
+3. apply the requested fitted coordinate vector to the reusable numeric state;
 4. evaluate all packed upper-triangle Term pairs in batches of at most 4096
    events;
 5. reduce each pair directly on the GPU so no event-by-pair matrix is retained;
@@ -163,7 +162,7 @@ For `T` active Terms, the packed pair order contains `T(T+1)/2` entries. A
 diagonal is an individual `|A_i|^2` integral. An off-diagonal is the complete
 signed `A_i A_j* + A_j A_i*` interference and appears once in the packed sum.
 
-`post/calculation/PostCalculation.cu` converts those integrals into:
+`post/Post.cu` converts those integrals into:
 
 | Category | Definition |
 |---|---|
@@ -379,7 +378,7 @@ the complete presentation configuration:
 - curve colors, line/marker/fill styles, and draw order;
 - legends, panel labels, diagnostic text, and output defaults.
 
-`GVVPlotUtils.h` retains only schema-v3 input handling, dynamic maps, branch
+`GVVPlotUtils.h` retains only schema-v4 input handling, dynamic maps, branch
 binding, exchange-symmetric observable filling, unstyled projection-histogram
 construction, Pearson diagnostics, project-root path resolution, and the common
 base style. `GVVAngularMoments.h` retains only Legendre/moment

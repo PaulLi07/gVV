@@ -1,5 +1,5 @@
 // Generic Minuit smoke test plus validation of parameter-layout invariants.
-#include "framework/fit/FitEngine.h"
+#include "core/Minuit.h"
 
 #include <cmath>
 #include <iostream>
